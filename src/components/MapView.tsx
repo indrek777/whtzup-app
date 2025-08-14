@@ -58,7 +58,8 @@ const MapController: React.FC<{
   preventCentering?: boolean;
   hasManuallySetLocation?: boolean;
   isInitialLoad?: boolean;
-}> = ({ userLocation, onMapReady, preventCentering = false, hasManuallySetLocation = false, isInitialLoad = true }) => {
+  onMapDoubleClick?: (latlng: { lat: number; lng: number }) => void;
+}> = ({ userLocation, onMapReady, preventCentering = false, hasManuallySetLocation = false, isInitialLoad = true, onMapDoubleClick }) => {
   const map = useMap()
 
   useEffect(() => {
@@ -68,6 +69,22 @@ const MapController: React.FC<{
     // Notify parent component that map is ready
     onMapReady(map)
   }, [map, onMapReady])
+
+  // Add double-click event listener
+  useEffect(() => {
+    if (!onMapDoubleClick) return
+
+    const handleDoubleClick = (e: any) => {
+      console.log('Map double-clicked at:', e.latlng)
+      onMapDoubleClick(e.latlng)
+    }
+
+    map.on('dblclick', handleDoubleClick)
+
+    return () => {
+      map.off('dblclick', handleDoubleClick)
+    }
+  }, [map, onMapDoubleClick])
 
   // Prevent initial centering if user is dragging
   useEffect(() => {
@@ -476,6 +493,26 @@ const MapView: React.FC = () => {
     }
   }
 
+  const handleMapDoubleClick = (latlng: { lat: number; lng: number }) => {
+    const newLocation: [number, number] = [latlng.lat, latlng.lng]
+    
+    console.log('Location set by map double-click:', newLocation)
+    setUserLocation(newLocation)
+    setLocationStatus('success')
+    setHasManuallySetLocation(true)
+    setIsInitialLoad(false)
+    
+    // Show success notification
+    const notification = document.createElement('div')
+    notification.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in'
+    notification.textContent = `Location moved to ${newLocation[0].toFixed(4)}, ${newLocation[1].toFixed(4)}`
+    document.body.appendChild(notification)
+    
+    setTimeout(() => {
+      notification.remove()
+    }, 3000)
+  }
+
   const getCategoryIcon = (category: string) => {
     const icons = {
       music: '🎵',
@@ -508,13 +545,14 @@ const MapView: React.FC = () => {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
-          <MapController 
-            userLocation={userLocation} 
-            onMapReady={setMapInstance}
-            preventCentering={isDraggingIcon}
-            hasManuallySetLocation={hasManuallySetLocation}
-            isInitialLoad={isInitialLoad}
-          />
+                     <MapController 
+             userLocation={userLocation} 
+             onMapReady={setMapInstance}
+             preventCentering={isDraggingIcon}
+             hasManuallySetLocation={hasManuallySetLocation}
+             isInitialLoad={isInitialLoad}
+             onMapDoubleClick={handleMapDoubleClick}
+           />
           
           {/* User Location Marker */}
           {userLocation && locationStatus === 'success' && (
