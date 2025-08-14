@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet'
 import { Icon } from 'leaflet'
 import { useEvents, Event } from '../context/EventContext'
-import { MapPin, Filter, Search, Menu, Navigation, AlertCircle, X, User, List, Compass, Settings } from 'lucide-react'
+import { MapPin, Filter, Search, Menu, Navigation, AlertCircle, X, User, List, Compass, Settings as SettingsIcon } from 'lucide-react'
 import EventList from './EventList'
 import FilterModal from './FilterModal'
 import Rating from './Rating'
+import Settings from './Settings'
 
 // Marker icon with count badge
 const createMarkerIcon = (category: string, count: number = 1) => {
@@ -59,7 +60,8 @@ const MapController: React.FC<{
   hasManuallySetLocation?: boolean;
   isInitialLoad?: boolean;
   onMapDoubleClick?: (latlng: { lat: number; lng: number }) => void;
-}> = ({ userLocation, onMapReady, preventCentering = false, hasManuallySetLocation = false, isInitialLoad = true, onMapDoubleClick }) => {
+  setSelectedEvent: (event: Event | null) => void;
+}> = ({ userLocation, onMapReady, preventCentering = false, hasManuallySetLocation = false, isInitialLoad = true, onMapDoubleClick, setSelectedEvent }) => {
   const map = useMap()
 
   useEffect(() => {
@@ -85,6 +87,24 @@ const MapController: React.FC<{
       map.off('dblclick', handleDoubleClick)
     }
   }, [map, onMapDoubleClick])
+
+  // Add single-click event listener to clear selected event
+  useEffect(() => {
+    const handleMapClick = (e: any) => {
+      // Only clear if clicking on the map itself, not on markers
+      if (e.originalEvent.target.classList.contains('leaflet-container') || 
+          e.originalEvent.target.classList.contains('leaflet-pane')) {
+        // Clear selected event when clicking on empty map area
+        setSelectedEvent(null)
+      }
+    }
+
+    map.on('click', handleMapClick)
+
+    return () => {
+      map.off('click', handleMapClick)
+    }
+  }, [map])
 
   // Prevent initial centering if user is dragging
   useEffect(() => {
@@ -120,9 +140,10 @@ const MapController: React.FC<{
 }
 
 const MapView: React.FC = () => {
-  const { events, userLocation, setUserLocation, rateEvent } = useEvents()
+  const { events, userLocation, setUserLocation, rateEvent, setSelectedEvent, selectedEvent } = useEvents()
   const [showEventList, setShowEventList] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'error' | 'denied'>('loading')
   const [currentFilters, setCurrentFilters] = useState<{
@@ -159,7 +180,22 @@ const MapView: React.FC = () => {
         (error) => {
           console.error('Error getting location:', error)
           setLocationStatus('error')
+          // Set default location (Tallinn, Estonia)
           setUserLocation([59.436962, 24.753574])
+          
+          // Show user-friendly error message
+          if (error.code === 1) {
+            console.log('Location access denied by user')
+          } else if (error.code === 2) {
+            console.log('Location unavailable')
+          } else if (error.code === 3) {
+            console.log('Location request timed out')
+          }
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       )
     } else {
@@ -173,6 +209,14 @@ const MapView: React.FC = () => {
   useEffect(() => {
     getUserLocation()
   }, [])
+
+  // Make map instance and setSelectedEvent globally accessible for EventList
+  useEffect(() => {
+    if (mapInstance) {
+      (window as any).mapInstance = mapInstance
+    }
+    ;(window as any).setSelectedEvent = setSelectedEvent
+  }, [mapInstance, setSelectedEvent])
 
   // Update filtered events when events or filters change
   useEffect(() => {
@@ -221,11 +265,15 @@ const MapView: React.FC = () => {
     
     // Group events by coordinates
     events.forEach(event => {
-      if (!event.location.coordinates || 
+      // Validate coordinates before processing
+      if (!event.location?.coordinates || 
           !Array.isArray(event.location.coordinates) || 
           event.location.coordinates.length !== 2 ||
           typeof event.location.coordinates[0] !== 'number' ||
-          typeof event.location.coordinates[1] !== 'number') {
+          typeof event.location.coordinates[1] !== 'number' ||
+          isNaN(event.location.coordinates[0]) ||
+          isNaN(event.location.coordinates[1])) {
+        console.warn('Invalid coordinates for event:', event.title, event.location?.coordinates)
         return
       }
       
@@ -239,6 +287,13 @@ const MapView: React.FC = () => {
     // Process each group
     grouped.forEach((locationEvents, coordKey) => {
       const [lat, lng] = coordKey.split(',').map(Number)
+      
+      // Validate parsed coordinates
+      if (isNaN(lat) || isNaN(lng)) {
+        console.warn('Invalid parsed coordinates:', coordKey)
+        return
+      }
+      
       const count = locationEvents.length
       
       if (count === 1) {
@@ -272,6 +327,12 @@ const MapView: React.FC = () => {
 
   // Function to calculate distance between two coordinates
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    // Validate input coordinates
+    if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) {
+      console.warn('Invalid coordinates in calculateDistance:', { lat1, lon1, lat2, lon2 })
+      return Infinity // Return large distance for invalid coordinates
+    }
+    
     const R = 6371 // Earth's radius in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180
     const dLon = (lon2 - lon1) * Math.PI / 180
@@ -415,6 +476,7 @@ const MapView: React.FC = () => {
 
   const handleMarkerClick = (event: Event) => {
     console.log('Marker clicked:', event.title)
+    setSelectedEvent(event)
   }
 
   const handleIconDragStart = (e: React.DragEvent) => {
@@ -545,14 +607,15 @@ const MapView: React.FC = () => {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
-                     <MapController 
-             userLocation={userLocation} 
-             onMapReady={setMapInstance}
-             preventCentering={isDraggingIcon}
-             hasManuallySetLocation={hasManuallySetLocation}
-             isInitialLoad={isInitialLoad}
-             onMapDoubleClick={handleMapDoubleClick}
-           />
+                               <MapController 
+            userLocation={userLocation} 
+            onMapReady={setMapInstance}
+            preventCentering={isDraggingIcon}
+            hasManuallySetLocation={hasManuallySetLocation}
+            isInitialLoad={isInitialLoad}
+            onMapDoubleClick={handleMapDoubleClick}
+            setSelectedEvent={setSelectedEvent}
+          />
           
           {/* User Location Marker */}
           {userLocation && locationStatus === 'success' && (
@@ -601,17 +664,31 @@ const MapView: React.FC = () => {
             </div>
           )}
 
-          {/* Processed Event Markers */}
-          {processEventsForDisplay(filteredEvents).map((processed) => {
-            return (
-              <Marker
-                key={processed.event.id}
-                position={processed.displayPosition}
-                icon={createMarkerIcon(processed.event.category, processed.isPrimary ? processed.count : 1)}
-                eventHandlers={{
-                  click: () => handleMarkerClick(processed.event)
-                }}
-              >
+                     {/* Processed Event Markers */}
+           {processEventsForDisplay(filteredEvents).map((processed) => {
+             const isSelected = selectedEvent?.id === processed.event.id
+             return (
+               <React.Fragment key={processed.event.id}>
+                 {/* Highlight circle for selected event */}
+                 {isSelected && (
+                   <CircleMarker
+                     center={processed.displayPosition}
+                     radius={30}
+                     pathOptions={{
+                       color: '#007AFF',
+                       fillColor: '#007AFF',
+                       fillOpacity: 0.2,
+                       weight: 2
+                     }}
+                   />
+                 )}
+                 <Marker
+                   position={processed.displayPosition}
+                   icon={createMarkerIcon(processed.event.category, processed.isPrimary ? processed.count : 1)}
+                   eventHandlers={{
+                     click: () => handleMarkerClick(processed.event)
+                   }}
+                 >
                 <Popup>
                   <div className="p-3 min-w-[280px]">
                     <div className="flex items-center gap-2 mb-2">
@@ -655,7 +732,8 @@ const MapView: React.FC = () => {
                   </div>
                 </Popup>
               </Marker>
-            )
+               </React.Fragment>
+             )
           })}
         </MapContainer>
       </div>
@@ -678,7 +756,7 @@ const MapView: React.FC = () => {
                </button>
               
               <div className="flex-1 min-w-0">
-                <h1 className="text-base font-semibold text-gray-800 truncate">WhtzUp</h1>
+                                 <h1 className="text-base font-semibold text-gray-800 truncate">Events</h1>
                 
                                  {/* Filter Status Bar - iPhone Style */}
                  {(currentFilters.categories.length > 0 || currentFilters.searchTerm || (currentFilters.dateRange && currentFilters.dateRange !== 'week') || currentFilters.radius !== 999) && (
@@ -826,8 +904,11 @@ const MapView: React.FC = () => {
               >
                 <User size={18} />
               </button>
-              <button className="ios-floating-button touch-target">
-                <Settings size={18} />
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="ios-floating-button touch-target"
+              >
+                <SettingsIcon size={18} />
               </button>
             </div>
           </div>
@@ -929,6 +1010,11 @@ const MapView: React.FC = () => {
           onClose={() => setShowEventList(false)}
           selectedEvent={null}
         />
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings onClose={() => setShowSettings(false)} />
       )}
     </div>
   )

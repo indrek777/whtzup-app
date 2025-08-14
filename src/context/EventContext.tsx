@@ -31,6 +31,8 @@ interface EventContextType {
   setSelectedEvent: (event: Event | null) => void
   setUserLocation: (location: [number, number]) => void
   addEvent: (event: Event) => void
+  updateEvent: (eventId: string, updatedEvent: Event) => void
+  deleteEvent: (eventId: string) => void
   getEventsNearby: (radius: number) => Event[]
   rateEvent: (eventId: string, rating: number) => void
 }
@@ -117,6 +119,16 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setEvents(prev => [...prev, event])
   }
 
+  const updateEvent = (eventId: string, updatedEvent: Event) => {
+    setEvents(prev => prev.map(event => 
+      event.id === eventId ? updatedEvent : event
+    ))
+  }
+
+  const deleteEvent = (eventId: string) => {
+    setEvents(prev => prev.filter(event => event.id !== eventId))
+  }
+
   const rateEvent = (eventId: string, rating: number) => {
     setEvents(prev => prev.map(event => {
       if (event.id === eventId) {
@@ -174,6 +186,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setSelectedEvent,
     setUserLocation,
     addEvent,
+    updateEvent,
+    deleteEvent,
     getEventsNearby,
     rateEvent
   }

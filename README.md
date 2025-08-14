@@ -7,6 +7,7 @@ A modern, mobile-first web application for discovering events happening around y
 - 🗺️ **Interactive Map**: Central map view with event markers
 - 📍 **Location-based Discovery**: Find events near your current location
 - 🎯 **Smart Filtering**: Filter events by category, price, date, and radius
+- ⚙️ **Event Management**: Create, edit, and delete events through settings
 - 📱 **Mobile-First Design**: Optimized for mobile devices with iOS-like UI
 - 🎨 **Beautiful UI**: Modern design with smooth animations and transitions
 - 🔍 **Event Details**: Comprehensive event information and booking
@@ -65,7 +66,8 @@ src/
 │   ├── MapView.tsx     # Main map interface
 │   ├── EventList.tsx   # Event list bottom sheet
 │   ├── EventDetail.tsx # Event detail page
-│   └── FilterModal.tsx # Filter interface
+│   ├── FilterModal.tsx # Filter interface
+│   └── Settings.tsx    # Event management interface
 ├── context/            # React context
 │   └── EventContext.tsx # Event state management
 ├── App.tsx             # Main app component
@@ -94,6 +96,13 @@ src/
 - Attendee count and capacity
 - Contact and booking options
 - Share and favorite functionality
+
+### Event Management
+- Create new events with detailed information
+- Edit existing events with full form validation
+- Delete events with confirmation
+- Search and filter events by category
+- View all events in a comprehensive list
 
 ### Mobile Optimization
 - Touch-friendly interface

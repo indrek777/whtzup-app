@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEvents, Event } from '../context/EventContext'
 import { X, MapPin, Clock, Users, Calendar, Filter, Search } from 'lucide-react'
@@ -14,10 +14,37 @@ interface EventListProps {
 const EventList: React.FC<EventListProps> = ({ events, onClose, selectedEvent }) => {
   const navigate = useNavigate()
   const { setSelectedEvent, rateEvent } = useEvents()
+  const [mapInstance, setMapInstance] = useState<any>(null)
 
   const handleEventClick = (event: Event) => {
     setSelectedEvent(event)
-    navigate(`/event/${event.id}`)
+    
+    // Find the map instance and center on the event
+    const mapElement = document.querySelector('.leaflet-container')
+    if (mapElement && event.location.coordinates) {
+      // Get the map instance from the MapView component
+      const map = (window as any).mapInstance
+      if (map) {
+        // Center map on the event location
+        map.flyTo(event.location.coordinates, 15, {
+          duration: 1.5,
+          easeLinearity: 0.25
+        })
+        
+        // Close the event list to show the map
+        onClose()
+        
+        // Show a notification that the event is now on the map
+        const notification = document.createElement('div')
+        notification.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in'
+        notification.textContent = `Event "${event.title}" is now centered on the map`
+        document.body.appendChild(notification)
+        
+        setTimeout(() => {
+          notification.remove()
+        }, 3000)
+      }
+    }
   }
 
   const getCategoryIcon = (category: string) => {

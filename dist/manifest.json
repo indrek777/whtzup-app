@@ -1,6 +1,6 @@
 {
-  "name": "WhtzUp - Events Near You",
-  "short_name": "WhtzUp",
+  "name": "Events - Events Near You",
+  "short_name": "Events",
   "description": "Discover and explore events happening around you",
   "start_url": "/",
   "display": "standalone",
