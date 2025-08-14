@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet'
 import { Icon } from 'leaflet'
 import { useEvents, Event } from '../context/EventContext'
-import { MapPin, Filter, Search, Menu, Navigation, AlertCircle, X, User, List, Compass, Settings as SettingsIcon } from 'lucide-react'
+import { MapPin, Filter, Search, Menu, Navigation, AlertCircle, X, User, List, Compass, Settings as SettingsIcon, Edit } from 'lucide-react'
 import EventList from './EventList'
 import FilterModal from './FilterModal'
 import Rating from './Rating'
@@ -477,6 +477,17 @@ const MapView: React.FC = () => {
     setSelectedEvent(event)
   }
 
+  const handleEditEvent = (event: Event) => {
+    console.log('Edit event clicked:', event.title)
+    const password = prompt('Please enter the password to edit this event:')
+    if (password === 'indrek') {
+      setSelectedEvent(event)
+      setShowSettings(true)
+    } else if (password !== null) {
+      alert('Incorrect password. Event editing cancelled.')
+    }
+  }
+
   const handleIconDragStart = (e: React.DragEvent) => {
     console.log('Icon drag started')
     setIsDraggingIcon(true)
@@ -687,48 +698,59 @@ const MapView: React.FC = () => {
                      click: () => handleMarkerClick(processed.event)
                    }}
                  >
-                <Popup>
-                  <div className="p-3 min-w-[280px]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">{getCategoryIcon(processed.event.category)}</span>
-                      <h3 className="font-semibold text-sm flex-1">{processed.event.title}</h3>
-                      {processed.count > 1 && (
-                        <span className="text-xs bg-red-500 text-white px-1 py-0.5 rounded-full">
-                          {processed.count} events
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Rating Section */}
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700">Rate this event:</span>
-                        {processed.event.rating && (
-                          <span className="text-xs text-gray-500">
-                            {processed.event.rating.average.toFixed(1)} avg
-                          </span>
-                        )}
-                      </div>
-                      <Rating
-                        value={processed.event.userRating || 0}
-                        onChange={(rating) => rateEvent(processed.event.id, rating)}
-                        size="sm"
-                        showValue={false}
-                      />
-                    </div>
-                    
-                    <p className="text-xs text-gray-600 mb-1">{processed.event.location.name}</p>
-                    <p className="text-xs text-gray-500 mb-2">{processed.event.date} at {processed.event.time}</p>
-                    
-                    {/* Event Details */}
-                    <div className="text-xs text-gray-600 space-y-1">
-                      <p><span className="font-medium">Organizer:</span> {processed.event.organizer}</p>
-                      <p><span className="font-medium">Attendees:</span> {processed.event.attendees}
-                        {processed.event.maxAttendees && ` / ${processed.event.maxAttendees}`}
-                      </p>
-                    </div>
-                  </div>
-                </Popup>
+                                 <Popup>
+                   <div className="p-3 min-w-[280px]">
+                     <div className="flex items-center gap-2 mb-2">
+                       <span className="text-lg">{getCategoryIcon(processed.event.category)}</span>
+                       <h3 className="font-semibold text-sm flex-1">{processed.event.title}</h3>
+                       {processed.count > 1 && (
+                         <span className="text-xs bg-red-500 text-white px-1 py-0.5 rounded-full">
+                           {processed.count} events
+                         </span>
+                       )}
+                     </div>
+                     
+                     {/* Rating Section */}
+                     <div className="mb-3">
+                       <div className="flex items-center justify-between mb-1">
+                         <span className="text-xs font-medium text-gray-700">Rate this event:</span>
+                         {processed.event.rating && (
+                           <span className="text-xs text-gray-500">
+                             {processed.event.rating.average.toFixed(1)} avg
+                           </span>
+                         )}
+                       </div>
+                       <Rating
+                         value={processed.event.userRating || 0}
+                         onChange={(rating) => rateEvent(processed.event.id, rating)}
+                         size="sm"
+                         showValue={false}
+                       />
+                     </div>
+                     
+                     <p className="text-xs text-gray-600 mb-1">{processed.event.location.name}</p>
+                     <p className="text-xs text-gray-500 mb-2">{processed.event.date} at {processed.event.time}</p>
+                     
+                     {/* Event Details */}
+                     <div className="text-xs text-gray-600 space-y-1 mb-3">
+                       <p><span className="font-medium">Organizer:</span> {processed.event.organizer}</p>
+                       <p><span className="font-medium">Attendees:</span> {processed.event.attendees}
+                         {processed.event.maxAttendees && ` / ${processed.event.maxAttendees}`}
+                       </p>
+                     </div>
+
+                     {/* Action Buttons */}
+                     <div className="flex gap-2 pt-2 border-t border-gray-200">
+                       <button
+                         onClick={() => handleEditEvent(processed.event)}
+                         className="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-xs py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1"
+                       >
+                         <Edit size={12} />
+                         Edit Event
+                       </button>
+                     </div>
+                   </div>
+                 </Popup>
               </Marker>
                </React.Fragment>
              )
@@ -902,12 +924,19 @@ const MapView: React.FC = () => {
               >
                 <User size={18} />
               </button>
-              <button 
-                onClick={() => setShowSettings(true)}
-                className="ios-floating-button touch-target"
-              >
-                <SettingsIcon size={18} />
-              </button>
+                             <button 
+                 onClick={() => {
+                   const password = prompt('Please enter the password to access settings:')
+                   if (password === 'indrek') {
+                     setShowSettings(true)
+                   } else if (password !== null) {
+                     alert('Incorrect password. Settings access denied.')
+                   }
+                 }}
+                 className="ios-floating-button touch-target"
+               >
+                 <SettingsIcon size={18} />
+               </button>
             </div>
           </div>
         </div>
@@ -1014,10 +1043,10 @@ const MapView: React.FC = () => {
         />
       )}
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <Settings onClose={() => setShowSettings(false)} />
-      )}
+             {/* Settings Modal */}
+       {showSettings && (
+         <Settings onClose={() => setShowSettings(false)} selectedEvent={selectedEvent} />
+       )}
     </div>
   )
 }

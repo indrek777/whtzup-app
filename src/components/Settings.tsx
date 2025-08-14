@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useEvents, Event } from '../context/EventContext'
 import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft } from 'lucide-react'
 
 interface SettingsProps {
   onClose: () => void
+  selectedEvent?: Event | null
 }
 
 interface EventFormData {
@@ -23,7 +24,7 @@ interface EventFormData {
   maxAttendees?: number
 }
 
-const Settings: React.FC<SettingsProps> = ({ onClose }) => {
+const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
   const { events, addEvent, updateEvent, deleteEvent } = useEvents()
   const [activeTab, setActiveTab] = useState<'events' | 'add'>('events')
   const [editingEvent, setEditingEvent] = useState<Event | null>(null)
@@ -46,6 +47,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     attendees: 0,
     maxAttendees: undefined
   })
+
+  // Auto-switch to edit mode when selectedEvent is provided
+  useEffect(() => {
+    if (selectedEvent) {
+      handleEditEvent(selectedEvent)
+    }
+  }, [selectedEvent])
 
   const categories = [
     { value: 'all', label: 'All Categories', icon: '📅' },
