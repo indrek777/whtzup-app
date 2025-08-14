@@ -5,122 +5,388 @@
 @layer base {
   * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
   }
   
   html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    /* Prevent zoom on input focus */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
   }
   
   #root {
     height: 100vh;
     width: 100vw;
+    /* iPhone safe area support */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* iPhone-specific viewport meta */
+  @supports (padding: max(0px)) {
+    #root {
+      padding-top: max(env(safe-area-inset-top), 0px);
+      padding-bottom: max(env(safe-area-inset-bottom), 0px);
+      padding-left: max(env(safe-area-inset-left), 0px);
+      padding-right: max(env(safe-area-inset-right), 0px);
+    }
   }
 }
 
 @layer components {
+  /* iPhone Safe Areas */
   .safe-area-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: max(env(safe-area-inset-top), 44px);
   }
   
   .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(env(safe-area-inset-bottom), 34px);
   }
   
+  .safe-area-left {
+    padding-left: max(env(safe-area-inset-left), 0px);
+  }
+  
+  .safe-area-right {
+    padding-right: max(env(safe-area-inset-right), 0px);
+  }
+
+  /* iOS-style blur effects */
+  .ios-blur {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.8);
+  }
+
+  .ios-blur-dark {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+
+  /* iPhone-optimized touch targets (minimum 44px) */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* iOS-style floating buttons */
+  .ios-floating-button {
+    @apply bg-white shadow-lg rounded-full;
+    min-width: 56px;
+    min-height: 56px;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .ios-floating-button:active {
+    transform: scale(0.95);
+    background-color: rgba(255, 255, 255, 0.7);
+  }
+
+  .ios-floating-button.primary {
+    background: linear-gradient(135deg, #007AFF, #5856D6);
+    color: white;
+    border: none;
+  }
+
+  .ios-floating-button.primary:active {
+    background: linear-gradient(135deg, #0056CC, #4A4AC4);
+  }
+
+  /* iOS-style cards */
+  .ios-card {
+    @apply bg-white rounded-2xl shadow-sm;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .ios-card-elevated {
+    @apply bg-white rounded-2xl shadow-lg;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* iOS-style bottom sheet */
+  .ios-bottom-sheet {
+    @apply bg-white rounded-t-3xl shadow-2xl;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  /* iOS-style navigation bar */
+  .ios-nav-bar {
+    @apply ios-blur border-b border-gray-200/50;
+    min-height: 44px;
+  }
+
+  /* iOS-style status bar */
+  .ios-status-bar {
+    height: env(safe-area-inset-top);
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, transparent 100%);
+  }
+
+  /* Map container optimizations */
   .map-container {
     height: 100vh;
     width: 100vw;
+    /* Prevent text selection on map */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
-  
+
+  /* Event card with iOS styling */
   .event-card {
-    @apply bg-white rounded-xl shadow-lg border border-gray-200 p-4 mb-3;
-    backdrop-filter: blur(10px);
+    @apply ios-card p-4 mb-3;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
+
+  .event-card:active {
+    transform: scale(0.98);
+    @apply ios-card-elevated;
+  }
+
+  /* Legacy floating button (keeping for compatibility) */
   .floating-button {
-    @apply bg-primary-500 text-white rounded-full p-3 shadow-lg;
-    transition: all 0.2s ease-in-out;
+    @apply ios-floating-button;
   }
   
   .floating-button:active {
-    @apply bg-primary-600 transform scale-95;
+    @apply transform scale-95;
   }
 }
 
-/* Custom scrollbar for web */
-::-webkit-scrollbar {
-  width: 4px;
+/* Custom scrollbar for web (hidden on mobile) */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* Hide scrollbar on mobile */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-/* Custom animations */
+/* iOS-style animations */
 @keyframes slide-up {
   from {
     transform: translateY(100%);
+    opacity: 0;
   }
   to {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
 .animate-slide-up {
-  animation: slide-up 0.3s ease-out;
+  animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Custom slider styles */
+.animate-slide-down {
+  animation: slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* iOS-style slider */
 .slider {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
   cursor: pointer;
+  height: 44px; /* iPhone touch target */
 }
 
 .slider::-webkit-slider-track {
   background: #e5e7eb;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 3px;
+  border: none;
 }
 
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  background: #3b82f6;
-  height: 20px;
-  width: 20px;
+  background: linear-gradient(135deg, #007AFF, #5856D6);
+  height: 24px;
+  width: 24px;
   border-radius: 50%;
   cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
 }
 
 .slider::-moz-range-track {
   background: #e5e7eb;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 3px;
   border: none;
 }
 
 .slider::-moz-range-thumb {
-  background: #3b82f6;
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
+  background: linear-gradient(135deg, #007AFF, #5856D6);
+  height: 24px;
+  width: 24px;
   border-radius: 50%;
   cursor: pointer;
-  border: none;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* iPhone-specific media queries */
+@media (max-width: 428px) {
+  /* iPhone 14 Pro Max and smaller */
+  .ios-floating-button {
+    min-width: 52px;
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 390px) {
+  /* iPhone 14 and smaller */
+  .ios-floating-button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 375px) {
+  /* iPhone SE and smaller */
+  .ios-floating-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .ios-blur {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+  
+  .ios-card {
+    background-color: rgba(28, 28, 30, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .ios-bottom-sheet {
+    background-color: rgba(28, 28, 30, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Haptic feedback simulation (for web) */
+.haptic-light {
+  animation: haptic-light 0.1s ease-out;
+}
+
+.haptic-medium {
+  animation: haptic-medium 0.15s ease-out;
+}
+
+.haptic-heavy {
+  animation: haptic-heavy 0.2s ease-out;
+}
+
+@keyframes haptic-light {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1px); }
+  75% { transform: translateX(1px); }
+}
+
+@keyframes haptic-medium {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+@keyframes haptic-heavy {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
 }

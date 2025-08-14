@@ -79,14 +79,35 @@ const parseDateTime = (startsAt: string): { date: string, time: string } => {
     // If it's a full datetime string
     if (startsAt.includes(' ')) {
       const parts = startsAt.split(' ')
-      dateStr = parts[0]
-      const timeStr = parts[1] || '12:00'
-      return { date: dateStr, time: timeStr }
+      // Find the part that looks like a date (YYYY-MM-DD format)
+      const datePart = parts.find(part => /^\d{4}-\d{2}-\d{2}$/.test(part))
+      const timePart = parts.find(part => /^\d{2}:\d{2}$/.test(part))
+      
+      if (datePart) {
+        dateStr = datePart
+        return { date: dateStr, time: timePart || '12:00' }
+      }
     }
     
     // If it's just a date, use default time
-    return { date: dateStr, time: '12:00' }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(startsAt)) {
+      return { date: startsAt, time: '12:00' }
+    }
+    
+    // If we can't parse it, try to extract a date from the string
+    const dateMatch = startsAt.match(/(\d{4}-\d{2}-\d{2})/)
+    if (dateMatch) {
+      return { date: dateMatch[1], time: '12:00' }
+    }
+    
+    // Fallback to current date
+    const now = new Date()
+    return {
+      date: now.toISOString().split('T')[0],
+      time: '12:00'
+    }
   } catch (error) {
+    console.warn('Error parsing date:', startsAt, error)
     // Fallback to current date
     const now = new Date()
     return {

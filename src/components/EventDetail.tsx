@@ -122,7 +122,18 @@ const EventDetail: React.FC = () => {
               <Calendar className="text-primary-500" size={20} />
               <div>
                 <p className="font-medium text-gray-800">
-                  {format(new Date(event.date), 'EEEE, MMMM dd, yyyy')}
+                  {(() => {
+                    try {
+                      const date = new Date(event.date)
+                      if (isNaN(date.getTime())) {
+                        return 'Date TBD'
+                      }
+                      return format(date, 'EEEE, MMMM dd, yyyy')
+                    } catch (error) {
+                      console.warn('Error formatting date:', event.date, error)
+                      return 'Date TBD'
+                    }
+                  })()}
                 </p>
                 <p className="text-sm text-gray-500">Date</p>
               </div>
