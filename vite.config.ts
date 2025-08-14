@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 7777,
-    host: true
+    host: true,
+    allowedHosts: ['olympio.ee', '.olympio.ee']
   },
   build: {
     outDir: 'dist',
