@@ -29,6 +29,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
     id: '',
     title: '',
@@ -180,6 +181,43 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     } catch {
       return dateString
     }
+  }
+
+  // Get unique venues from existing events
+  const getUniqueVenues = () => {
+    const venues = new Map<string, { name: string, address: string, coordinates: [number, number] }>()
+    events.forEach(event => {
+      if (event.location.name.trim()) {
+        venues.set(event.location.name.toLowerCase(), {
+          name: event.location.name,
+          address: event.location.address,
+          coordinates: event.location.coordinates
+        })
+      }
+    })
+    return Array.from(venues.values())
+  }
+
+  // Filter venues based on input
+  const getVenueSuggestions = (input: string) => {
+    if (!input.trim()) return []
+    const venues = getUniqueVenues()
+    return venues.filter(venue => 
+      venue.name.toLowerCase().includes(input.toLowerCase()) ||
+      venue.address.toLowerCase().includes(input.toLowerCase())
+    ).slice(0, 5) // Limit to 5 suggestions
+  }
+
+  const handleVenueSelect = (venue: { name: string, address: string, coordinates: [number, number] }) => {
+    setFormData({
+      ...formData,
+      location: {
+        name: venue.name,
+        address: venue.address,
+        coordinates: venue.coordinates
+      }
+    })
+    setShowVenueSuggestions(false)
   }
 
   return (
@@ -451,20 +489,49 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                   </select>
                 </div>
 
-                                 {/* Location Information */}
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
-                   <input
-                     type="text"
-                     value={formData.location.name}
-                     onChange={(e) => setFormData({ 
-                       ...formData, 
-                       location: { ...formData.location, name: e.target.value }
-                     })}
-                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="Enter venue name"
-                   />
-                 </div>
+                                                   {/* Location Information */}
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
+                    <input
+                      type="text"
+                      value={formData.location.name}
+                      onChange={(e) => {
+                        setFormData({ 
+                          ...formData, 
+                          location: { ...formData.location, name: e.target.value }
+                        })
+                        setShowVenueSuggestions(e.target.value.trim().length > 0)
+                      }}
+                      onFocus={() => setShowVenueSuggestions(formData.location.name.trim().length > 0)}
+                      onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 200)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter venue name"
+                    />
+                    
+                    {/* Venue Suggestions */}
+                    {showVenueSuggestions && (
+                      <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {getVenueSuggestions(formData.location.name).map((venue, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => handleVenueSelect(venue)}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-gray-50"
+                          >
+                            <div className="font-medium text-gray-800">{venue.name}</div>
+                            {venue.address && (
+                              <div className="text-sm text-gray-600 truncate">{venue.address}</div>
+                            )}
+                          </button>
+                        ))}
+                        {getVenueSuggestions(formData.location.name).length === 0 && (
+                          <div className="px-3 py-2 text-sm text-gray-500">
+                            No matching venues found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
