@@ -27,7 +27,6 @@ const createMarkerIcon = (category: string, count: number = 1) => {
       iconUrl: `data:image/svg+xml;base64,${btoa(`
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2"/>
-          <circle cx="16" cy="16" r="6" fill="white"/>
           <circle cx="24" cy="8" r="8" fill="#FF3B30" stroke="white" stroke-width="2"/>
           <text x="24" y="12" text-anchor="middle" fill="white" font-size="10" font-weight="bold">${count}</text>
         </svg>
@@ -38,12 +37,11 @@ const createMarkerIcon = (category: string, count: number = 1) => {
     })
   }
   
-  // Single event marker
+  // Single event marker - simple colored circle
   return new Icon({
     iconUrl: `data:image/svg+xml;base64,${btoa(`
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="10" fill="${color}" stroke="white" stroke-width="2"/>
-        <circle cx="12" cy="12" r="4" fill="white"/>
       </svg>
     `)}`,
     iconSize: [24, 24],
@@ -965,43 +963,47 @@ const MapView: React.FC = () => {
         </div>
       )}
 
-             {/* Map Legend */}
-       {showLegend && (
-         <div className="absolute bottom-20 left-6 z-10 ios-card-elevated p-4 max-w-xs animate-scale-in">
-          <h4 className="text-sm font-semibold text-gray-800 mb-3">Map Legend</h4>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-red-500"></div>
-              <span>Music Events</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-orange-500"></div>
-              <span>Food & Drink</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-green-500"></div>
-              <span>Sports</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-purple-500"></div>
-              <span>Art & Culture</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-              <span>Business</span>
-            </div>
-            <div className="border-t border-gray-200 pt-2 mt-2">
-              <div className="flex items-center gap-2 text-gray-600">
-                <div className="w-6 h-6 rounded-full bg-red-500 border-2 border-red-700 relative">
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">3</div>
-                </div>
-                <span>Markers with red badges show multiple events</span>
+                                                       {/* Map Legend */}
+         {showLegend && (
+           <div className="absolute bottom-20 left-6 z-10 ios-card-elevated p-4 max-w-xs animate-scale-in">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">Map Legend</h4>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-red-500 border border-white"></div>
+                <span>Music Events</span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">All events are visible - overlapping events are slightly offset</p>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-orange-500 border border-white"></div>
+                <span>Food & Drink</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-green-500 border border-white"></div>
+                <span>Sports</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-purple-500 border border-white"></div>
+                <span>Art & Culture</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-blue-500 border border-white"></div>
+                <span>Business</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-gray-500 border border-white"></div>
+                <span>Other Events</span>
+              </div>
+              <div className="border-t border-gray-200 pt-2 mt-2">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <div className="w-6 h-6 rounded-full bg-red-500 border-2 border-red-700 relative">
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">3</div>
+                  </div>
+                  <span>Markers with red badges show multiple events</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">All events are visible - overlapping events are slightly offset</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Event List */}
       {showEventList && (
