@@ -46,7 +46,9 @@
 @layer components {
   /* iPhone Safe Areas */
   .safe-area-top {
-    padding-top: max(env(safe-area-inset-top), 44px);
+    padding-top: 0;
+    /* Ensure top bar is properly positioned */
+    position: relative;
   }
   
   .safe-area-bottom {
@@ -138,6 +140,8 @@
   .ios-nav-bar {
     @apply ios-blur border-b border-gray-200/50;
     min-height: 44px;
+    /* Ensure proper spacing on iPhone */
+    padding-top: max(env(safe-area-inset-top), 44px);
   }
 
   /* iOS-style status bar */

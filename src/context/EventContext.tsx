@@ -17,6 +17,11 @@ export interface Event {
   image?: string
   attendees: number
   maxAttendees?: number
+  rating?: {
+    average: number
+    count: number
+  }
+  userRating?: number // User's personal rating (1-5)
 }
 
 interface EventContextType {
@@ -27,6 +32,7 @@ interface EventContextType {
   setUserLocation: (location: [number, number]) => void
   addEvent: (event: Event) => void
   getEventsNearby: (radius: number) => Event[]
+  rateEvent: (eventId: string, rating: number) => void
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined)
@@ -73,7 +79,11 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             time: '20:00',
             organizer: 'Blue Note Club',
             attendees: 45,
-            maxAttendees: 100
+            maxAttendees: 100,
+            rating: {
+              average: 4.2,
+              count: 15
+            }
           },
           {
             id: '2',
@@ -89,7 +99,11 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             time: '12:00',
             organizer: 'NYC Food Trucks',
             attendees: 120,
-            maxAttendees: 500
+            maxAttendees: 500,
+            rating: {
+              average: 4.7,
+              count: 28
+            }
           }
         ]
         setEvents(mockEvents)
@@ -101,6 +115,30 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const addEvent = (event: Event) => {
     setEvents(prev => [...prev, event])
+  }
+
+  const rateEvent = (eventId: string, rating: number) => {
+    setEvents(prev => prev.map(event => {
+      if (event.id === eventId) {
+        const currentRating = event.rating || { average: 0, count: 0 }
+        const userRating = event.userRating || 0
+        
+        // If user already rated, remove their previous rating
+        const totalRating = currentRating.average * currentRating.count - userRating + rating
+        const newCount = userRating > 0 ? currentRating.count : currentRating.count + 1
+        const newAverage = newCount > 0 ? totalRating / newCount : 0
+        
+        return {
+          ...event,
+          rating: {
+            average: Math.round(newAverage * 10) / 10, // Round to 1 decimal place
+            count: newCount
+          },
+          userRating: rating
+        }
+      }
+      return event
+    }))
   }
 
   const getEventsNearby = (radius: number): Event[] => {
@@ -136,7 +174,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     setSelectedEvent,
     setUserLocation,
     addEvent,
-    getEventsNearby
+    getEventsNearby,
+    rateEvent
   }
 
   return (

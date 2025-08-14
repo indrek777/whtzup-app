@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEvents, Event } from '../context/EventContext'
 import { X, MapPin, Clock, Users, Calendar, Filter, Search } from 'lucide-react'
 import { format } from 'date-fns'
+import Rating from './Rating'
 
 interface EventListProps {
   events: Event[]
@@ -12,7 +13,7 @@ interface EventListProps {
 
 const EventList: React.FC<EventListProps> = ({ events, onClose, selectedEvent }) => {
   const navigate = useNavigate()
-  const { setSelectedEvent } = useEvents()
+  const { setSelectedEvent, rateEvent } = useEvents()
 
   const handleEventClick = (event: Event) => {
     setSelectedEvent(event)
@@ -179,6 +180,26 @@ const EventList: React.FC<EventListProps> = ({ events, onClose, selectedEvent })
                     <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
                       {event.description}
                     </p>
+                    
+                    {/* Rating Section */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-700">Rate:</span>
+                        <Rating
+                          value={event.userRating || 0}
+                          onChange={(rating) => {
+                            rateEvent(event.id, rating)
+                          }}
+                          size="sm"
+                          showValue={false}
+                        />
+                      </div>
+                      {event.rating && (
+                        <div className="text-xs text-gray-500">
+                          {event.rating.average.toFixed(1)} avg ({event.rating.count})
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

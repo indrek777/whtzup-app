@@ -5,6 +5,7 @@ import { useEvents, Event } from '../context/EventContext'
 import { MapPin, Filter, Search, Menu, Navigation, AlertCircle, X, User, List, Compass, Settings } from 'lucide-react'
 import EventList from './EventList'
 import FilterModal from './FilterModal'
+import Rating from './Rating'
 
 // Marker icon with count badge
 const createMarkerIcon = (category: string, count: number = 1) => {
@@ -102,7 +103,7 @@ const MapController: React.FC<{
 }
 
 const MapView: React.FC = () => {
-  const { events, userLocation, setUserLocation } = useEvents()
+  const { events, userLocation, setUserLocation, rateEvent } = useEvents()
   const [showEventList, setShowEventList] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
@@ -115,8 +116,8 @@ const MapView: React.FC = () => {
     sortBy: 'date' | 'distance' | 'name'
   }>({
     categories: [],
-    dateRange: null,
-    radius: 10,
+    dateRange: 'week',
+    radius: 999,
     searchTerm: '',
     sortBy: 'date'
   })
@@ -574,18 +575,45 @@ const MapView: React.FC = () => {
                 }}
               >
                 <Popup>
-                  <div className="p-2">
+                  <div className="p-3 min-w-[280px]">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-lg">{getCategoryIcon(processed.event.category)}</span>
-                      <h3 className="font-semibold text-sm">{processed.event.title}</h3>
+                      <h3 className="font-semibold text-sm flex-1">{processed.event.title}</h3>
                       {processed.count > 1 && (
                         <span className="text-xs bg-red-500 text-white px-1 py-0.5 rounded-full">
                           {processed.count} events
                         </span>
                       )}
                     </div>
+                    
+                    {/* Rating Section */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-700">Rate this event:</span>
+                        {processed.event.rating && (
+                          <span className="text-xs text-gray-500">
+                            {processed.event.rating.average.toFixed(1)} avg
+                          </span>
+                        )}
+                      </div>
+                      <Rating
+                        value={processed.event.userRating || 0}
+                        onChange={(rating) => rateEvent(processed.event.id, rating)}
+                        size="sm"
+                        showValue={false}
+                      />
+                    </div>
+                    
                     <p className="text-xs text-gray-600 mb-1">{processed.event.location.name}</p>
-                    <p className="text-xs text-gray-500">{processed.event.date} at {processed.event.time}</p>
+                    <p className="text-xs text-gray-500 mb-2">{processed.event.date} at {processed.event.time}</p>
+                    
+                    {/* Event Details */}
+                    <div className="text-xs text-gray-600 space-y-1">
+                      <p><span className="font-medium">Organizer:</span> {processed.event.organizer}</p>
+                      <p><span className="font-medium">Attendees:</span> {processed.event.attendees}
+                        {processed.event.maxAttendees && ` / ${processed.event.maxAttendees}`}
+                      </p>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
@@ -595,27 +623,27 @@ const MapView: React.FC = () => {
       </div>
 
       {/* iOS-style Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 z-10 safe-area-top">
-        <div className="ios-nav-bar px-4 py-3">
-          <div className="flex items-center justify-between">
+      <div className="absolute top-0 left-0 right-0 z-10">
+        <div className="ios-nav-bar px-4 py-2">
+          <div className="flex items-center justify-between gap-2">
             {/* Left side - Filter and Title */}
-            <div className="flex items-center gap-3 flex-1">
-              <button
-                onClick={() => setShowFilters(true)}
-                className={`ios-floating-button touch-target ${currentFilters.categories.length > 0 || currentFilters.searchTerm || currentFilters.dateRange || currentFilters.radius !== 10 ? 'primary' : ''}`}
-              >
-                <Filter size={20} />
-                {/* Active Filter Indicator */}
-                {(currentFilters.categories.length > 0 || currentFilters.searchTerm || currentFilters.dateRange || currentFilters.radius !== 10) && (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white"></div>
-                )}
-              </button>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+                             <button
+                 onClick={() => setShowFilters(true)}
+                 className={`ios-floating-button touch-target ${currentFilters.categories.length > 0 || currentFilters.searchTerm || (currentFilters.dateRange && currentFilters.dateRange !== 'week') || currentFilters.radius !== 999 ? 'primary' : ''}`}
+               >
+                 <Filter size={18} />
+                 {/* Active Filter Indicator */}
+                 {(currentFilters.categories.length > 0 || currentFilters.searchTerm || (currentFilters.dateRange && currentFilters.dateRange !== 'week') || currentFilters.radius !== 999) && (
+                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white"></div>
+                 )}
+               </button>
               
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg font-semibold text-gray-800 truncate">WhtzUp</h1>
+                <h1 className="text-base font-semibold text-gray-800 truncate">WhtzUp</h1>
                 
-                {/* Filter Status Bar - iPhone Style */}
-                {(currentFilters.categories.length > 0 || currentFilters.searchTerm || currentFilters.dateRange || currentFilters.radius !== 10) && (
+                                 {/* Filter Status Bar - iPhone Style */}
+                 {(currentFilters.categories.length > 0 || currentFilters.searchTerm || (currentFilters.dateRange && currentFilters.dateRange !== 'week') || currentFilters.radius !== 999) && (
                   <div className="mt-1">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                       <div className="flex items-center justify-between">
@@ -624,16 +652,16 @@ const MapView: React.FC = () => {
                           <span className="text-xs font-medium text-blue-800">Filters Active</span>
                           <span className="text-xs text-blue-600">({filteredEvents.length} of {events.length})</span>
                         </div>
-                        <button
-                          onClick={() => {
-                            setCurrentFilters({
-                              categories: [],
-                              dateRange: null,
-                              radius: 10,
-                              searchTerm: '',
-                              sortBy: 'date'
-                            })
-                          }}
+                                                 <button
+                           onClick={() => {
+                             setCurrentFilters({
+                               categories: [],
+                               dateRange: 'week',
+                               radius: 999,
+                               searchTerm: '',
+                               sortBy: 'date'
+                             })
+                           }}
                           className="text-blue-600 hover:text-blue-800 touch-target"
                           title="Clear all filters"
                         >
@@ -652,51 +680,46 @@ const MapView: React.FC = () => {
                             "{currentFilters.searchTerm}"
                           </span>
                         )}
-                        {currentFilters.dateRange && currentFilters.dateRange !== 'all' && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                            {currentFilters.dateRange}
-                          </span>
-                        )}
-                        {currentFilters.radius !== 10 && currentFilters.radius !== 999 && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                            {currentFilters.radius}km radius
-                          </span>
-                        )}
-                        {currentFilters.radius === 999 && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                            No distance limit
-                          </span>
-                        )}
+                                                 {currentFilters.dateRange && currentFilters.dateRange !== 'all' && currentFilters.dateRange !== 'week' && (
+                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                             {currentFilters.dateRange}
+                           </span>
+                         )}
+                         {currentFilters.radius !== 999 && (
+                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                             {currentFilters.radius}km radius
+                           </span>
+                         )}
                       </div>
                     </div>
                   </div>
                 )}
                 
-                {/* Default Status - Only show when no filters */}
-                {!(currentFilters.categories.length > 0 || currentFilters.searchTerm || currentFilters.dateRange || currentFilters.radius !== 10) && (
-                  <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full mt-1">
-                    <span>{filteredEvents.length} events</span>
-                    {(() => {
-                      const processedEvents = processEventsForDisplay(filteredEvents)
-                      const multiLocationEvents = processedEvents.filter(p => p.count > 1 && p.isPrimary)
-                      if (multiLocationEvents.length > 0) {
-                        return (
-                          <span className="text-orange-600">
-                            • {multiLocationEvents.length} locations with multiple events
-                          </span>
-                        )
-                      }
-                      return null
-                    })()}
-                  </div>
-                )}
+                                 {/* Default Status - Show when only default filters are active */}
+                 {(currentFilters.categories.length === 0 && !currentFilters.searchTerm && currentFilters.dateRange === 'week' && currentFilters.radius === 999) && (
+                   <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full mt-1">
+                     <span>{filteredEvents.length} events this week</span>
+                     {(() => {
+                       const processedEvents = processEventsForDisplay(filteredEvents)
+                       const multiLocationEvents = processedEvents.filter(p => p.count > 1 && p.isPrimary)
+                       if (multiLocationEvents.length > 0) {
+                         return (
+                           <span className="text-orange-600">
+                             • {multiLocationEvents.length} locations with multiple events
+                           </span>
+                         )
+                       }
+                       return null
+                     })()}
+                   </div>
+                 )}
               </div>
             </div>
             
             {/* Right side - Action buttons */}
-            <div className="flex items-center gap-2">
-              {/* Location Status */}
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {/* Location Status - Hidden on small screens to save space */}
+              <div className="hidden sm:flex items-center gap-2">
                 {isDraggingIcon && (
                   <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
                     <User size={12} />
@@ -724,13 +747,13 @@ const MapView: React.FC = () => {
                 )}
               </div>
               
-              {/* Action Buttons */}
+              {/* Action Buttons - Optimized for iPhone */}
               <button 
                 onClick={getUserLocation}
                 className="ios-floating-button touch-target"
                 title="Refresh location"
               >
-                <Navigation size={20} />
+                <Navigation size={18} />
               </button>
               <button 
                 onClick={() => {
@@ -746,7 +769,7 @@ const MapView: React.FC = () => {
                 title="Center on my location"
                 disabled={!userLocation || !mapInstance}
               >
-                <MapPin size={20} />
+                <MapPin size={18} />
               </button>
               <button 
                 draggable
@@ -763,10 +786,10 @@ const MapView: React.FC = () => {
                 className={`ios-floating-button touch-target ${isDraggingIcon ? 'opacity-50' : ''}`}
                 title="Drag to map to set location"
               >
-                <User size={20} />
+                <User size={18} />
               </button>
               <button className="ios-floating-button touch-target">
-                <Settings size={20} />
+                <Settings size={18} />
               </button>
             </div>
           </div>
@@ -795,7 +818,7 @@ const MapView: React.FC = () => {
           className="ios-floating-button primary touch-target"
           title="View events list"
         >
-          <List size={24} />
+          <List size={22} />
         </button>
         
         {/* Legend Toggle Button */}
