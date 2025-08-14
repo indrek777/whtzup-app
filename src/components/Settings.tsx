@@ -103,6 +103,16 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     if (!formData.location.name.trim()) missingFields.push('Venue Name')
     if (!formData.organizer.trim()) missingFields.push('Organizer')
     
+    // Validate coordinates
+    const [lat, lng] = formData.location.coordinates
+    if (isNaN(lat) || isNaN(lng)) {
+      missingFields.push('Valid Coordinates')
+    } else if (lat < -90 || lat > 90) {
+      missingFields.push('Valid Latitude (between -90 and 90)')
+    } else if (lng < -180 || lng > 180) {
+      missingFields.push('Valid Longitude (between -180 and 180)')
+    }
+    
     if (missingFields.length > 0) {
       alert(`Please fill in the following required fields:\n• ${missingFields.join('\n• ')}`)
       return
@@ -144,8 +154,13 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   }
 
   const handleDeleteEvent = (eventId: string) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      deleteEvent(eventId)
+    const password = prompt('Please enter the password to delete this event:')
+    if (password === 'indrek') {
+      if (window.confirm('Are you sure you want to delete this event?')) {
+        deleteEvent(eventId)
+      }
+    } else if (password !== null) {
+      alert('Incorrect password. Event deletion cancelled.')
     }
   }
 
@@ -436,34 +451,88 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                   </select>
                 </div>
 
-                {/* Location Information */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
-                  <input
-                    type="text"
-                    value={formData.location.name}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      location: { ...formData.location, name: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter venue name"
-                  />
-                </div>
+                                 {/* Location Information */}
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
+                   <input
+                     type="text"
+                     value={formData.location.name}
+                     onChange={(e) => setFormData({ 
+                       ...formData, 
+                       location: { ...formData.location, name: e.target.value }
+                     })}
+                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                     placeholder="Enter venue name"
+                   />
+                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                  <input
-                    type="text"
-                    value={formData.location.address}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      location: { ...formData.location, address: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter full address"
-                  />
-                </div>
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                   <input
+                     type="text"
+                     value={formData.location.address}
+                     onChange={(e) => setFormData({ 
+                       ...formData, 
+                       location: { ...formData.location, address: e.target.value }
+                     })}
+                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                     placeholder="Enter full address"
+                   />
+                 </div>
+
+                 {/* Coordinates */}
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-2">Coordinates</label>
+                   <div className="grid grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-xs text-gray-600 mb-1">Latitude</label>
+                       <input
+                         type="number"
+                         step="any"
+                         value={formData.location.coordinates[0]}
+                         onChange={(e) => {
+                           const lat = parseFloat(e.target.value)
+                           if (!isNaN(lat)) {
+                             setFormData({
+                               ...formData,
+                               location: {
+                                 ...formData.location,
+                                 coordinates: [lat, formData.location.coordinates[1]]
+                               }
+                             })
+                           }
+                         }}
+                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="59.436962"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-xs text-gray-600 mb-1">Longitude</label>
+                       <input
+                         type="number"
+                         step="any"
+                         value={formData.location.coordinates[1]}
+                         onChange={(e) => {
+                           const lng = parseFloat(e.target.value)
+                           if (!isNaN(lng)) {
+                             setFormData({
+                               ...formData,
+                               location: {
+                                 ...formData.location,
+                                 coordinates: [formData.location.coordinates[0], lng]
+                               }
+                             })
+                           }
+                         }}
+                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="24.753574"
+                       />
+                     </div>
+                   </div>
+                   <p className="text-xs text-gray-500 mt-1">
+                     Current coordinates: {formData.location.coordinates[0].toFixed(6)}, {formData.location.coordinates[1].toFixed(6)}
+                   </p>
+                 </div>
 
                 {/* Date and Time */}
                 <div className="grid grid-cols-2 gap-4">
