@@ -848,8 +848,8 @@ const MapView: React.FC = () => {
         />
       )}
 
-      {/* Floating Action Buttons */}
-      <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-3">
+             {/* Floating Action Buttons */}
+       <div className="absolute bottom-20 right-6 z-10 flex flex-col gap-3">
         {/* Events List Button */}
         <button
           onClick={() => setShowEventList(true)}
@@ -884,9 +884,9 @@ const MapView: React.FC = () => {
         </div>
       )}
 
-      {/* Map Legend */}
-      {showLegend && (
-        <div className="absolute bottom-6 left-6 z-10 ios-card-elevated p-4 max-w-xs animate-scale-in">
+             {/* Map Legend */}
+       {showLegend && (
+         <div className="absolute bottom-20 left-6 z-10 ios-card-elevated p-4 max-w-xs animate-scale-in">
           <h4 className="text-sm font-semibold text-gray-800 mb-3">Map Legend</h4>
           <div className="space-y-2 text-xs">
             <div className="flex items-center gap-2">
