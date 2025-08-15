@@ -1,0 +1,30 @@
+{
+  "backupTimestamp": "2025-08-15T14:59:15.017Z",
+  "backupDirectory": "C:\\TMP\\Cursor\\whtzup-app\\backups\\2025-08-15T14-59-14",
+  "files": [
+    {
+      "name": "events-summary.json",
+      "size": 229,
+      "sizeFormatted": "0.22 KB"
+    },
+    {
+      "name": "events-user.json",
+      "size": 479992,
+      "sizeFormatted": "468.74 KB"
+    },
+    {
+      "name": "venues.json",
+      "size": 290,
+      "sizeFormatted": "0.28 KB"
+    }
+  ],
+  "totalSize": 480511,
+  "notes": [
+    "This backup contains all events data and venue information.",
+    "Events are stored in JSON format and can be restored directly.",
+    "Venues are stored in browser localStorage and need to be restored through the app interface.",
+    "To restore: copy events-user.json back to public/ directory",
+    "To restore venues: use the Venue Manager in the app"
+  ],
+  "totalSizeFormatted": "469.25 KB"
+}

@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-08-15T14:59:15.010Z",
+  "totalEvents": 1357,
+  "sources": {
+    "app": 10,
+    "csv": 1006,
+    "merged": 341
+  },
+  "dateRange": {
+    "earliest": "2019-11-29 10:00",
+    "latest": "2025-12-13 10:00"
+  }
+}
