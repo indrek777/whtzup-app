@@ -25,7 +25,12 @@ const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
   const { events } = useEvents()
   const [venues, setVenues] = useState<VenueData[]>([])
   const [venuesNeedingGeocoding, setVenuesNeedingGeocoding] = useState<VenueData[]>([])
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<{
+    totalVenues: number
+    venuesWithCoordinates: number
+    venuesNeedingGeocoding: number
+    mostUsedVenue: VenueData | null
+  }>({
     totalVenues: 0,
     venuesWithCoordinates: 0,
     venuesNeedingGeocoding: 0,
