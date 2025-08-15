@@ -25,16 +25,26 @@ const GeocodingCSVTool: React.FC<GeocodingCSVToolProps> = ({ onClose }) => {
 
   // Count events that need geocoding
   const eventsNeedingGeocoding = events.filter(event => {
-    const [lat, lng] = event.location.coordinates
-    return (
-      (lat === 59.436962 && lng === 24.753574) || // Default Tallinn coordinates
-      isNaN(lat) || isNaN(lng) ||
-      lat === 0 || lng === 0
-    )
+    try {
+      const [lat, lng] = event.location.coordinates
+      return (
+        (lat === 59.436962 && lng === 24.753574) || // Default Tallinn coordinates
+        isNaN(lat) || isNaN(lng) ||
+        lat === 0 || lng === 0
+      )
+    } catch (error) {
+      console.error('Error filtering event:', error, event)
+      return false
+    }
   })
 
   const handleDownload = () => {
-    downloadEventsForGeocoding(events)
+    try {
+      downloadEventsForGeocoding(events)
+    } catch (error) {
+      console.error('Error downloading events for geocoding:', error)
+      alert('Error downloading events. Please try again.')
+    }
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

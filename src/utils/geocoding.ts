@@ -332,9 +332,9 @@ export const parseGeocodedCSV = (csvText: string): GeocodedEventData[] => {
       continue
     }
 
-    // Validate coordinates are within Estonia
-    if (lat < 57.5 || lat > 59.7 || lon < 21.5 || lon > 28.2) {
-      console.warn(`Skipping line ${i + 1}: coordinates outside Estonia (${lat}, ${lon})`)
+    // Validate coordinates are valid (accept worldwide coordinates)
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      console.warn(`Skipping line ${i + 1}: invalid coordinates (${lat}, ${lon})`)
       continue
     }
 

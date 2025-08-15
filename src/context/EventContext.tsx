@@ -124,7 +124,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     const loadEvents = async () => {
       try {
         // First try to load from server API
-        const response = await fetch('/api/events')
+        const response = await fetch('http://localhost:7777/api/events')
         if (response.ok) {
           const serverEvents = await response.json()
           if (Array.isArray(serverEvents) && serverEvents.length > 0) {

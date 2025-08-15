@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { 
   Download, Upload, CheckCircle, AlertCircle, X, MapPin, 
-  Database, TrendingUp, Clock, Search, Filter, Trash2 
+  Database, TrendingUp, Clock, Search, Filter, Trash2, Edit3, Save, XCircle
 } from 'lucide-react'
 import { 
   getAllVenues, 
@@ -11,17 +11,26 @@ import {
   importVenuesCSV,
   cleanupOldVenues,
   updateVenueCoordinates,
+  addVenue,
+  isDefaultCoordinates,
   VenueData
 } from '../utils/venueStorage'
+import { useEvents } from '../context/EventContext'
 
 interface VenueManagerProps {
   onClose: () => void
 }
 
 const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
-  const [venues, setVenues] = useState<VenueData[]>(getAllVenues())
-  const [venuesNeedingGeocoding, setVenuesNeedingGeocoding] = useState<VenueData[]>(getVenuesNeedingGeocoding())
-  const [stats, setStats] = useState(getVenueStats())
+  const { events } = useEvents()
+  const [venues, setVenues] = useState<VenueData[]>([])
+  const [venuesNeedingGeocoding, setVenuesNeedingGeocoding] = useState<VenueData[]>([])
+  const [stats, setStats] = useState({
+    totalVenues: 0,
+    venuesWithCoordinates: 0,
+    venuesNeedingGeocoding: 0,
+    mostUsedVenue: null
+  })
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'with-coordinates' | 'needs-geocoding'>('all')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -31,27 +40,49 @@ const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
     successCount?: number
     errors?: string[]
   } | null>(null)
+  const [editingVenue, setEditingVenue] = useState<string | null>(null)
+  const [editCoordinates, setEditCoordinates] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Load data safely after component mounts
+  useEffect(() => {
+    try {
+      setVenues(getAllVenues())
+      setVenuesNeedingGeocoding(getVenuesNeedingGeocoding())
+      setStats(getVenueStats())
+    } catch (error) {
+      console.error('Error loading venue data:', error)
+    }
+  }, [])
+
   const refreshData = () => {
-    setVenues(getAllVenues())
-    setVenuesNeedingGeocoding(getVenuesNeedingGeocoding())
-    setStats(getVenueStats())
+    try {
+      setVenues(getAllVenues())
+      setVenuesNeedingGeocoding(getVenuesNeedingGeocoding())
+      setStats(getVenueStats())
+    } catch (error) {
+      console.error('Error refreshing venue data:', error)
+    }
   }
 
   const handleExport = () => {
-    const csvContent = exportVenuesCSV()
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `venues-backup-${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    alert(`Exported ${venues.length} venues to CSV file.`)
+    try {
+      const csvContent = exportVenuesCSV()
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `venues-backup-${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      alert(`Exported ${venues.length} venues to CSV file.`)
+    } catch (error) {
+      console.error('Error exporting venues:', error)
+      alert('Error exporting venues. Please try again.')
+    }
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,25 +149,98 @@ const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
     }
   }
 
+  const handleStartEdit = (venue: VenueData) => {
+    setEditingVenue(venue.name)
+    setEditCoordinates({
+      lat: venue.coordinates[0].toString(),
+      lng: venue.coordinates[1].toString()
+    })
+  }
+
+  const handleSaveEdit = () => {
+    if (!editingVenue) return
+
+    const lat = parseFloat(editCoordinates.lat)
+    const lng = parseFloat(editCoordinates.lng)
+
+    if (isNaN(lat) || isNaN(lng)) {
+      alert('Please enter valid numbers for latitude and longitude.')
+      return
+    }
+
+    if (lat < -90 || lat > 90) {
+      alert('Latitude must be between -90 and 90 degrees.')
+      return
+    }
+
+    if (lng < -180 || lng > 180) {
+      alert('Longitude must be between -180 and 180 degrees.')
+      return
+    }
+
+    if (updateVenueCoordinates(editingVenue, [lat, lng])) {
+      refreshData()
+      setEditingVenue(null)
+      setEditCoordinates({ lat: '', lng: '' })
+      alert(`Updated coordinates for "${editingVenue}"`)
+    } else {
+      alert('Failed to update coordinates. Please try again.')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingVenue(null)
+    setEditCoordinates({ lat: '', lng: '' })
+  }
+
+  const handlePopulateVenues = () => {
+    try {
+      let venueCount = 0
+      
+      // Extract venues from events and add them to venue storage
+      events.forEach(event => {
+        if (event.location && event.location.name && event.location.name.trim()) {
+          addVenue(
+            event.location.name,
+            event.location.address || '',
+            event.location.coordinates
+          )
+          venueCount++
+        }
+      })
+      
+      // Refresh the venue data
+      refreshData()
+      
+      alert(`Successfully populated ${venueCount} venues from events!`)
+    } catch (error) {
+      console.error('Error populating venues:', error)
+      alert('Error populating venues. Please try again.')
+    }
+  }
+
   const filteredVenues = venues.filter(venue => {
-    const matchesSearch = venue.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         venue.address.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesFilter = filterType === 'all' ||
-                         (filterType === 'with-coordinates' && !isDefaultCoordinates(venue.coordinates)) ||
-                         (filterType === 'needs-geocoding' && isDefaultCoordinates(venue.coordinates))
-    
-    return matchesSearch && matchesFilter
+    try {
+      // Check if venue has required properties
+      if (!venue || !venue.name || !venue.coordinates) {
+        return false
+      }
+      
+      const matchesSearch = venue.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (venue.address && venue.address.toLowerCase().includes(searchTerm.toLowerCase()))
+      
+      const matchesFilter = filterType === 'all' ||
+                           (filterType === 'with-coordinates' && !isDefaultCoordinates(venue.coordinates)) ||
+                           (filterType === 'needs-geocoding' && isDefaultCoordinates(venue.coordinates))
+      
+      return matchesSearch && matchesFilter
+    } catch (error) {
+      console.error('Error filtering venue:', error, venue)
+      return false
+    }
   })
 
-  const isDefaultCoordinates = (coordinates: [number, number]): boolean => {
-    const [lat, lng] = coordinates
-    return (
-      (lat === 59.436962 && lng === 24.753574) || // Default Tallinn coordinates
-      isNaN(lat) || isNaN(lng) ||
-      lat === 0 || lng === 0
-    )
-  }
+
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-US', {
@@ -243,14 +347,23 @@ const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
               <span className="hidden sm:inline">Cleanup</span>
             </button>
             
-            <button
-              onClick={refreshData}
-              className="ios-floating-button touch-target flex-shrink-0"
-              title="Refresh data"
-            >
-              <span className="text-lg">🔄</span>
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
+                         <button
+               onClick={refreshData}
+               className="ios-floating-button touch-target flex-shrink-0"
+               title="Refresh data"
+             >
+               <span className="text-lg">🔄</span>
+               <span className="hidden sm:inline">Refresh</span>
+             </button>
+             
+             <button
+               onClick={handlePopulateVenues}
+               className="ios-floating-button touch-target flex-shrink-0"
+               title="Populate venues from events"
+             >
+               <span className="text-lg">📊</span>
+               <span className="hidden sm:inline">Populate</span>
+             </button>
           </div>
 
           {/* Upload Result */}
@@ -349,49 +462,119 @@ const VenueManager: React.FC<VenueManagerProps> = ({ onClose }) => {
                 <p>No venues found matching your criteria</p>
               </div>
             ) : (
-              filteredVenues.map(venue => (
-                <div
-                  key={venue.name}
-                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-800 truncate">{venue.name}</h3>
-                      {venue.address && (
-                        <p className="text-sm text-gray-600 truncate">{venue.address}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        isDefaultCoordinates(venue.coordinates)
-                          ? 'bg-orange-100 text-orange-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {isDefaultCoordinates(venue.coordinates) ? 'Needs Geocoding' : 'Has Coordinates'}
-                      </span>
-                    </div>
-                  </div>
+              filteredVenues.map(venue => {
+                try {
+                  // Check if venue has required properties
+                  if (!venue || !venue.name || !venue.coordinates) {
+                    return null
+                  }
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} />
-                      <span>
-                        {venue.coordinates[0].toFixed(6)}, {venue.coordinates[1].toFixed(6)}
-                      </span>
+                  const hasValidCoordinates = venue.coordinates && 
+                    Array.isArray(venue.coordinates) && 
+                    venue.coordinates.length >= 2 &&
+                    !isNaN(venue.coordinates[0]) && 
+                    !isNaN(venue.coordinates[1])
+                  
+                  return (
+                    <div
+                      key={venue.name}
+                      className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-800 truncate">{venue.name}</h3>
+                          {venue.address && (
+                            <p className="text-sm text-gray-600 truncate">{venue.address}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            isDefaultCoordinates(venue.coordinates)
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {isDefaultCoordinates(venue.coordinates) ? 'Needs Geocoding' : 'Has Coordinates'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                         <div className="flex items-center gap-2">
+                           <MapPin size={14} />
+                           {editingVenue === venue.name ? (
+                             <div className="flex items-center gap-2">
+                               <input
+                                 type="number"
+                                 step="any"
+                                 placeholder="Lat"
+                                 value={editCoordinates.lat}
+                                 onChange={(e) => setEditCoordinates(prev => ({ ...prev, lat: e.target.value }))}
+                                 className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               />
+                               <span className="text-xs">,</span>
+                               <input
+                                 type="number"
+                                 step="any"
+                                 placeholder="Lng"
+                                 value={editCoordinates.lng}
+                                 onChange={(e) => setEditCoordinates(prev => ({ ...prev, lng: e.target.value }))}
+                                 className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               />
+                               <button
+                                 onClick={handleSaveEdit}
+                                 className="p-1 text-green-600 hover:text-green-800"
+                                 title="Save coordinates"
+                               >
+                                 <Save size={12} />
+                               </button>
+                               <button
+                                 onClick={handleCancelEdit}
+                                 className="p-1 text-red-600 hover:text-red-800"
+                                 title="Cancel edit"
+                               >
+                                 <XCircle size={12} />
+                               </button>
+                             </div>
+                           ) : (
+                             <span>
+                               {hasValidCoordinates 
+                                 ? `${venue.coordinates[0].toFixed(6)}, ${venue.coordinates[1].toFixed(6)}`
+                                 : 'Invalid coordinates'
+                               }
+                             </span>
+                           )}
+                         </div>
+                         
+                         <div className="flex items-center gap-2">
+                           <TrendingUp size={14} />
+                           <span>Used {venue.usageCount || 0} times</span>
+                         </div>
+                         
+                         <div className="flex items-center gap-2">
+                           <Clock size={14} />
+                           <span>Last: {venue.lastUsed ? formatDate(venue.lastUsed) : 'Unknown'}</span>
+                         </div>
+                       </div>
+                       
+                       {editingVenue !== venue.name && (
+                         <div className="mt-3 flex justify-end">
+                           <button
+                             onClick={() => handleStartEdit(venue)}
+                             className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                             title="Edit coordinates"
+                           >
+                             <Edit3 size={12} />
+                             <span>Edit Coordinates</span>
+                           </button>
+                         </div>
+                       )}
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <TrendingUp size={14} />
-                      <span>Used {venue.usageCount} times</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} />
-                      <span>Last: {formatDate(venue.lastUsed)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
+                  )
+                } catch (error) {
+                  console.error('Error rendering venue:', error, venue)
+                  return null
+                }
+              }).filter(Boolean)
             )}
           </div>
         </div>
