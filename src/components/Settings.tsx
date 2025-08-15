@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { useEvents, Event } from '../context/EventContext'
-import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft, Upload, Download, FileText } from 'lucide-react'
+import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft, Upload, Download, FileText, Database } from 'lucide-react'
 import DataImporter from './DataImporter'
 import GeocodingTool from './GeocodingTool'
 import GeocodingCSVTool from './GeocodingCSVTool'
+import VenueManager from './VenueManager'
 import { createEventBackup } from '../utils/eventBackup'
 import { clearStoredEvents, downloadCurrentEventsAsJSON } from '../utils/eventStorage'
 import { searchAddress, getCoordinates, formatDisplayName, GeocodingSearchResult } from '../utils/geocoding'
@@ -40,6 +41,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
   const [showDataImporter, setShowDataImporter] = useState(false)
   const [showGeocodingTool, setShowGeocodingTool] = useState(false)
   const [showGeocodingCSVTool, setShowGeocodingCSVTool] = useState(false)
+  const [showVenueManager, setShowVenueManager] = useState(false)
   const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([])
   const [isGeocoding, setIsGeocoding] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
@@ -385,20 +387,34 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                      >
                        <MapPin size={18} />
                      </button>
-                     <button
-                       onClick={() => {
-                         const password = prompt('Please enter the password to access CSV geocoding tool:')
-                         if (password === 'indrek') {
-                           setShowGeocodingCSVTool(true)
-                         } else if (password !== null) {
-                           alert('Incorrect password. CSV geocoding tool access denied.')
-                         }
-                       }}
-                       className="ios-floating-button touch-target flex-shrink-0"
-                       title="Download/Upload geocoded CSV"
-                     >
-                       <FileText size={18} />
-                     </button>
+                                           <button
+                        onClick={() => {
+                          const password = prompt('Please enter the password to access CSV geocoding tool:')
+                          if (password === 'indrek') {
+                            setShowGeocodingCSVTool(true)
+                          } else if (password !== null) {
+                            alert('Incorrect password. CSV geocoding tool access denied.')
+                          }
+                        }}
+                        className="ios-floating-button touch-target flex-shrink-0"
+                        title="Download/Upload geocoded CSV"
+                      >
+                        <FileText size={18} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const password = prompt('Please enter the password to access venue manager:')
+                          if (password === 'indrek') {
+                            setShowVenueManager(true)
+                          } else if (password !== null) {
+                            alert('Incorrect password. Venue manager access denied.')
+                          }
+                        }}
+                        className="ios-floating-button touch-target flex-shrink-0"
+                        title="Manage venue storage"
+                      >
+                        <Database size={18} />
+                      </button>
                    <button
                      onClick={() => {
                        const password = prompt('Please enter the password to backup events:')
@@ -867,6 +883,9 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
         )}
         {showGeocodingCSVTool && (
           <GeocodingCSVTool onClose={() => setShowGeocodingCSVTool(false)} />
+        )}
+        {showVenueManager && (
+          <VenueManager onClose={() => setShowVenueManager(false)} />
         )}
      </div>
    )

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { loadEventsFromFile } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
+import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
 
 // Helper function to determine category
 const determineCategory = (name: string, description: string): 'music' | 'food' | 'sports' | 'art' | 'business' | 'other' => {
@@ -144,7 +145,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
               attendees: Math.floor(Math.random() * 200) + 10,
               maxAttendees: undefined
             }))
-            setEvents(events)
+            
+            // Process events with venue storage to auto-fix coordinates
+            const processedEvents = processEventsWithVenueStorage(events)
+            setEvents(processedEvents)
             console.log('Loaded', events.length, 'events from server')
             return
           }
@@ -153,13 +157,15 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         // Fallback to localStorage
         const storedEvents = await loadEventsFromStorage()
         if (storedEvents.length > 0) {
-          setEvents(storedEvents)
-          console.log('Loaded', storedEvents.length, 'events from storage')
+          const processedEvents = processEventsWithVenueStorage(storedEvents)
+          setEvents(processedEvents)
+          console.log('Loaded', processedEvents.length, 'events from storage')
         } else {
           // Fallback to JSON file if no stored events
           const importedEvents = await loadEventsFromFile()
-          setEvents(importedEvents)
-          console.log('Loaded', importedEvents.length, 'events from imported data')
+          const processedEvents = processEventsWithVenueStorage(importedEvents)
+          setEvents(processedEvents)
+          console.log('Loaded', processedEvents.length, 'events from imported data')
         }
       } catch (error) {
         console.error('Error loading events:', error)
@@ -215,7 +221,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const addEvent = (event: Event) => {
     setEvents(prev => {
-      const updatedEvents = [...prev, event]
+      // Process the new event with venue storage
+      const processedEvent = processEventsWithVenueStorage([event])[0]
+      const updatedEvents = [...prev, processedEvent]
+      
       // Save to storage
       saveEventsToFile(updatedEvents).catch(error => {
         console.error('Error saving events:', error)
@@ -226,8 +235,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const updateEvent = (eventId: string, updatedEvent: Event) => {
     setEvents(prev => {
+      // Process the updated event with venue storage
+      const processedEvent = processEventsWithVenueStorage([updatedEvent])[0]
       const updatedEvents = prev.map(event => 
-        event.id === eventId ? updatedEvent : event
+        event.id === eventId ? processedEvent : event
       )
       // Save to storage
       saveEventsToFile(updatedEvents).catch(error => {
@@ -296,6 +307,46 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       Math.sin(dLon/2) * Math.sin(dLon/2)
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
     return R * c
+  }
+
+  // Process events to auto-fix venue coordinates
+  const processEventsWithVenueStorage = (eventsToProcess: Event[]): Event[] => {
+    return eventsToProcess.map(event => {
+      // Auto-fix coordinates if they're default/unknown
+      const fixedCoordinates = autoFixVenueCoordinates(
+        event.location.name,
+        event.location.coordinates
+      )
+      
+      // If coordinates were fixed, update the event
+      if (fixedCoordinates !== event.location.coordinates) {
+        const updatedEvent = {
+          ...event,
+          location: {
+            ...event.location,
+            coordinates: fixedCoordinates
+          }
+        }
+        
+        // Also save the venue to storage for future use
+        addVenue(
+          event.location.name,
+          event.location.address,
+          fixedCoordinates
+        )
+        
+        return updatedEvent
+      }
+      
+      // Always save venue to storage for tracking
+      addVenue(
+        event.location.name,
+        event.location.address,
+        event.location.coordinates
+      )
+      
+      return event
+    })
   }
 
   const value: EventContextType = {
