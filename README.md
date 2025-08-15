@@ -8,6 +8,7 @@ A modern, mobile-first web application for discovering events happening around y
 - 📍 **Location-based Discovery**: Find events near your current location
 - 🎯 **Smart Filtering**: Filter events by category, price, date, and radius
 - ⚙️ **Event Management**: Create, edit, and delete events through settings
+- 📥 **Data Import**: Import events from CSV files with automatic category detection
 - 📱 **Mobile-First Design**: Optimized for mobile devices with iOS-like UI
 - 🎨 **Beautiful UI**: Modern design with smooth animations and transitions
 - 🔍 **Event Details**: Comprehensive event information and booking
@@ -103,6 +104,15 @@ src/
 - Delete events with confirmation
 - Search and filter events by category
 - View all events in a comprehensive list
+
+### Data Import
+- Import events from CSV files
+- Automatic category detection based on keywords
+- Preview events before importing
+- Configurable category mapping
+- Support for Estonian CSV format (Kuupäev, Algusaeg, Lõpuaeg, Üritus, Asukoht, Laiuskraad, Pikkuskraad)
+- Drag and drop file upload
+- Sample CSV download for reference
 
 ### Mobile Optimization
 - Touch-friendly interface

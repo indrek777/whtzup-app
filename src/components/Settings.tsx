@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useEvents, Event } from '../context/EventContext'
-import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft } from 'lucide-react'
+import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft, Upload } from 'lucide-react'
+import DataImporter from './DataImporter'
 
 interface SettingsProps {
   onClose: () => void
@@ -31,6 +32,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
+  const [showDataImporter, setShowDataImporter] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
     id: '',
     title: '',
@@ -292,6 +294,20 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                      />
                    </div>
+                   <button
+                     onClick={() => {
+                       const password = prompt('Please enter the password to access data import:')
+                       if (password === 'indrek') {
+                         setShowDataImporter(true)
+                       } else if (password !== null) {
+                         alert('Incorrect password. Data import access denied.')
+                       }
+                     }}
+                     className="ios-floating-button touch-target"
+                     title="Import events from CSV"
+                   >
+                     <Upload size={18} />
+                   </button>
                    <button
                      onClick={() => setActiveTab('add')}
                      className="ios-floating-button primary touch-target"
@@ -685,6 +701,11 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
           )}
         </div>
       </div>
+
+      {/* Data Importer Modal */}
+      {showDataImporter && (
+        <DataImporter onClose={() => setShowDataImporter(false)} />
+      )}
     </div>
   )
 }
