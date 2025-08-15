@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { Upload, FileText, CheckCircle, AlertCircle, X, Download, Info } from 'lucide-react'
 import { useEvents } from '../context/EventContext'
 import { Event } from '../context/EventContext'
+import { getCoordinates } from '../utils/geocoding'
 
 interface DataImporterProps {
   onClose: () => void
@@ -46,12 +47,12 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Function to detect category based on event title and description
-  const detectCategory = (title: string, description: string = ''): string => {
+  const detectCategory = (title: string, description: string = ''): Event['category'] => {
     const text = (title + ' ' + description).toLowerCase()
     
     for (const [keyword, category] of Object.entries(categoryMapping)) {
       if (text.includes(keyword)) {
-        return category
+        return category as Event['category']
       }
     }
     
@@ -105,7 +106,7 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
         location: {
           name: locationName,
           address: locationName,
-          coordinates
+          coordinates: coordinates || [59.436962, 24.753574] // Default to Tallinn coordinates if null
         },
         category: detectCategory(title, locationName),
         description: `${locationName ? `Location: ${locationName}` : ''}`.trim(),
@@ -189,32 +190,59 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
     }
   }
 
-  // Function to import events to the app
-  const importEvents = () => {
-    importedEvents.forEach(event => {
-      const newEvent: Event = {
-        id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        title: event.title,
-        description: event.description,
-        category: event.category,
-        location: event.location,
-        date: event.date,
-        time: event.startTime,
-        organizer: event.organizer,
-        attendees: event.attendees,
-        maxAttendees: event.maxAttendees,
-        userRating: 0,
-        rating: null
-      }
-      
-      addEvent(newEvent)
-    })
-    
-    setImportStatus('success')
-    setTimeout(() => {
-      onClose()
-    }, 2000)
-  }
+     // Function to import events to the app
+   const importEvents = async () => {
+     setImportStatus('processing')
+     
+     try {
+       // Process events with geocoding for missing coordinates
+       for (const event of importedEvents) {
+         let coordinates = event.location.coordinates
+         
+         // If no coordinates and we have a location name, try to geocode it
+         if (!coordinates && event.location.name.trim()) {
+           try {
+             const geocodedCoords = await getCoordinates(event.location.name)
+             if (geocodedCoords) {
+               coordinates = geocodedCoords
+             }
+           } catch (error) {
+             console.warn('Failed to geocode location:', event.location.name, error)
+           }
+         }
+         
+         const newEvent: Event = {
+           id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+           title: event.title,
+           description: event.description,
+           category: event.category as Event['category'],
+           location: {
+             name: event.location.name,
+             address: event.location.address,
+             coordinates: coordinates || [59.436962, 24.753574]
+           },
+           date: event.date,
+           time: event.startTime,
+           organizer: event.organizer,
+           attendees: event.attendees,
+           maxAttendees: event.maxAttendees,
+           userRating: 0,
+           rating: undefined
+         }
+         
+         addEvent(newEvent)
+       }
+       
+       setImportStatus('success')
+       setTimeout(() => {
+         onClose()
+       }, 3000)
+     } catch (error) {
+       console.error('Error importing events:', error)
+       setImportStatus('error')
+       setErrorMessage('Failed to import events. Please try again.')
+     }
+   }
 
   // Function to update category mapping
   const updateCategoryMapping = (keyword: string, category: string) => {
@@ -266,7 +294,9 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
                 <div className="flex items-start gap-3">
                   <Info size={20} className="text-blue-600 mt-0.5" />
                   <div className="text-sm text-blue-800">
-                    <h3 className="font-semibold mb-2">CSV Format Requirements</h3>
+                                         <h3 className="font-semibold mb-2">CSV Import Information</h3>
+                     <p className="mb-2 text-green-700 font-medium">✅ Imported events will be automatically shared with all users on the same server.</p>
+                     <p className="mb-2 text-blue-700 font-medium">🚀 No manual file replacement needed - all users will see the new events immediately!</p>
                     <p className="mb-2">Your CSV file should include these columns:</p>
                     <ul className="list-disc list-inside space-y-1 text-xs">
                       <li><strong>Kuupäev</strong> (Date) - Required</li>
@@ -348,6 +378,17 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
                   <span>{errorMessage}</span>
                 </div>
               )}
+
+                             {importStatus === 'success' && (
+                 <div className="flex items-center gap-3 text-green-600 bg-green-50 p-3 rounded-lg">
+                   <CheckCircle size={20} />
+                   <div>
+                     <span className="font-medium">Import successful!</span>
+                     <p className="text-sm text-green-700 mt-1">Events have been added and automatically shared with all users on the server.</p>
+                     <p className="text-xs text-blue-600 mt-1">🚀 All users will see the new events immediately - no manual steps required!</p>
+                   </div>
+                 </div>
+               )}
             </div>
           ) : (
             /* Preview Section */
@@ -421,13 +462,23 @@ const DataImporter: React.FC<DataImporterProps> = ({ onClose }) => {
                 >
                   Back to Upload
                 </button>
-                <button
-                  onClick={importEvents}
-                  className="flex-1 ios-floating-button primary"
-                >
-                  <CheckCircle size={16} />
-                  Import {importedEvents.length} Events
-                </button>
+                                 <button
+                   onClick={importEvents}
+                   disabled={importStatus === 'processing'}
+                   className="flex-1 ios-floating-button primary disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   {importStatus === 'processing' ? (
+                     <>
+                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                       Importing...
+                     </>
+                   ) : (
+                     <>
+                       <CheckCircle size={16} />
+                       Import {importedEvents.length} Events
+                     </>
+                   )}
+                 </button>
               </div>
             </div>
           )}

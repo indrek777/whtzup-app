@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useEvents, Event } from '../context/EventContext'
-import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft, Upload } from 'lucide-react'
+import { X, Edit, Trash2, Plus, Search, Filter, Calendar, MapPin, User, Clock, Users, Star, Save, ArrowLeft, Upload, Download, FileText } from 'lucide-react'
 import DataImporter from './DataImporter'
+import GeocodingTool from './GeocodingTool'
+import GeocodingCSVTool from './GeocodingCSVTool'
+import { createEventBackup } from '../utils/eventBackup'
+import { clearStoredEvents, downloadCurrentEventsAsJSON } from '../utils/eventStorage'
+import { searchAddress, getCoordinates, formatDisplayName, GeocodingSearchResult } from '../utils/geocoding'
 
 interface SettingsProps {
   onClose: () => void
@@ -33,6 +38,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
   const [showDataImporter, setShowDataImporter] = useState(false)
+  const [showGeocodingTool, setShowGeocodingTool] = useState(false)
+  const [showGeocodingCSVTool, setShowGeocodingCSVTool] = useState(false)
+  const [geocodingResults, setGeocodingResults] = useState<GeocodingSearchResult[]>([])
+  const [isGeocoding, setIsGeocoding] = useState(false)
   const [formData, setFormData] = useState<EventFormData>({
     id: '',
     title: '',
@@ -230,6 +239,57 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
     setShowVenueSuggestions(false)
   }
 
+  // Handle address search with Nominatim
+  const handleAddressSearch = async (query: string) => {
+    if (query.trim().length < 3) {
+      setGeocodingResults([])
+      return
+    }
+
+    setIsGeocoding(true)
+    try {
+      const results = await searchAddress(query)
+      setGeocodingResults(results)
+    } catch (error) {
+      console.error('Error searching address:', error)
+      setGeocodingResults([])
+    } finally {
+      setIsGeocoding(false)
+    }
+  }
+
+  // Handle selecting a geocoding result
+  const handleGeocodingSelect = (result: GeocodingSearchResult) => {
+    setFormData({
+      ...formData,
+      location: {
+        name: formatDisplayName(result.display_name),
+        address: result.display_name,
+        coordinates: [parseFloat(result.lat), parseFloat(result.lon)]
+      }
+    })
+    setGeocodingResults([])
+  }
+
+  // Auto-geocode when address is entered
+  const handleAddressInput = async (address: string) => {
+    setFormData({
+      ...formData,
+      location: { ...formData.location, address }
+    })
+    
+    // Search for coordinates if address is long enough
+    if (address.trim().length >= 5) {
+      const coords = await getCoordinates(address)
+      if (coords) {
+        setFormData(prev => ({
+          ...prev,
+          location: { ...prev.location, coordinates: coords }
+        }))
+      }
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
       <div className="ios-card-elevated w-full max-w-2xl h-[90vh] flex flex-col overflow-hidden">
@@ -264,9 +324,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                   <ArrowLeft size={18} />
                 </button>
               )}
-              <h2 className="text-lg font-semibold text-gray-800">
-                {activeTab === 'events' ? 'Event Management' : (editingEvent ? 'Edit Event' : 'Add New Event')}
-              </h2>
+                             <h2 className="text-lg font-semibold text-gray-800">
+                 {activeTab === 'events' ? 'Event Management' : (editingEvent ? 'Edit Event' : 'Add New Event')}
+               </h2>
+               
             </div>
             <button
               onClick={onClose}
@@ -281,10 +342,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
         <div className="flex-1 overflow-hidden">
           {activeTab === 'events' ? (
             <div className="h-full flex flex-col">
-               {/* Search and Filter Bar */}
-               <div className="flex-shrink-0 p-4 border-b border-gray-100">
-                 <div className="flex gap-2 mb-3">
-                   <div className="flex-1 relative">
+               
+
+                {/* Search and Filter Bar */}
+                <div className="flex-shrink-0 p-4 border-b border-gray-100">
+                 <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                   <div className="flex-1 relative min-w-0">
                      <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                      <input
                        type="text"
@@ -294,23 +357,83 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                      />
                    </div>
+                                       <button
+                      onClick={() => {
+                        const password = prompt('Please enter the password to access data import:')
+                        if (password === 'indrek') {
+                          setShowDataImporter(true)
+                        } else if (password !== null) {
+                          alert('Incorrect password. Data import access denied.')
+                        }
+                      }}
+                      className="ios-floating-button touch-target flex-shrink-0"
+                      title="Import events from CSV"
+                    >
+                      <Upload size={18} />
+                    </button>
+                                         <button
+                       onClick={() => {
+                         const password = prompt('Please enter the password to access geocoding tool:')
+                         if (password === 'indrek') {
+                           setShowGeocodingTool(true)
+                         } else if (password !== null) {
+                           alert('Incorrect password. Geocoding tool access denied.')
+                         }
+                       }}
+                       className="ios-floating-button touch-target flex-shrink-0"
+                       title="Geocode existing events"
+                     >
+                       <MapPin size={18} />
+                     </button>
+                     <button
+                       onClick={() => {
+                         const password = prompt('Please enter the password to access CSV geocoding tool:')
+                         if (password === 'indrek') {
+                           setShowGeocodingCSVTool(true)
+                         } else if (password !== null) {
+                           alert('Incorrect password. CSV geocoding tool access denied.')
+                         }
+                       }}
+                       className="ios-floating-button touch-target flex-shrink-0"
+                       title="Download/Upload geocoded CSV"
+                     >
+                       <FileText size={18} />
+                     </button>
                    <button
                      onClick={() => {
-                       const password = prompt('Please enter the password to access data import:')
+                       const password = prompt('Please enter the password to backup events:')
                        if (password === 'indrek') {
-                         setShowDataImporter(true)
+                         downloadCurrentEventsAsJSON(events)
+                         alert('Events JSON file downloaded for sharing! Replace events-user.json with this file to share with all users.')
                        } else if (password !== null) {
-                         alert('Incorrect password. Data import access denied.')
+                         alert('Incorrect password. Backup access denied.')
                        }
                      }}
-                     className="ios-floating-button touch-target"
-                     title="Import events from CSV"
+                     className="ios-floating-button touch-target flex-shrink-0"
+                     title="Download events for sharing"
                    >
-                     <Upload size={18} />
+                     <Download size={18} />
+                   </button>
+                   <button
+                     onClick={() => {
+                       const password = prompt('Please enter the password to clear all events:')
+                       if (password === 'indrek') {
+                         if (window.confirm('Are you sure you want to clear all events? This action cannot be undone.')) {
+                           clearStoredEvents()
+                           window.location.reload() // Reload to reset to original events
+                         }
+                       } else if (password !== null) {
+                         alert('Incorrect password. Clear access denied.')
+                       }
+                     }}
+                     className="ios-floating-button touch-target flex-shrink-0"
+                     title="Clear all events"
+                   >
+                     <Trash2 size={18} />
                    </button>
                    <button
                      onClick={() => setActiveTab('add')}
-                     className="ios-floating-button primary touch-target"
+                     className="ios-floating-button primary touch-target flex-shrink-0"
                    >
                      <Plus size={18} />
                    </button>
@@ -370,9 +493,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                    </div>
                  )}
                </div>
+               
+               
 
-              {/* Events List */}
-              <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                             {/* Events List */}
+               <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                 
                  {filteredEvents.length === 0 ? (
                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
                      <Calendar size={48} className="mb-4 opacity-50" />
@@ -514,62 +640,90 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
                 </div>
 
                                                    {/* Location Information */}
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
-                    <input
-                      type="text"
-                      value={formData.location.name}
-                      onChange={(e) => {
-                        setFormData({ 
-                          ...formData, 
-                          location: { ...formData.location, name: e.target.value }
-                        })
-                        setShowVenueSuggestions(e.target.value.trim().length > 0)
-                      }}
-                      onFocus={() => setShowVenueSuggestions(formData.location.name.trim().length > 0)}
-                      onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 200)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter venue name"
-                    />
-                    
-                    {/* Venue Suggestions */}
-                    {showVenueSuggestions && (
-                      <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {getVenueSuggestions(formData.location.name).map((venue, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => handleVenueSelect(venue)}
-                            className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-gray-50"
-                          >
-                            <div className="font-medium text-gray-800">{venue.name}</div>
-                            {venue.address && (
-                              <div className="text-sm text-gray-600 truncate">{venue.address}</div>
-                            )}
-                          </button>
-                        ))}
-                        {getVenueSuggestions(formData.location.name).length === 0 && (
-                          <div className="px-3 py-2 text-sm text-gray-500">
-                            No matching venues found
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                                     <div className="relative">
+                     <label className="block text-sm font-medium text-gray-700 mb-2">Venue Name *</label>
+                     <input
+                       type="text"
+                       value={formData.location.name}
+                       onChange={(e) => {
+                         setFormData({ 
+                           ...formData, 
+                           location: { ...formData.location, name: e.target.value }
+                         })
+                         setShowVenueSuggestions(e.target.value.trim().length > 0)
+                       }}
+                       onFocus={() => setShowVenueSuggestions(formData.location.name.trim().length > 0)}
+                       onBlur={() => setTimeout(() => setShowVenueSuggestions(false), 200)}
+                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       placeholder="Enter venue name"
+                     />
+                     
+                     {/* Venue Suggestions */}
+                     {showVenueSuggestions && (
+                       <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                         {getVenueSuggestions(formData.location.name).map((venue, index) => (
+                           <button
+                             key={index}
+                             type="button"
+                             onClick={() => handleVenueSelect(venue)}
+                             className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-gray-50"
+                           >
+                             <div className="font-medium text-gray-800">{venue.name}</div>
+                             {venue.address && (
+                               <div className="text-sm text-gray-600 truncate">{venue.address}</div>
+                             )}
+                           </button>
+                         ))}
+                         {getVenueSuggestions(formData.location.name).length === 0 && (
+                           <div className="px-3 py-2 text-sm text-gray-500">
+                             No matching venues found
+                           </div>
+                         )}
+                       </div>
+                     )}
+                   </div>
 
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                   <input
-                     type="text"
-                     value={formData.location.address}
-                     onChange={(e) => setFormData({ 
-                       ...formData, 
-                       location: { ...formData.location, address: e.target.value }
-                     })}
-                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                     placeholder="Enter full address"
-                   />
-                 </div>
+                   <div className="relative">
+                     <label className="block text-sm font-medium text-gray-700 mb-2">Address (with auto-geocoding)</label>
+                     <div className="relative">
+                       <input
+                         type="text"
+                         value={formData.location.address}
+                         onChange={(e) => handleAddressInput(e.target.value)}
+                         onFocus={() => handleAddressSearch(formData.location.address)}
+                         className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                         placeholder="Enter full address for automatic coordinate lookup"
+                       />
+                                               <MapPin size={16} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                     </div>
+                     
+                     {/* Geocoding Results */}
+                     {geocodingResults.length > 0 && (
+                       <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                         {isGeocoding && (
+                           <div className="px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
+                             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                             Searching addresses...
+                           </div>
+                         )}
+                         {geocodingResults.map((result, index) => (
+                           <button
+                             key={index}
+                             type="button"
+                             onClick={() => handleGeocodingSelect(result)}
+                             className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-gray-50"
+                           >
+                             <div className="font-medium text-gray-800">{formatDisplayName(result.display_name)}</div>
+                             <div className="text-xs text-gray-500">
+                               {result.lat}, {result.lon} • {result.type}
+                             </div>
+                           </button>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+
+                 
 
                  {/* Coordinates */}
                  <div>
@@ -702,12 +856,20 @@ const Settings: React.FC<SettingsProps> = ({ onClose, selectedEvent }) => {
         </div>
       </div>
 
-      {/* Data Importer Modal */}
-      {showDataImporter && (
-        <DataImporter onClose={() => setShowDataImporter(false)} />
-      )}
-    </div>
-  )
-}
+             {/* Data Importer Modal */}
+       {showDataImporter && (
+         <DataImporter onClose={() => setShowDataImporter(false)} />
+       )}
+
+       {/* Geocoding Tool Modal */}
+               {showGeocodingTool && (
+          <GeocodingTool onClose={() => setShowGeocodingTool(false)} />
+        )}
+        {showGeocodingCSVTool && (
+          <GeocodingCSVTool onClose={() => setShowGeocodingCSVTool(false)} />
+        )}
+     </div>
+   )
+ }
 
 export default Settings

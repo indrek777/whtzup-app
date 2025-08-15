@@ -1,5 +1,66 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { loadEventsFromFile } from '../utils/eventDataImporter'
+import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
+
+// Helper function to determine category
+const determineCategory = (name: string, description: string): 'music' | 'food' | 'sports' | 'art' | 'business' | 'other' => {
+  const text = (name + ' ' + description).toLowerCase()
+  
+  if (text.includes('kontsert') || text.includes('muusika') || text.includes('jazz') || text.includes('rock')) {
+    return 'music'
+  }
+  if (text.includes('söök') || text.includes('restoran') || text.includes('vein') || text.includes('toit')) {
+    return 'food'
+  }
+  if (text.includes('jalgpall') || text.includes('spordi') || text.includes('võistlus')) {
+    return 'sports'
+  }
+  if (text.includes('näitus') || text.includes('galerii') || text.includes('kunst') || text.includes('muuseum')) {
+    return 'art'
+  }
+  if (text.includes('konverents') || text.includes('seminar') || text.includes('workshop')) {
+    return 'business'
+  }
+  
+  return 'other'
+}
+
+// Helper function to parse date from startsAt
+const parseDate = (startsAt: string): string => {
+  try {
+    if (startsAt.includes(' ')) {
+      const parts = startsAt.split(' ')
+      const datePart = parts.find(part => /^\d{4}-\d{2}-\d{2}$/.test(part))
+      if (datePart) return datePart
+    }
+    
+    if (/^\d{4}-\d{2}-\d{2}$/.test(startsAt)) {
+      return startsAt
+    }
+    
+    const dateMatch = startsAt.match(/(\d{4}-\d{2}-\d{2})/)
+    if (dateMatch) return dateMatch[1]
+    
+    return new Date().toISOString().split('T')[0]
+  } catch {
+    return new Date().toISOString().split('T')[0]
+  }
+}
+
+// Helper function to parse time from startsAt
+const parseTime = (startsAt: string): string => {
+  try {
+    if (startsAt.includes(' ')) {
+      const parts = startsAt.split(' ')
+      const timePart = parts.find(part => /^\d{2}:\d{2}$/.test(part))
+      if (timePart) return timePart
+    }
+    
+    return '12:00'
+  } catch {
+    return '12:00'
+  }
+}
 
 export interface Event {
   id: string
@@ -30,6 +91,7 @@ interface EventContextType {
   userLocation: [number, number] | null
   setSelectedEvent: (event: Event | null) => void
   setUserLocation: (location: [number, number]) => void
+  setEvents: (events: Event[]) => void
   addEvent: (event: Event) => void
   updateEvent: (eventId: string, updatedEvent: Event) => void
   deleteEvent: (eventId: string) => void
@@ -56,13 +118,49 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
 
-  // Load events from imported data
+  // Load events from imported data and storage
   useEffect(() => {
     const loadEvents = async () => {
       try {
-        const importedEvents = await loadEventsFromFile()
-        setEvents(importedEvents)
-        console.log('Loaded', importedEvents.length, 'events from imported data')
+        // First try to load from server API
+        const response = await fetch('/api/events')
+        if (response.ok) {
+          const serverEvents = await response.json()
+          if (Array.isArray(serverEvents) && serverEvents.length > 0) {
+            // Convert server format to Event format
+            const events: Event[] = serverEvents.map((item: any) => ({
+              id: item.id,
+              title: item.name,
+              description: item.description,
+              category: determineCategory(item.name, item.description),
+              location: {
+                name: item.venue || item.address || 'Various locations',
+                address: item.address || item.venue || 'Location TBD',
+                coordinates: [Number(item.latitude), Number(item.longitude)] as [number, number]
+              },
+              date: parseDate(item.startsAt),
+              time: parseTime(item.startsAt),
+              organizer: item.source === 'csv' ? 'Local Organizer' : 'Event Organizer',
+              attendees: Math.floor(Math.random() * 200) + 10,
+              maxAttendees: undefined
+            }))
+            setEvents(events)
+            console.log('Loaded', events.length, 'events from server')
+            return
+          }
+        }
+        
+        // Fallback to localStorage
+        const storedEvents = await loadEventsFromStorage()
+        if (storedEvents.length > 0) {
+          setEvents(storedEvents)
+          console.log('Loaded', storedEvents.length, 'events from storage')
+        } else {
+          // Fallback to JSON file if no stored events
+          const importedEvents = await loadEventsFromFile()
+          setEvents(importedEvents)
+          console.log('Loaded', importedEvents.length, 'events from imported data')
+        }
       } catch (error) {
         console.error('Error loading events:', error)
         // Fallback to mock data if import fails
@@ -116,17 +214,38 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   }, [])
 
   const addEvent = (event: Event) => {
-    setEvents(prev => [...prev, event])
+    setEvents(prev => {
+      const updatedEvents = [...prev, event]
+      // Save to storage
+      saveEventsToFile(updatedEvents).catch(error => {
+        console.error('Error saving events:', error)
+      })
+      return updatedEvents
+    })
   }
 
   const updateEvent = (eventId: string, updatedEvent: Event) => {
-    setEvents(prev => prev.map(event => 
-      event.id === eventId ? updatedEvent : event
-    ))
+    setEvents(prev => {
+      const updatedEvents = prev.map(event => 
+        event.id === eventId ? updatedEvent : event
+      )
+      // Save to storage
+      saveEventsToFile(updatedEvents).catch(error => {
+        console.error('Error saving events:', error)
+      })
+      return updatedEvents
+    })
   }
 
   const deleteEvent = (eventId: string) => {
-    setEvents(prev => prev.filter(event => event.id !== eventId))
+    setEvents(prev => {
+      const updatedEvents = prev.filter(event => event.id !== eventId)
+      // Save to storage
+      saveEventsToFile(updatedEvents).catch(error => {
+        console.error('Error saving events:', error)
+      })
+      return updatedEvents
+    })
   }
 
   const rateEvent = (eventId: string, rating: number) => {
@@ -185,6 +304,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     userLocation,
     setSelectedEvent,
     setUserLocation,
+    setEvents,
     addEvent,
     updateEvent,
     deleteEvent,

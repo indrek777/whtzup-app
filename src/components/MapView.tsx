@@ -172,8 +172,14 @@ const MapView: React.FC = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           console.log('Location obtained:', position.coords)
-          setUserLocation([position.coords.latitude, position.coords.longitude])
-          setLocationStatus('success')
+          if (position.coords && typeof position.coords.latitude === 'number' && typeof position.coords.longitude === 'number') {
+            setUserLocation([position.coords.latitude, position.coords.longitude])
+            setLocationStatus('success')
+          } else {
+            console.warn('Invalid coordinates received from geolocation')
+            setUserLocation([59.436962, 24.753574])
+            setLocationStatus('error')
+          }
         },
         (error) => {
           console.error('Error getting location:', error)
@@ -414,7 +420,7 @@ const MapView: React.FC = () => {
       }
       
       // Radius filter
-      if (filters.radius !== 999 && userLocation) {
+      if (filters.radius !== 999 && userLocation && userLocation.length >= 2) {
         const distance = calculateDistance(
           userLocation[0],
           userLocation[1],
@@ -448,7 +454,7 @@ const MapView: React.FC = () => {
             return 0
           }
         case 'distance':
-          if (!userLocation) return 0
+          if (!userLocation || userLocation.length < 2) return 0
           const distanceA = calculateDistance(
             userLocation[0],
             userLocation[1],
@@ -956,26 +962,26 @@ const MapView: React.FC = () => {
         />
       )}
 
-             {/* Floating Action Buttons */}
-       <div className="absolute bottom-20 right-6 z-10 flex flex-col gap-3">
-        {/* Events List Button */}
-        <button
-          onClick={() => setShowEventList(true)}
-          className="ios-floating-button primary touch-target"
-          title="View events list"
-        >
-          <List size={22} />
-        </button>
-        
-        {/* Legend Toggle Button */}
-        <button
-          onClick={() => setShowLegend(!showLegend)}
-          className="ios-floating-button touch-target"
-          title="Toggle map legend"
-        >
-          <Compass size={20} />
-        </button>
-      </div>
+                    {/* Floating Action Buttons */}
+        <div className="absolute bottom-20 right-6 z-10 flex flex-col gap-3">
+         {/* Events List Button */}
+         <button
+           onClick={() => setShowEventList(true)}
+           className="ios-floating-button primary touch-target"
+           title="View events list"
+         >
+           <List size={22} />
+         </button>
+         
+         {/* Legend Toggle Button */}
+         <button
+           onClick={() => setShowLegend(!showLegend)}
+           className="ios-floating-button touch-target"
+           title="Toggle map legend"
+         >
+           <Compass size={20} />
+         </button>
+       </div>
 
       {/* Dragging Icon Indicator */}
       {isDraggingIcon && dragIconPosition && (
