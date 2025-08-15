@@ -18,7 +18,7 @@ export const saveEventsToFile = async (events: Event[]): Promise<void> => {
     }))
 
     // Save to localStorage for current user
-    localStorage.setItem('whtzup-events', JSON.stringify(eventsForStorage))
+    localStorage.setItem('event-events', JSON.stringify(eventsForStorage))
     
     // Also update the server's JSON file for all users
     await updateServerJSONFile(eventsForStorage)
@@ -80,7 +80,7 @@ const downloadUpdatedJSONFile = (events: any[]) => {
 // Function to clear all stored events
 export const clearStoredEvents = (): void => {
   try {
-    localStorage.removeItem('whtzup-events')
+    localStorage.removeItem('event-events')
     console.log('Cleared all stored events')
   } catch (error) {
     console.error('Error clearing stored events:', error)
@@ -113,7 +113,7 @@ export const downloadCurrentEventsAsJSON = (events: Event[]): void => {
 // Function to load events from storage (localStorage fallback)
 export const loadEventsFromStorage = async (): Promise<Event[]> => {
   try {
-    const stored = localStorage.getItem('whtzup-events')
+    const stored = localStorage.getItem('event-events')
     if (!stored) {
       return []
     }

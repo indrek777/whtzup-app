@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# WhtzUp Event Discovery App - Docker Deployment Script
+# Event Discovery App - Docker Deployment Script
 # This script automates the deployment process
 
 set -e  # Exit on any error
 
-echo "🐳 WhtzUp Event Discovery App - Docker Deployment"
+echo "🐳 Event Discovery App - Docker Deployment"
 echo "=================================================="
 
 # Colors for output
@@ -84,7 +84,7 @@ deploy_app() {
     print_status "Building and starting the application..."
     
     # Stop existing containers if running
-    if docker-compose ps | grep -q "whtzup-event-app"; then
+    if docker-compose ps | grep -q "event-app"; then
         print_warning "Stopping existing containers..."
         docker-compose down
     fi
@@ -107,7 +107,7 @@ check_health() {
         print_success "Container is running"
     else
         print_error "Container failed to start"
-        docker-compose logs whtzup-app
+        docker-compose logs event-app
         exit 1
     fi
     
@@ -126,13 +126,13 @@ show_info() {
     echo "======================"
     echo ""
     echo "📱 Application URLs:"
-    echo "   • Main App: http://localhost:7777"
-    echo "   • API: http://localhost:7777/api/events"
+echo "   • Main App: http://localhost:5555"
+echo "   • API: http://localhost:5555/api/events"
     echo ""
     echo "📊 Useful Commands:"
-    echo "   • View logs: docker-compose logs -f whtzup-app"
+    echo "   • View logs: docker-compose logs -f event-app"
     echo "   • Stop app: docker-compose down"
-    echo "   • Restart app: docker-compose restart whtzup-app"
+    echo "   • Restart app: docker-compose restart event-app"
     echo "   • Update app: docker-compose up -d --build"
     echo ""
     echo "📁 Data Locations:"
@@ -169,7 +169,7 @@ case "${1:-deploy}" in
         print_success "Application restarted"
         ;;
     "logs")
-        docker-compose logs -f whtzup-app
+        docker-compose logs -f event-app
         ;;
     "update")
         print_status "Updating application..."

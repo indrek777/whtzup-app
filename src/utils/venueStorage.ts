@@ -9,7 +9,7 @@ export interface VenueData {
   usageCount: number
 }
 
-const VENUE_STORAGE_KEY = 'whtzup_venues'
+const VENUE_STORAGE_KEY = 'event_venues'
 const DEFAULT_COORDINATES: [number, number] = [59.436962, 24.753574] // Tallinn
 
 // Load venues from localStorage

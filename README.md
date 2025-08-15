@@ -1,4 +1,4 @@
-# WhtzUp - Event Discovery App
+# Event - Event Discovery App
 
 A modern, mobile-first web application for discovering events happening around you. Built with React, TypeScript, and Tailwind CSS, featuring an interactive map as the central element.
 
@@ -36,7 +36,7 @@ A modern, mobile-first web application for discovering events happening around y
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd whtzup
+cd event
 ```
 
 2. Install dependencies:
@@ -49,7 +49,7 @@ npm install
 npm run dev
 ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+4. Open your browser and navigate to `http://localhost:5555`
 
 ### Building for Production
 

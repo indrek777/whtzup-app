@@ -47,8 +47,8 @@
                     return;
                 }
 
-                // Check for whtzup-events
-                const storedEvents = localStorage.getItem('whtzup-events');
+                // Check for event-events
+const storedEvents = localStorage.getItem('event-events');
                 
                 if (storedEvents) {
                     const events = JSON.parse(storedEvents);
@@ -85,7 +85,7 @@
 
         function clearStorage() {
             if (confirm('Are you sure you want to clear all stored events?')) {
-                localStorage.removeItem('whtzup-events');
+                localStorage.removeItem('event-events');
                 alert('Storage cleared!');
                 refreshTest();
             }
@@ -105,7 +105,7 @@
                 source: "csv"
             };
 
-            const existingEvents = localStorage.getItem('whtzup-events');
+            const existingEvents = localStorage.getItem('event-events');
             let events = [];
             
             if (existingEvents) {
@@ -113,7 +113,7 @@
             }
             
             events.push(testEvent);
-            localStorage.setItem('whtzup-events', JSON.stringify(events));
+            localStorage.setItem('event-events', JSON.stringify(events));
             
             alert('Test event added!');
             refreshTest();

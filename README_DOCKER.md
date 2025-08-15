@@ -1,6 +1,6 @@
-# 🐳 WhtzUp Event Discovery App - Docker Deployment
+# 🐳 Event Discovery App - Docker Deployment
 
-This repository contains a complete Docker setup for the WhtzUp Event Discovery App, making it easy to deploy and manage the application in any environment.
+This repository contains a complete Docker setup for the Event Discovery App, making it easy to deploy and manage the application in any environment.
 
 ## 📋 What's Included
 
@@ -41,8 +41,8 @@ docker-compose up -d --build
 ```
 
 ### 2. Access the Application
-- **Main App**: http://localhost:7777
-- **API**: http://localhost:7777/api/events
+- **Main App**: http://localhost:5555
+- **API**: http://localhost:5555/api/events
 
 ## 🏢 Production Deployment
 
@@ -101,13 +101,13 @@ The application uses Docker volumes to persist data:
 ### Application Control
 ```bash
 # View logs
-docker-compose logs -f whtzup-app
+docker-compose logs -f event-app
 
 # Stop application
 docker-compose down
 
 # Restart application
-docker-compose restart whtzup-app
+docker-compose restart event-app
 
 # Update application
 docker-compose up -d --build
@@ -122,7 +122,7 @@ docker exec whtzup-event-app node backup-data.js
 docker-compose ps
 
 # Access container shell
-docker-compose exec whtzup-app sh
+docker-compose exec event-app sh
 ```
 
 ## 🔒 Security Features
@@ -157,7 +157,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ### Scaling
 ```bash
 # Scale to multiple instances
-docker-compose up -d --scale whtzup-app=3
+docker-compose up -d --scale event-app=3
 ```
 
 ## 🔄 Backup & Recovery
@@ -178,7 +178,7 @@ cp public/events-user.json backups/events-backup-$(date +%Y%m%d).json
 ```bash
 # Restore from backup
 cp backups/YYYY-MM-DDTHH-MM-SS/events-user.json public/events-user.json
-docker-compose restart whtzup-app
+docker-compose restart event-app
 ```
 
 ## 🛠️ Troubleshooting
@@ -188,7 +188,7 @@ docker-compose restart whtzup-app
 #### Container Won't Start
 ```bash
 # Check logs
-docker-compose logs whtzup-app
+docker-compose logs event-app
 
 # Rebuild without cache
 docker-compose build --no-cache
@@ -218,7 +218,7 @@ sudo chown -R $USER:$USER backups/
 
 ### Getting Help
 1. Check the troubleshooting section in `DOCKER_INSTALLATION.md`
-2. Review application logs: `docker-compose logs whtzup-app`
+2. Review application logs: `docker-compose logs event-app`
 3. Verify Docker installation: `docker --version && docker-compose --version`
 4. Check system resources: `docker system df`
 
@@ -230,8 +230,8 @@ sudo chown -R $USER:$USER backups/
 
 ## 🎉 Success!
 
-Once deployed, your WhtzUp Event Discovery App will be:
-- ✅ **Accessible** at http://localhost:7777
+Once deployed, your Event Discovery App will be:
+- ✅ **Accessible** at http://localhost:5555
 - ✅ **Persistent** with data stored in volumes
 - ✅ **Secure** with production-ready configuration
 - ✅ **Scalable** with Docker Compose

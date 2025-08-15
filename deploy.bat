@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM WhtzUp Event Discovery App - Docker Deployment Script (Windows)
+REM Event Discovery App - Docker Deployment Script (Windows)
 REM This script automates the deployment process
 
-echo 🐳 WhtzUp Event Discovery App - Docker Deployment
+echo 🐳 Event Discovery App - Docker Deployment
 echo ==================================================
 
 REM Check if Docker is installed
@@ -70,7 +70,7 @@ goto :unknown
 echo [INFO] Building and starting the application...
 
 REM Stop existing containers if running
-docker-compose ps | findstr "whtzup-event-app" >nul 2>&1
+docker-compose ps | findstr "event-app" >nul 2>&1
 if not errorlevel 1 (
     echo [WARNING] Stopping existing containers...
     docker-compose down
@@ -94,7 +94,7 @@ REM Check if container is running
 docker-compose ps | findstr "Up" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Container failed to start
-    docker-compose logs whtzup-app
+    docker-compose logs event-app
     pause
     exit /b 1
 ) else (
@@ -102,7 +102,7 @@ if errorlevel 1 (
 )
 
 REM Check API endpoint
-curl -s http://localhost:7777/api/events >nul 2>&1
+curl -s http://localhost:5555/api/events >nul 2>&1
 if errorlevel 1 (
     echo [WARNING] API endpoint not responding yet (this is normal during startup)
 ) else (
@@ -172,13 +172,13 @@ echo 🎉 Deployment Complete!
 echo ======================
 echo.
 echo 📱 Application URLs:
-echo    • Main App: http://localhost:7777
-echo    • API: http://localhost:7777/api/events
+echo    • Main App: http://localhost:5555
+echo    • API: http://localhost:5555/api/events
 echo.
 echo 📊 Useful Commands:
-echo    • View logs: docker-compose logs -f whtzup-app
+echo    • View logs: docker-compose logs -f event-app
 echo    • Stop app: docker-compose down
-echo    • Restart app: docker-compose restart whtzup-app
+echo    • Restart app: docker-compose restart event-app
 echo    • Update app: docker-compose up -d --build
 echo.
 echo 📁 Data Locations:

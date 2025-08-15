@@ -1,6 +1,6 @@
-# 🐳 Docker Installation Manual for WhtzUp Event Discovery App
+# 🐳 Docker Installation Manual for Event Discovery App
 
-This guide will help you deploy the WhtzUp Event Discovery App using Docker and Docker Compose.
+This guide will help you deploy the Event Discovery App using Docker and Docker Compose.
 
 ## 📋 Prerequisites
 
@@ -52,7 +52,7 @@ sudo systemctl enable docker
 ### 1. Clone the Repository
 ```bash
 git clone <your-repository-url>
-cd whtzup-app
+cd event-app
 ```
 
 ### 2. Prepare Data Directory
@@ -71,12 +71,12 @@ cp public/events-user.json data/events-user.json
 docker-compose up -d
 
 # View logs
-docker-compose logs -f whtzup-app
+docker-compose logs -f event-app
 ```
 
 ### 4. Access the Application
-- **Main App**: http://localhost:7777
-- **API Endpoint**: http://localhost:7777/api/events
+- **Main App**: http://localhost:5555
+- **API Endpoint**: http://localhost:5555/api/events
 
 ## 🔧 Configuration Options
 
@@ -87,7 +87,7 @@ You can customize the application by setting environment variables in the `docke
 ```yaml
 environment:
   - NODE_ENV=production
-  - PORT=7777
+  - PORT=5555
   - NOMINATIM_URL=http://nominatim:8080  # If using local Nominatim
 ```
 
@@ -97,7 +97,7 @@ To change the port, modify the `docker-compose.yml` file:
 
 ```yaml
 ports:
-  - "8080:7777"  # Change 8080 to your desired port
+  - "8080:5555"  # Change 8080 to your desired port
 ```
 
 ### Data Persistence
@@ -143,10 +143,10 @@ docker-compose logs -f nominatim
 docker-compose ps
 
 # View application logs
-docker-compose logs whtzup-app
+docker-compose logs event-app
 
 # View real-time logs
-docker-compose logs -f whtzup-app
+docker-compose logs -f event-app
 ```
 
 ### Health Checks
@@ -157,11 +157,11 @@ The application includes health checks that monitor:
 ### Backup Management
 ```bash
 # Create backup of current data
-docker exec whtzup-event-app node backup-data.js
+docker exec event-app node backup-data.js
 
 # Restore from backup
 cp backups/YYYY-MM-DDTHH-MM-SS/events-user.json public/events-user.json
-docker-compose restart whtzup-app
+docker-compose restart event-app
 ```
 
 ## 🔄 Common Operations
@@ -182,13 +182,13 @@ docker-compose up -d --build
 cp new-events.json public/events-user.json
 
 # Restart container to pick up changes
-docker-compose restart whtzup-app
+docker-compose restart event-app
 ```
 
 ### Scale the Application
 ```bash
 # Scale to multiple instances (if needed)
-docker-compose up -d --scale whtzup-app=3
+docker-compose up -d --scale event-app=3
 ```
 
 ### Stop the Application
@@ -206,12 +206,12 @@ docker-compose down -v
 
 #### 1. Port Already in Use
 ```bash
-# Check what's using port 7777
-netstat -tulpn | grep 7777
+# Check what's using port 5555
+netstat -tulpn | grep 5555
 
 # Change port in docker-compose.yml
 ports:
-  - "8080:7777"
+  - "8080:5555"
 ```
 
 #### 2. Permission Denied
@@ -224,13 +224,13 @@ sudo chown -R $USER:$USER backups/
 #### 3. Container Won't Start
 ```bash
 # Check container logs
-docker-compose logs whtzup-app
+docker-compose logs event-app
 
 # Check container status
 docker-compose ps
 
 # Restart container
-docker-compose restart whtzup-app
+docker-compose restart event-app
 ```
 
 #### 4. Build Failures
@@ -245,7 +245,7 @@ docker system prune -a
 ### Debug Mode
 ```bash
 # Run in debug mode with shell access
-docker-compose run --rm whtzup-app sh
+docker-compose run --rm event-app sh
 
 # Check file permissions inside container
 ls -la /app/
@@ -269,7 +269,7 @@ services:
     build: .
     environment:
       - NODE_ENV=production
-      - PORT=7777
+      - PORT=5555
     networks:
       - internal
     restart: unless-stopped
@@ -328,7 +328,7 @@ services:
 If you encounter issues:
 
 1. Check the troubleshooting section above
-2. Review application logs: `docker-compose logs whtzup-app`
+2. Review application logs: `docker-compose logs event-app`
 3. Verify Docker installation: `docker --version && docker-compose --version`
 4. Check system resources: `docker system df`
 

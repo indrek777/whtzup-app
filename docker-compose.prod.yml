@@ -2,19 +2,19 @@ version: '3.8'
 
 services:
   # Main application
-  whtzup-app:
+  event-app:
     build: .
-    container_name: whtzup-event-app
+    container_name: event-app
     environment:
       - NODE_ENV=production
-      - PORT=7777
+      - PORT=5555
     volumes:
       - ./data:/app/data
       - ./public/events-user.json:/app/public/events-user.json
       - ./backups:/app/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:7777/api/events', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5555/api/events', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -22,12 +22,12 @@ services:
     networks:
       - internal
     expose:
-      - "7777"
+      - "5555"
 
   # Nginx reverse proxy
   nginx:
     image: nginx:alpine
-    container_name: whtzup-nginx
+    container_name: event-nginx
     ports:
       - "80:80"
       - "443:443"
@@ -36,7 +36,7 @@ services:
       - ./ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
     depends_on:
-      - whtzup-app
+      - event-app
     restart: unless-stopped
     networks:
       - internal
@@ -45,7 +45,7 @@ services:
   # Optional: Redis for caching (if needed in future)
   redis:
     image: redis:7-alpine
-    container_name: whtzup-redis
+    container_name: event-redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -58,7 +58,7 @@ services:
   # Optional: Nominatim geocoding service
   nominatim:
     image: mediagis/nominatim:4.2
-    container_name: whtzup-nominatim
+    container_name: event-nominatim
     environment:
       - PBF_URL=https://download.geofabrik.de/europe/estonia-latest.osm.pbf
       - REPLICATION_URL=https://download.geofabrik.de/europe/estonia-updates/

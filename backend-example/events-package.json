@@ -1,0 +1,31 @@
+{
+  "name": "event-sharing-backend",
+  "version": "1.0.0",
+  "description": "Backend API for sharing events between users",
+  "main": "events-server.js",
+  "scripts": {
+    "start": "node events-server.js",
+    "dev": "nodemon events-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "events",
+    "sharing",
+    "api",
+    "backend",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -15,13 +15,13 @@ docker-compose up -d --build
 ### Application Management
 ```bash
 # View logs
-docker-compose logs -f whtzup-app
+docker-compose logs -f event-app
 
 # Stop application
 docker-compose down
 
 # Restart application
-docker-compose restart whtzup-app
+docker-compose restart event-app
 
 # Update application
 docker-compose up -d --build
@@ -30,19 +30,19 @@ docker-compose up -d --build
 ### Data Management
 ```bash
 # Create backup
-docker exec whtzup-event-app node backup-data.js
+docker exec event-app node backup-data.js
 
 # View container status
 docker-compose ps
 
 # Access container shell
-docker-compose exec whtzup-app sh
+docker-compose exec event-app sh
 ```
 
 ## 📁 File Structure
 
 ```
-whtzup-app/
+event-app/
 ├── Dockerfile                 # Multi-stage Docker build
 ├── docker-compose.yml         # Development setup
 ├── docker-compose.prod.yml    # Production setup with nginx
@@ -63,7 +63,7 @@ whtzup-app/
 # docker-compose.yml
 environment:
   - NODE_ENV=production
-  - PORT=7777
+  - PORT=5555
   - NOMINATIM_URL=http://nominatim:8080
 ```
 
@@ -71,7 +71,7 @@ environment:
 ```yaml
 # Change external port
 ports:
-  - "8080:7777"  # External:Internal
+  - "8080:5555"  # External:Internal
 ```
 
 ### Volume Mounts
@@ -111,7 +111,7 @@ docker-compose -f docker-compose.prod.yml up -d
 #### Container Won't Start
 ```bash
 # Check logs
-docker-compose logs whtzup-app
+docker-compose logs event-app
 
 # Check container status
 docker-compose ps
@@ -123,11 +123,11 @@ docker-compose build --no-cache
 #### Port Already in Use
 ```bash
 # Check what's using the port
-netstat -tulpn | grep 7777
+netstat -tulpn | grep 5555
 
 # Change port in docker-compose.yml
 ports:
-  - "8080:7777"
+  - "8080:5555"
 ```
 
 #### Permission Issues
@@ -140,13 +140,13 @@ sudo chown -R $USER:$USER backups/
 ### Debug Commands
 ```bash
 # Run container in interactive mode
-docker-compose run --rm whtzup-app sh
+docker-compose run --rm event-app sh
 
 # Check file permissions inside container
 docker-compose exec whtzup-app ls -la /app/
 
 # View container resources
-docker stats whtzup-event-app
+docker stats event-app
 ```
 
 ## 📊 Monitoring
@@ -154,7 +154,7 @@ docker stats whtzup-event-app
 ### Health Checks
 ```bash
 # Check application health
-curl http://localhost:7777/api/events
+curl http://localhost:5555/api/events
 
 # Check container health
 docker-compose ps
@@ -205,7 +205,7 @@ deploy:
 ### Scaling
 ```bash
 # Scale to multiple instances
-docker-compose up -d --scale whtzup-app=3
+docker-compose up -d --scale event-app=3
 ```
 
 ## 🔄 Backup & Restore
@@ -223,7 +223,7 @@ cp public/events-user.json backups/events-backup-$(date +%Y%m%d).json
 ```bash
 # Restore from backup
 cp backups/YYYY-MM-DDTHH-MM-SS/events-user.json public/events-user.json
-docker-compose restart whtzup-app
+docker-compose restart event-app
 ```
 
 ## 📚 Useful Commands
@@ -249,7 +249,7 @@ docker system prune -a
 docker network ls
 
 # Inspect network
-docker network inspect whtzup-app_whtzup-network
+docker network inspect event-app_event-network
 ```
 
 ### Volume Management
@@ -258,7 +258,7 @@ docker network inspect whtzup-app_whtzup-network
 docker volume ls
 
 # Inspect volume
-docker volume inspect whtzup-app_data
+docker volume inspect event-app_data
 ```
 
 ---
