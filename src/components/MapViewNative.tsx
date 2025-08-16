@@ -2383,4 +2383,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default MapViewNative
+module.exports = MapViewNative

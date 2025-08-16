@@ -916,4 +916,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default UserProfile
+module.exports = UserProfile
