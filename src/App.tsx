@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { EventProvider } from './context/EventContext'
-import MapView from './components/MapView'
+const MapView = require('./components/MapView')
 import './index.css'
 
 // Error Boundary Component
