@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch } from 'react-native'
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform } from 'react-native'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -7,7 +7,8 @@ import { eventsData, totalEventsCount } from '../data/events'
 import { ratingService, EventRating, SharedRating } from '../utils/ratingService'
 import { eventService, Event } from '../utils/eventService'
 import { userService } from '../utils/userService'
-import UserProfile from './UserProfile'
+const UserProfile = require('./UserProfile')
+import DateTimePicker from '@react-native-community/datetimepicker'
 
 // Marker color function
 const getMarkerColor = (category: string): string => {
@@ -348,6 +349,12 @@ const MapViewNative: React.FC = () => {
     hasPremium: false,
     canCreateEventToday: false
   })
+
+  // Date/Time picker states
+  const [showDateFromPicker, setShowDateFromPicker] = useState(false)
+  const [showDateToPicker, setShowDateToPicker] = useState(false)
+  const [showEventTimePicker, setShowEventTimePicker] = useState(false)
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false)
 
   // Load events from imported data
   useEffect(() => {
@@ -979,6 +986,89 @@ const MapViewNative: React.FC = () => {
     return previewText;
   };
 
+  // Date/Time picker handlers
+  const handleDateFromChange = (event: any, selectedDate?: Date) => {
+    setShowDateFromPicker(false)
+    if (selectedDate) {
+      const dateString = selectedDate.toISOString().split('T')[0]
+      setSearchFilters(prev => ({ ...prev, dateFrom: dateString }))
+    }
+  }
+
+  const handleDateToChange = (event: any, selectedDate?: Date) => {
+    setShowDateToPicker(false)
+    if (selectedDate) {
+      const dateString = selectedDate.toISOString().split('T')[0]
+      setSearchFilters(prev => ({ ...prev, dateTo: dateString }))
+    }
+  }
+
+  const handleEventTimeChange = (event: any, selectedDate?: Date) => {
+    setShowEventTimePicker(false)
+    if (selectedDate) {
+      const dateString = selectedDate.toISOString().slice(0, 16).replace('T', ' ')
+      setNewEvent(prev => ({ ...prev, startsAt: dateString }))
+    }
+  }
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false)
+    if (selectedDate) {
+      const dateString = selectedDate.toISOString().split('T')[0]
+      setNewEvent(prev => ({ ...prev, recurringEndDate: dateString }))
+    }
+  }
+
+  // Cancel handlers for DateTimePicker
+  const handleDateFromCancel = () => {
+    setShowDateFromPicker(false)
+  }
+
+  const handleDateToCancel = () => {
+    setShowDateToPicker(false)
+  }
+
+  const handleEventTimeCancel = () => {
+    setShowEventTimePicker(false)
+  }
+
+  const handleEndDateCancel = () => {
+    setShowEndDatePicker(false)
+  }
+
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return 'Select date'
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      })
+    } catch {
+      return 'Invalid date'
+    }
+  }
+
+  const formatTimeForDisplay = (dateTimeString: string) => {
+    if (!dateTimeString) return 'Select time'
+    try {
+      const [datePart, timePart] = dateTimeString.split(' ')
+      if (timePart) {
+        const [hours, minutes] = timePart.split(':')
+        const date = new Date()
+        date.setHours(parseInt(hours), parseInt(minutes))
+        return date.toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+      }
+      return 'Select time'
+    } catch {
+      return 'Invalid time'
+    }
+  }
+
   const parseDateTime = (dateTimeString: string) => {
     if (!dateTimeString) {
       return { date: 'No date set', time: 'No time set' };
@@ -1017,32 +1107,18 @@ const MapViewNative: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
+                     {/* Search Button */}
         <TouchableOpacity 
-          style={styles.searchBar}
+          style={styles.searchButton}
           onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: true }))}
         >
-          <Text style={styles.searchBarText}>
-            {searchFilters.query ? `"${searchFilters.query}"` : 'Search events...'}
-          </Text>
-          <Text style={styles.searchBarSubtext}>
-            {filteredEvents.length} of {events.length} events
-            {searchFilters.distanceFilter && searchFilters.userLocation && (
-              ` • Within ${searchFilters.distanceRadius}km`
-            )}
-            {!userFeatures.hasAdvancedSearch && ' • 1 week ahead only'}
-            {!syncStatus.backendAvailable && ' • 📱 Local'}
-            {syncStatus.pendingEvents > 0 && ` • ⏳ ${syncStatus.pendingEvents} pending`}
-          </Text>
+          <Text style={styles.searchButtonIcon}>🔍</Text>
+          {(searchFilters.query || searchFilters.category !== 'All' || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.distanceFilter) && (
+            <View style={styles.searchButtonBadge}>
+              <Text style={styles.searchButtonBadgeText}>{filteredEvents.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
-        
-        {(searchFilters.query || searchFilters.category !== 'All' || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.distanceFilter) && (
-          <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
       {/* Settings Icon */}
       <TouchableOpacity 
@@ -1246,38 +1322,84 @@ const MapViewNative: React.FC = () => {
                 />
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date & Time</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="YYYY-MM-DD HH:MM (optional)"
-                  value={newEvent.startsAt}
-                  onChangeText={(text) => setNewEvent(prev => ({ ...prev, startsAt: text }))}
-                />
-              </View>
+                                                           <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Date & Time</Text>
+                  <TouchableOpacity 
+                    style={styles.dateTimePickerButton}
+                    onPress={() => setShowEventTimePicker(true)}
+                  >
+                    <Text style={styles.dateTimePickerText}>
+                      {newEvent.startsAt ? formatTimeForDisplay(newEvent.startsAt) : '📅 Select date & time'}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {/* Event Time Picker integrated into create event modal */}
+                  {showEventTimePicker && (
+                    <View style={styles.inlineDatePicker}>
+                      <Text style={styles.inlineDatePickerLabel}>Select Date & Time:</Text>
+                      <DateTimePicker
+                        value={newEvent.startsAt ? new Date(newEvent.startsAt) : new Date()}
+                        mode="datetime"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={handleEventTimeChange}
+                      />
+                      <TouchableOpacity 
+                        style={styles.inlineDatePickerCancelButton}
+                        onPress={handleEventTimeCancel}
+                      >
+                        <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Category</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                  {['Other', 'Sports', 'Music', 'Theater', 'Art', 'Comedy', 'Food & Drink', 'Business', 'Technology', 'Family & Kids', 'Health & Wellness', 'Cultural', 'Nightlife', 'Charity & Community', 'Fashion & Beauty', 'Science & Education', 'Nature & Environment', 'Gaming & Entertainment'].map((category) => (
-                    <TouchableOpacity
-                      key={category}
-                      style={[
-                        styles.categoryButton,
-                        newEvent.category === category && styles.categoryButtonActive
-                      ]}
-                      onPress={() => setNewEvent(prev => ({ ...prev, category }))}
-                    >
-                      <Text style={[
-                        styles.categoryButtonText,
-                        newEvent.category === category && styles.categoryButtonTextActive
-                      ]}>
-                        {category}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
+                             <View style={styles.inputGroup}>
+                 <Text style={styles.inputLabel}>Category</Text>
+                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                   {[
+                     { key: 'Other', icon: '📌', label: 'Other' },
+                     { key: 'Sports', icon: '⚽', label: 'Sports' },
+                     { key: 'Music', icon: '🎵', label: 'Music' },
+                     { key: 'Theater', icon: '🎭', label: 'Theater' },
+                     { key: 'Art', icon: '🎨', label: 'Art' },
+                     { key: 'Comedy', icon: '😂', label: 'Comedy' },
+                     { key: 'Food & Drink', icon: '🍕', label: 'Food' },
+                     { key: 'Business', icon: '💼', label: 'Business' },
+                     { key: 'Technology', icon: '💻', label: 'Tech' },
+                     { key: 'Family & Kids', icon: '👨‍👩‍👧‍👦', label: 'Family' },
+                     { key: 'Health & Wellness', icon: '🧘', label: 'Health' },
+                     { key: 'Cultural', icon: '🏛️', label: 'Cultural' },
+                     { key: 'Nightlife', icon: '🌙', label: 'Nightlife' },
+                     { key: 'Charity & Community', icon: '🤝', label: 'Community' },
+                     { key: 'Fashion & Beauty', icon: '👗', label: 'Fashion' },
+                     { key: 'Science & Education', icon: '🔬', label: 'Science' },
+                     { key: 'Nature & Environment', icon: '🌿', label: 'Nature' },
+                     { key: 'Gaming & Entertainment', icon: '🎮', label: 'Gaming' }
+                   ].map((category) => (
+                     <TouchableOpacity
+                       key={category.key}
+                       style={[
+                         styles.categoryIconButton,
+                         newEvent.category === category.key && styles.categoryIconButtonActive
+                       ]}
+                       onPress={() => setNewEvent(prev => ({ ...prev, category: category.key }))}
+                     >
+                       <Text style={[
+                         styles.categoryIcon,
+                         newEvent.category === category.key && styles.categoryIconActive
+                       ]}>
+                         {category.icon}
+                       </Text>
+                       <Text style={[
+                         styles.categoryIconLabel,
+                         newEvent.category === category.key && styles.categoryIconLabelActive
+                       ]}>
+                         {category.label}
+                       </Text>
+                     </TouchableOpacity>
+                   ))}
+                 </ScrollView>
+               </View>
 
               {/* Recurring Event Section */}
               <View style={styles.inputGroup}>
@@ -1435,19 +1557,37 @@ const MapViewNative: React.FC = () => {
                         </View>
                       )}
                       
-                      {newEvent.recurringEndDate && (
-                        <View style={styles.endDateRow}>
-                          <TextInput
-                            style={styles.textInput}
-                            placeholder="YYYY-MM-DD"
-                            value={newEvent.recurringEndDate}
-                            onChangeText={(text) => setNewEvent(prev => ({ 
-                              ...prev, 
-                              recurringEndDate: text 
-                            }))}
-                          />
-                        </View>
-                      )}
+                                                                                           {newEvent.recurringEndDate && (
+                          <View style={styles.endDateRow}>
+                            <TouchableOpacity 
+                              style={styles.datePickerButton}
+                              onPress={() => setShowEndDatePicker(true)}
+                            >
+                              <Text style={styles.datePickerText}>
+                                {formatDateForDisplay(newEvent.recurringEndDate)}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        
+                        {/* Recurring End Date Picker integrated into create event modal */}
+                        {showEndDatePicker && (
+                          <View style={styles.inlineDatePicker}>
+                            <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
+                            <DateTimePicker
+                              value={newEvent.recurringEndDate ? new Date(newEvent.recurringEndDate) : new Date()}
+                              mode="date"
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                              onChange={handleEndDateChange}
+                            />
+                            <TouchableOpacity 
+                              style={styles.inlineDatePickerCancelButton}
+                              onPress={handleEndDateCancel}
+                            >
+                              <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                     </View>
 
                     <View style={styles.recurringPreview}>
@@ -1528,8 +1668,14 @@ const MapViewNative: React.FC = () => {
                     {selectedEvent.isRecurring && (
                       <Text style={styles.recurringIndicator}> 🔄</Text>
                     )}
+                    {selectedEvent.source === 'app' && (
+                      <Text style={styles.systemEventIcon}> ✓</Text>
+                    )}
                   </Text>
                   <Text style={styles.eventVenue}>{selectedEvent.venue}</Text>
+                  {selectedEvent.source === 'app' && (
+                    <Text style={styles.systemEventInfo}>✓ Verified system event</Text>
+                  )}
                   <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
                   {selectedEvent.source === 'user' && (
                     <Text style={styles.userCreatedBadge}>👤 Created by you</Text>
@@ -1604,24 +1750,24 @@ const MapViewNative: React.FC = () => {
         </View>
       </Modal>
 
-      {/* Search Modal */}
-      <Modal
-        visible={searchFilters.showSearchModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Search & Filter</Text>
-            <TouchableOpacity 
-              onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: false }))}
-              style={styles.closeButton}
-            >
-              <Text style={styles.closeButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
+                                         {/* Search Modal */}
+           <Modal
+             visible={searchFilters.showSearchModal}
+             animationType="slide"
+             presentationStyle="pageSheet"
+           >
+            <View style={styles.searchModalContainer}>
+              <View style={styles.searchModalHeader}>
+                <Text style={styles.searchModalTitle}>🔍 Search & Filter</Text>
+                <TouchableOpacity 
+                  onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: false }))}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
 
-          <ScrollView style={styles.modalContent}>
+           <ScrollView style={styles.modalContent}>
             {/* Search Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Search Events</Text>
@@ -1694,154 +1840,233 @@ const MapViewNative: React.FC = () => {
               )}
             </View>
 
-            {/* Category Filter */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                {['All', 'Sports', 'Music', 'Theater', 'Art', 'Comedy', 'Food & Drink', 'Business', 'Technology', 'Family & Kids', 'Health & Wellness', 'Cultural', 'Nightlife', 'Charity & Community', 'Fashion & Beauty', 'Science & Education', 'Nature & Environment', 'Gaming & Entertainment', 'Other'].map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryButton,
-                      searchFilters.category === category && styles.categoryButtonActive
-                    ]}
-                    onPress={() => setSearchFilters(prev => ({ ...prev, category }))}
-                  >
-                    <Text style={[
-                      styles.categoryButtonText,
-                      searchFilters.category === category && styles.categoryButtonTextActive
-                    ]}>
-                      {category} ({getCategoryCount(category)})
+                         {/* Category Filter */}
+             <View style={styles.inputGroup}>
+               <Text style={styles.inputLabel}>Category</Text>
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                 {[
+                   { key: 'All', icon: '🎯', label: 'All' },
+                   { key: 'Sports', icon: '⚽', label: 'Sports' },
+                   { key: 'Music', icon: '🎵', label: 'Music' },
+                   { key: 'Theater', icon: '🎭', label: 'Theater' },
+                   { key: 'Art', icon: '🎨', label: 'Art' },
+                   { key: 'Comedy', icon: '😂', label: 'Comedy' },
+                   { key: 'Food & Drink', icon: '🍕', label: 'Food' },
+                   { key: 'Business', icon: '💼', label: 'Business' },
+                   { key: 'Technology', icon: '💻', label: 'Tech' },
+                   { key: 'Family & Kids', icon: '👨‍👩‍👧‍👦', label: 'Family' },
+                   { key: 'Health & Wellness', icon: '🧘', label: 'Health' },
+                   { key: 'Cultural', icon: '🏛️', label: 'Cultural' },
+                   { key: 'Nightlife', icon: '🌙', label: 'Nightlife' },
+                   { key: 'Charity & Community', icon: '🤝', label: 'Community' },
+                   { key: 'Fashion & Beauty', icon: '👗', label: 'Fashion' },
+                   { key: 'Science & Education', icon: '🔬', label: 'Science' },
+                   { key: 'Nature & Environment', icon: '🌿', label: 'Nature' },
+                   { key: 'Gaming & Entertainment', icon: '🎮', label: 'Gaming' },
+                   { key: 'Other', icon: '📌', label: 'Other' }
+                 ].map((category) => (
+                   <TouchableOpacity
+                     key={category.key}
+                     style={[
+                       styles.categoryIconButton,
+                       searchFilters.category === category.key && styles.categoryIconButtonActive
+                     ]}
+                     onPress={() => setSearchFilters(prev => ({ ...prev, category: category.key }))}
+                   >
+                     <Text style={[
+                       styles.categoryIcon,
+                       searchFilters.category === category.key && styles.categoryIconActive
+                     ]}>
+                       {category.icon}
+                     </Text>
+                     <Text style={[
+                       styles.categoryIconLabel,
+                       searchFilters.category === category.key && styles.categoryIconLabelActive
+                     ]}>
+                       {category.label}
+                     </Text>
+                     <Text style={[
+                       styles.categoryIconCount,
+                       searchFilters.category === category.key && styles.categoryIconCountActive
+                     ]}>
+                       {getCategoryCount(category.key)}
+                     </Text>
+                   </TouchableOpacity>
+                 ))}
+               </ScrollView>
+             </View>
+
+                                                   {/* Date Range */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date Range</Text>
+                {!userFeatures.hasAdvancedSearch && (
+                  <View style={styles.premiumPrompt}>
+                    <Text style={styles.premiumPromptText}>
+                      ⭐ Free users can only see events within 1 week ahead
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Date Range */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Date Range</Text>
-              {!userFeatures.hasAdvancedSearch && (
-                <View style={styles.premiumPrompt}>
-                  <Text style={styles.premiumPromptText}>
-                    ⭐ Free users can only see events within 1 week ahead
-                  </Text>
-                  <Text style={styles.premiumPromptText}>
-                    Upgrade to Premium for unlimited date filtering
-                  </Text>
-                  <TouchableOpacity 
-                    style={styles.premiumButton}
-                    onPress={() => {
-                      setSearchFilters(prev => ({ ...prev, showSearchModal: false }))
-                      setShowUserProfile(true)
-                    }}
-                  >
-                    <Text style={styles.premiumButtonText}>Upgrade</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              <View style={styles.dateRow}>
-                <View style={styles.dateInput}>
-                  <Text style={styles.dateLabel}>From</Text>
-                  <TextInput
-                    style={[styles.textInput, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
-                    placeholder="YYYY-MM-DD"
-                    value={searchFilters.dateFrom}
-                    onChangeText={(text) => setSearchFilters(prev => ({ ...prev, dateFrom: text }))}
-                    editable={userFeatures.hasAdvancedSearch}
-                  />
-                </View>
-                <View style={styles.dateInput}>
-                  <Text style={styles.dateLabel}>To</Text>
-                  <TextInput
-                    style={[styles.textInput, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
-                    placeholder="YYYY-MM-DD"
-                    value={searchFilters.dateTo}
-                    onChangeText={(text) => setSearchFilters(prev => ({ ...prev, dateTo: text }))}
-                    editable={userFeatures.hasAdvancedSearch}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Search Results Preview */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Results ({filteredEvents.length} events)</Text>
-              <ScrollView style={styles.resultsPreview} showsVerticalScrollIndicator={false}>
-                {filteredEvents.slice(0, 10).map((event) => {
-                  let distanceInfo = ''
-                  if (searchFilters.userLocation) {
-                    const distance = calculateDistance(
-                      searchFilters.userLocation.latitude,
-                      searchFilters.userLocation.longitude,
-                      event.latitude,
-                      event.longitude
-                    )
-                    distanceInfo = ` • ${distance.toFixed(1)}km away`
-                  }
-                  
-                  const averageRating = getAverageRating(event.id)
-                  const ratingCount = getRatingCount(event.id)
-                  const userRating = getUserRating(event.id)
-                  
-                  return (
-                    <TouchableOpacity
-                      key={event.id}
-                      style={styles.resultItem}
+                    <Text style={styles.premiumPromptText}>
+                      Upgrade to Premium for unlimited date filtering
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.premiumButton}
                       onPress={() => {
                         setSearchFilters(prev => ({ ...prev, showSearchModal: false }))
-                        handleMarkerPress(event)
+                        setShowUserProfile(true)
                       }}
                     >
-                      <Text style={styles.resultTitle}>{event.name}</Text>
-                      <Text style={styles.resultVenue}>{event.venue}{distanceInfo}</Text>
-                      <View style={styles.resultRating}>
-                        {renderStars(averageRating, 14)}
-                        <Text style={styles.resultRatingText}>
-                          {averageRating} ({ratingCount})
-                        </Text>
-                        {userRating > 0 && (
-                          <Text style={styles.userRatingText}>
-                            • You: {userRating}/5
-                          </Text>
-                        )}
-                        {event.source === 'user' && (
-                          <Text style={styles.userCreatedText}>
-                            • 👤 Created by you
-                          </Text>
-                        )}
-                        {sharedRatings[event.id] && (
-                          <Text style={styles.sharedRatingText}>
-                            • 🌐 Shared
-                          </Text>
-                        )}
-                      </View>
-                      <Text style={styles.resultDate}>
-                        {parseDateTime(event.startsAt).date} at {parseDateTime(event.startsAt).time}
-                      </Text>
+                      <Text style={styles.premiumButtonText}>Upgrade</Text>
                     </TouchableOpacity>
-                  )
-                })}
-                {filteredEvents.length > 10 && (
-                  <Text style={styles.moreResults}>... and {filteredEvents.length - 10} more</Text>
+                  </View>
                 )}
-              </ScrollView>
-            </View>
+                <View style={styles.dateRow}>
+                  <TouchableOpacity 
+                    style={[styles.datePickerButton, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
+                    onPress={() => userFeatures.hasAdvancedSearch && setShowDateFromPicker(true)}
+                    disabled={!userFeatures.hasAdvancedSearch}
+                  >
+                    <Text style={styles.datePickerLabel}>From</Text>
+                    <Text style={styles.datePickerText}>
+                      {formatDateForDisplay(searchFilters.dateFrom)}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.datePickerButton, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
+                    onPress={() => userFeatures.hasAdvancedSearch && setShowDateToPicker(true)}
+                    disabled={!userFeatures.hasAdvancedSearch}
+                  >
+                    <Text style={styles.datePickerLabel}>To</Text>
+                    <Text style={styles.datePickerText}>
+                      {formatDateForDisplay(searchFilters.dateTo)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Date Pickers integrated into search modal */}
+                {showDateFromPicker && userFeatures.hasAdvancedSearch && (
+                  <View style={styles.inlineDatePicker}>
+                    <Text style={styles.inlineDatePickerLabel}>Select Start Date:</Text>
+                    <DateTimePicker
+                      value={searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleDateFromChange}
+                    />
+                    <TouchableOpacity 
+                      style={styles.inlineDatePickerCancelButton}
+                      onPress={handleDateFromCancel}
+                    >
+                      <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
+                {showDateToPicker && userFeatures.hasAdvancedSearch && (
+                  <View style={styles.inlineDatePicker}>
+                    <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
+                    <DateTimePicker
+                      value={searchFilters.dateTo ? new Date(searchFilters.dateTo) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleDateToChange}
+                    />
+                    <TouchableOpacity 
+                      style={styles.inlineDatePickerCancelButton}
+                      onPress={handleDateToCancel}
+                    >
+                      <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+                         {/* Search Results Preview */}
+             <View style={styles.inputGroup}>
+               <View style={styles.resultsHeader}>
+                 <Text style={styles.inputLabel}>Results</Text>
+                 <Text style={styles.resultsCount}>({filteredEvents.length} events)</Text>
+               </View>
+               <ScrollView style={styles.resultsPreview} showsVerticalScrollIndicator={false}>
+                 {filteredEvents.slice(0, 8).map((event) => {
+                   let distanceInfo = ''
+                   if (searchFilters.userLocation) {
+                     const distance = calculateDistance(
+                       searchFilters.userLocation.latitude,
+                       searchFilters.userLocation.longitude,
+                       event.latitude,
+                       event.longitude
+                     )
+                     distanceInfo = ` • ${distance.toFixed(1)}km`
+                   }
+                   
+                   const averageRating = getAverageRating(event.id)
+                   const ratingCount = getRatingCount(event.id)
+                   const userRating = getUserRating(event.id)
+                   
+                   return (
+                     <TouchableOpacity
+                       key={event.id}
+                       style={styles.resultItem}
+                       onPress={() => {
+                         setSearchFilters(prev => ({ ...prev, showSearchModal: false }))
+                         handleMarkerPress(event)
+                       }}
+                     >
+                       <View style={styles.resultHeader}>
+                         <Text style={styles.resultTitle}>
+                           {event.name}
+                           {event.source === 'app' && (
+                             <Text style={styles.systemEventIcon}> ✓</Text>
+                           )}
+                         </Text>
+                         <Text style={styles.resultDate}>
+                           {parseDateTime(event.startsAt).date}
+                         </Text>
+                       </View>
+                       <Text style={styles.resultVenue}>{event.venue}{distanceInfo}</Text>
+                       <View style={styles.resultMeta}>
+                         <View style={styles.resultRating}>
+                           {renderStars(averageRating, 12)}
+                           <Text style={styles.resultRatingText}>
+                             {averageRating} ({ratingCount})
+                           </Text>
+                         </View>
+                         <View style={styles.resultBadges}>
+                           {userRating > 0 && (
+                             <Text style={styles.userRatingText}>👤 {userRating}/5</Text>
+                           )}
+                           {event.source === 'user' && (
+                             <Text style={styles.userCreatedText}>👤</Text>
+                           )}
+                           {sharedRatings[event.id] && (
+                             <Text style={styles.sharedRatingText}>🌐</Text>
+                           )}
+                         </View>
+                       </View>
+                     </TouchableOpacity>
+                   )
+                 })}
+                 {filteredEvents.length > 8 && (
+                   <Text style={styles.moreResults}>... and {filteredEvents.length - 8} more</Text>
+                 )}
+               </ScrollView>
+             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* User Profile Modal */}
-              <UserProfile 
-          visible={showUserProfile} 
-          onClose={() => {
-            setShowUserProfile(false)
-            loadUserFeatures() // Reload user features after profile changes
-          }} 
-        />
-    </View>
-  )
-}
+             {/* User Profile Modal */}
+       <UserProfile 
+         visible={showUserProfile} 
+         onClose={() => {
+           setShowUserProfile(false)
+           loadUserFeatures() // Reload user features after profile changes
+         }} 
+       />
+
+       
+     </View>
+   )
+ }
 
 const styles = StyleSheet.create({
   container: {
@@ -1857,49 +2082,44 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
   },
-  searchContainer: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    right: 20,
-    zIndex: 1000,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchBar: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchBarText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  searchBarSubtext: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  clearButton: {
-    marginLeft: 10,
-    backgroundColor: '#ff4444',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 15,
-  },
-  clearButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+     searchButton: {
+     position: 'absolute',
+     top: 50,
+     left: 20,
+     backgroundColor: 'white',
+     width: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
+     height: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
+     borderRadius: Platform.OS === 'ios' ? (Platform.isPad ? 30 : 25) : 25,
+     justifyContent: 'center',
+     alignItems: 'center',
+     zIndex: 1000,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+   },
+   searchButtonIcon: {
+     fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 24 : 20) : 20,
+     color: '#333',
+   },
+   searchButtonBadge: {
+     position: 'absolute',
+     top: -5,
+     right: -5,
+     backgroundColor: '#007AFF',
+     borderRadius: 10,
+     minWidth: 20,
+     height: 20,
+     justifyContent: 'center',
+     alignItems: 'center',
+     paddingHorizontal: 4,
+   },
+   searchButtonBadgeText: {
+     color: 'white',
+     fontSize: 10,
+     fontWeight: 'bold',
+   },
   createEventButton: {
     position: 'absolute',
     bottom: 30, // Move closer to bottom since no bottom sheet
@@ -1971,10 +2191,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
+                           modalContent: {
+          flex: 1,
+          padding: Platform.OS === 'ios' ? (Platform.isPad ? 25 : 15) : 15, // Reduced padding for cleaner look
+          paddingBottom: Platform.OS === 'ios' ? (Platform.isPad ? 30 : 20) : 20, // Extra bottom padding for more space
+          backgroundColor: 'white',
+        },
   eventInfo: {
     marginBottom: 25,
     padding: 15,
@@ -2062,24 +2284,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  inputGroup: {
-    marginBottom: 25,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-  },
+             inputGroup: {
+         marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 25 : 20) : 20, // Reduced spacing for cleaner look
+       },
+      inputLabel: {
+      fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 18 : 16) : 16, // Larger font on iPad
+      fontWeight: '600',
+      color: '#333',
+      marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 12 : 8) : 8, // More spacing on iPad
+    },
+                           textInput: {
+          // Removed border for cleaner look
+          borderRadius: 8,
+          paddingHorizontal: Platform.OS === 'ios' ? (Platform.isPad ? 20 : 15) : 15, // More padding on iPad
+          paddingVertical: Platform.OS === 'ios' ? (Platform.isPad ? 16 : 12) : 12, // More padding on iPad
+          fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 18 : 16) : 16, // Larger font on iPad
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        },
   textArea: {
     minHeight: 80,
   },
@@ -2164,10 +2385,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  categoryButtonTextActive: {
-    color: 'white',
-    fontWeight: '600',
-  },
+     categoryButtonTextActive: {
+     color: 'white',
+     fontWeight: '600',
+   },
+                             categoryIconButton: {
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: Platform.OS === 'ios' ? (Platform.isPad ? 16 : 12) : 12, // Larger radius on iPad
+          marginRight: Platform.OS === 'ios' ? (Platform.isPad ? 16 : 12) : 12, // More spacing on iPad
+          paddingHorizontal: Platform.OS === 'ios' ? (Platform.isPad ? 16 : 12) : 12, // More padding on iPad
+          paddingVertical: Platform.OS === 'ios' ? (Platform.isPad ? 14 : 10) : 10, // More padding on iPad
+          alignItems: 'center',
+          minWidth: Platform.OS === 'ios' ? (Platform.isPad ? 80 : 60) : 60, // Larger buttons on iPad
+          // Removed shadows and border for cleaner look
+        },
+   categoryIconButtonActive: {
+     backgroundColor: '#007AFF',
+     shadowColor: '#007AFF',
+     shadowOpacity: 0.3,
+     elevation: 4,
+   },
+       categoryIcon: {
+      fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 24 : 20) : 20, // Larger icons on iPad
+      marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 6 : 4) : 4, // More spacing on iPad
+    },
+   categoryIconActive: {
+     // Icon color stays the same for better visibility
+   },
+       categoryIconLabel: {
+      fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 12 : 10) : 10, // Larger font on iPad
+      color: '#666',
+      fontWeight: '500',
+      textAlign: 'center',
+    },
+   categoryIconLabelActive: {
+     color: 'white',
+     fontWeight: '600',
+   },
+   categoryIconCount: {
+     fontSize: 8,
+     color: '#999',
+     fontWeight: '400',
+     marginTop: 2,
+   },
+   categoryIconCountActive: {
+     color: 'rgba(255, 255, 255, 0.8)',
+   },
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2227,21 +2490,39 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     textAlign: 'center',
   },
-  resultsPreview: {
-    maxHeight: 300,
-  },
-  resultItem: {
-    backgroundColor: '#f9f9f9',
-    padding: 15,
-    borderRadius: 8,
+                                     resultsPreview: {
+          maxHeight: Platform.OS === 'ios' ? (Platform.isPad ? 500 : 350) : 350, // Increased height for more space
+        },
+  resultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
   },
-  resultTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+  resultsCount: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+                           resultItem: {
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          padding: Platform.OS === 'ios' ? (Platform.isPad ? 12 : 10) : 10, // Reduced padding for cleaner look
+          borderRadius: Platform.OS === 'ios' ? (Platform.isPad ? 10 : 6) : 6, // Smaller radius for cleaner look
+          marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 8 : 6) : 6, // Reduced spacing for cleaner look
+          // Removed border for cleaner look
+        },
+  resultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 4,
   },
+      resultTitle: {
+      fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 18 : 16) : 16, // Larger font on iPad
+      fontWeight: '600',
+      color: '#333',
+      marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 6 : 4) : 4, // More spacing on iPad
+    },
   resultVenue: {
     fontSize: 14,
     color: '#666',
@@ -2251,6 +2532,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  resultMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  resultBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   resultRatingText: {
     fontSize: 12,
@@ -2382,6 +2673,64 @@ const styles = StyleSheet.create({
   },
   disabledInput: {
     opacity: 0.7,
+  },
+                   datePickerButton: {
+          flex: 1,
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          // Removed border for cleaner look
+          borderRadius: 8,
+          paddingHorizontal: 15,
+          paddingVertical: 12,
+          marginRight: 10,
+        },
+  datePickerLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+                   dateTimePickerButton: {
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          // Removed border for cleaner look
+          borderRadius: 8,
+          paddingHorizontal: 15,
+          paddingVertical: 12,
+        },
+  dateTimePickerText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+                   inlineDatePicker: {
+          marginTop: 15,
+          padding: 15,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: 8,
+          // Removed border for cleaner look
+        },
+  inlineDatePickerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  inlineDatePickerCancelButton: {
+    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#6c757d',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  inlineDatePickerCancelText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   recurringHeader: {
     flexDirection: 'row',
@@ -2538,6 +2887,18 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
+  systemEventIcon: {
+    fontSize: 14,
+    color: '#28a745',
+    fontWeight: '600',
+  },
+  systemEventInfo: {
+    fontSize: 12,
+    color: '#28a745',
+    fontWeight: '500',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
   recurringInstanceText: {
     fontSize: 12,
     color: '#666',
@@ -2575,11 +2936,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1,
   },
-  dailyLimitBadgeText: {
-    color: 'white',
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
-})
+     dailyLimitBadgeText: {
+     color: 'white',
+     fontSize: 8,
+     fontWeight: 'bold',
+   },
+                                                   searchModalContainer: {
+        flex: 0.9, // Increased from 0.8 to 0.9 for more space
+        backgroundColor: 'white',
+        marginTop: Platform.OS === 'ios' ? (Platform.isPad ? 10 : 5) : 5, // Minimal top margin
+        marginHorizontal: Platform.OS === 'ios' ? (Platform.isPad ? 20 : 10) : 10, // Minimal side margins
+        marginBottom: Platform.OS === 'ios' ? (Platform.isPad ? 10 : 5) : 5, // Minimal bottom margin
+        // Removed borders and shadows for cleaner look
+      },
+                   searchModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: Platform.OS === 'ios' ? (Platform.isPad ? 25 : 15) : 15, // More padding on iPad
+        // Removed border and border radius for cleaner look
+        paddingTop: Platform.OS === 'ios' ? (Platform.isPad ? 20 : 10) : 10, // More top padding on iPad
+        backgroundColor: 'white',
+      },
+       searchModalTitle: {
+      fontSize: Platform.OS === 'ios' ? (Platform.isPad ? 24 : 20) : 20, // Larger font on iPad
+      fontWeight: 'bold',
+      color: '#333',
+    },
+ })
 
 module.exports = MapViewNative

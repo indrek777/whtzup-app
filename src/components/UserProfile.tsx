@@ -46,6 +46,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   
   // Premium features state
   const [premiumFeatures, setPremiumFeatures] = useState<string[]>([])
+  
+  // User features state
+  const [userFeatures, setUserFeatures] = useState<{
+    hasAdvancedSearch: boolean
+    hasPremium: boolean
+    canCreateEventToday: boolean
+  }>({
+    hasAdvancedSearch: false,
+    hasPremium: false,
+    canCreateEventToday: false
+  })
 
   useEffect(() => {
     loadUserData()
@@ -63,6 +74,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
       // Load premium features
       const features = await userService.getPremiumFeatures()
       setPremiumFeatures(features)
+      
+      // Load user features
+      const hasAdvancedSearch = await userService.hasFeature('advanced_search')
+      const hasPremium = await userService.hasPremiumSubscription()
+      const canCreateEventToday = await userService.canCreateEventToday()
+      
+      setUserFeatures({
+        hasAdvancedSearch,
+        hasPremium,
+        canCreateEventToday
+      })
     }
   }
 
@@ -492,7 +514,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                       <Text style={styles.statLabel}>Events Created</Text>
                       {currentUser.subscription.status === 'free' && (
                         <Text style={styles.dailyLimitText}>
-                          {userService.canCreateEventToday() ? '1 event today' : '0 events today'}
+                          {userFeatures.canCreateEventToday ? '1 event today' : '0 events today'}
                         </Text>
                       )}
                     </View>
