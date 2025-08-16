@@ -43,6 +43,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     language: 'en',
     theme: 'auto'
   })
+  
+  // Premium features state
+  const [premiumFeatures, setPremiumFeatures] = useState<string[]>([])
 
   useEffect(() => {
     loadUserData()
@@ -57,6 +60,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     
     if (user) {
       setPreferences(user.preferences)
+      // Load premium features
+      const features = await userService.getPremiumFeatures()
+      setPremiumFeatures(features)
     }
   }
 
@@ -587,7 +593,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                 <View style={styles.premiumSection}>
                   <Text style={styles.sectionTitle}>Premium Features</Text>
                   <View style={styles.featuresList}>
-                    {userService.getPremiumFeatures().map((feature, index) => (
+                    {premiumFeatures.map((feature, index) => (
                       <Text key={index} style={styles.featureItem}>✓ {feature.replace('_', ' ')}</Text>
                     ))}
                   </View>

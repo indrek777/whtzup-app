@@ -12,22 +12,49 @@ import UserProfile from './UserProfile'
 // Marker color function
 const getMarkerColor = (category: string): string => {
   switch (category.toLowerCase()) {
+    case 'sports':
+      return 'red'
     case 'music':
     case 'concert':
     case 'festival':
-      return 'red'
+      return 'orange'
     case 'theater':
     case 'performance':
       return 'blue'
+    case 'art':
     case 'museum':
     case 'exhibition':
       return 'green'
     case 'comedy':
     case 'stand-up':
-      return 'orange'
+      return 'purple'
+    case 'food & drink':
+      return 'yellow'
+    case 'business':
+      return 'indigo'
+    case 'technology':
+      return 'cyan'
+    case 'family & kids':
+      return 'pink'
+    case 'health & wellness':
+      return 'lightblue'
     case 'cultural':
     case 'ball':
-      return 'purple'
+      return 'magenta'
+    case 'nightlife':
+      return 'darkblue'
+    case 'charity & community':
+      return 'teal'
+    case 'fashion & beauty':
+      return 'hotpink'
+    case 'science & education':
+      return 'gray'
+    case 'nature & environment':
+      return 'darkgreen'
+    case 'gaming & entertainment':
+      return 'brown'
+    case 'other':
+      return 'lightgray'
     default:
       return 'gray'
   }
@@ -36,17 +63,154 @@ const getMarkerColor = (category: string): string => {
 // Category determination function
 const determineCategory = (name: string, description: string): string => {
   const text = (name + ' ' + description).toLowerCase()
-  if (text.includes('concert') || text.includes('music') || text.includes('festival') || text.includes('symphony')) {
+  
+  // Sports categories
+  if (text.includes('football') || text.includes('soccer') || text.includes('match') || text.includes('game')) {
+    return 'Sports'
+  } else if (text.includes('basketball') || text.includes('volleyball') || text.includes('tennis')) {
+    return 'Sports'
+  } else if (text.includes('running') || text.includes('marathon') || text.includes('race')) {
+    return 'Sports'
+  } else if (text.includes('swimming') || text.includes('gym') || text.includes('fitness')) {
+    return 'Sports'
+  } else if (text.includes('yoga') || text.includes('pilates') || text.includes('workout')) {
+    return 'Sports'
+  } else if (text.includes('cycling') || text.includes('bike') || text.includes('cycling')) {
+    return 'Sports'
+  } else if (text.includes('hiking') || text.includes('climbing') || text.includes('outdoor')) {
+    return 'Sports'
+  }
+  
+  // Music categories
+  else if (text.includes('concert') || text.includes('music') || text.includes('festival') || text.includes('symphony')) {
     return 'Music'
-  } else if (text.includes('theater') || text.includes('performance') || text.includes('ballet')) {
+  } else if (text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical')) {
+    return 'Music'
+  } else if (text.includes('opera') || text.includes('orchestra') || text.includes('band')) {
+    return 'Music'
+  }
+  
+  // Theater & Performance
+  else if (text.includes('theater') || text.includes('performance') || text.includes('ballet')) {
     return 'Theater'
-  } else if (text.includes('museum') || text.includes('exhibition') || text.includes('näitus')) {
-    return 'Museum'
-  } else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
+  } else if (text.includes('dance') || text.includes('show') || text.includes('play')) {
+    return 'Theater'
+  } else if (text.includes('musical') || text.includes('drama') || text.includes('acting')) {
+    return 'Theater'
+  }
+  
+  // Art & Culture
+  else if (text.includes('museum') || text.includes('exhibition') || text.includes('näitus')) {
+    return 'Art'
+  } else if (text.includes('gallery') || text.includes('painting') || text.includes('sculpture')) {
+    return 'Art'
+  } else if (text.includes('photography') || text.includes('art') || text.includes('creative')) {
+    return 'Art'
+  }
+  
+  // Comedy & Entertainment
+  else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
     return 'Comedy'
-  } else if (text.includes('cultural') || text.includes('ball') || text.includes('festival')) {
+  } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
+    return 'Comedy'
+  }
+  
+  // Food & Drink
+  else if (text.includes('food') || text.includes('restaurant') || text.includes('dining')) {
+    return 'Food & Drink'
+  } else if (text.includes('wine') || text.includes('beer') || text.includes('cocktail')) {
+    return 'Food & Drink'
+  } else if (text.includes('cooking') || text.includes('chef') || text.includes('culinary')) {
+    return 'Food & Drink'
+  } else if (text.includes('tasting') || text.includes('festival') || text.includes('market')) {
+    return 'Food & Drink'
+  }
+  
+  // Business & Professional
+  else if (text.includes('conference') || text.includes('seminar') || text.includes('workshop')) {
+    return 'Business'
+  } else if (text.includes('meeting') || text.includes('networking') || text.includes('business')) {
+    return 'Business'
+  } else if (text.includes('training') || text.includes('course') || text.includes('education')) {
+    return 'Business'
+  }
+  
+  // Technology
+  else if (text.includes('tech') || text.includes('technology') || text.includes('digital')) {
+    return 'Technology'
+  } else if (text.includes('startup') || text.includes('innovation') || text.includes('ai')) {
+    return 'Technology'
+  } else if (text.includes('coding') || text.includes('programming') || text.includes('hackathon')) {
+    return 'Technology'
+  }
+  
+  // Family & Kids
+  else if (text.includes('kids') || text.includes('children') || text.includes('family')) {
+    return 'Family & Kids'
+  } else if (text.includes('playground') || text.includes('toy') || text.includes('story')) {
+    return 'Family & Kids'
+  }
+  
+  // Health & Wellness
+  else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
+    return 'Health & Wellness'
+  } else if (text.includes('therapy') || text.includes('healing') || text.includes('mindfulness')) {
+    return 'Health & Wellness'
+  }
+  
+  // Cultural & Heritage
+  else if (text.includes('cultural') || text.includes('heritage') || text.includes('traditional')) {
     return 'Cultural'
-  } else {
+  } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
+    return 'Cultural'
+  } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
+    return 'Cultural'
+  }
+  
+  // Nightlife
+  else if (text.includes('club') || text.includes('party') || text.includes('nightlife')) {
+    return 'Nightlife'
+  } else if (text.includes('bar') || text.includes('pub') || text.includes('dance')) {
+    return 'Nightlife'
+  }
+  
+  // Charity & Community
+  else if (text.includes('charity') || text.includes('volunteer') || text.includes('community')) {
+    return 'Charity & Community'
+  } else if (text.includes('fundraiser') || text.includes('donation') || text.includes('help')) {
+    return 'Charity & Community'
+  }
+  
+  // Fashion & Beauty
+  else if (text.includes('fashion') || text.includes('beauty') || text.includes('style')) {
+    return 'Fashion & Beauty'
+  } else if (text.includes('makeup') || text.includes('cosmetic') || text.includes('design')) {
+    return 'Fashion & Beauty'
+  }
+  
+  // Science & Education
+  else if (text.includes('science') || text.includes('research') || text.includes('lecture')) {
+    return 'Science & Education'
+  } else if (text.includes('university') || text.includes('academic') || text.includes('study')) {
+    return 'Science & Education'
+  }
+  
+  // Nature & Environment
+  else if (text.includes('nature') || text.includes('environment') || text.includes('eco')) {
+    return 'Nature & Environment'
+  } else if (text.includes('park') || text.includes('garden') || text.includes('outdoor')) {
+    return 'Nature & Environment'
+  }
+  
+  // Gaming & Entertainment
+  else if (text.includes('game') || text.includes('gaming') || text.includes('esports')) {
+    return 'Gaming & Entertainment'
+  } else if (text.includes('board') || text.includes('card') || text.includes('tournament')) {
+    return 'Gaming & Entertainment'
+  }
+  
+  // Other
+  else {
     return 'Other'
   }
 }
@@ -1095,7 +1259,7 @@ const MapViewNative: React.FC = () => {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Category</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                  {['Other', 'Music', 'Theater', 'Museum', 'Comedy', 'Cultural'].map((category) => (
+                  {['Other', 'Sports', 'Music', 'Theater', 'Art', 'Comedy', 'Food & Drink', 'Business', 'Technology', 'Family & Kids', 'Health & Wellness', 'Cultural', 'Nightlife', 'Charity & Community', 'Fashion & Beauty', 'Science & Education', 'Nature & Environment', 'Gaming & Entertainment'].map((category) => (
                     <TouchableOpacity
                       key={category}
                       style={[
@@ -1534,7 +1698,7 @@ const MapViewNative: React.FC = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                {['All', 'Music', 'Theater', 'Museum', 'Comedy', 'Cultural'].map((category) => (
+                {['All', 'Sports', 'Music', 'Theater', 'Art', 'Comedy', 'Food & Drink', 'Business', 'Technology', 'Family & Kids', 'Health & Wellness', 'Cultural', 'Nightlife', 'Charity & Community', 'Fashion & Beauty', 'Science & Education', 'Nature & Environment', 'Gaming & Entertainment', 'Other'].map((category) => (
                   <TouchableOpacity
                     key={category}
                     style={[

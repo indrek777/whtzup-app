@@ -128,11 +128,23 @@ const WebMapView: React.FC = () => {
           }}
         >
           <option value="all">All Categories</option>
+          <option value="Sports">Sports</option>
           <option value="Music">Music</option>
           <option value="Theater">Theater</option>
-          <option value="Museum">Museum</option>
+          <option value="Art">Art</option>
           <option value="Comedy">Comedy</option>
+          <option value="Food & Drink">Food & Drink</option>
+          <option value="Business">Business</option>
+          <option value="Technology">Technology</option>
+          <option value="Family & Kids">Family & Kids</option>
+          <option value="Health & Wellness">Health & Wellness</option>
           <option value="Cultural">Cultural</option>
+          <option value="Nightlife">Nightlife</option>
+          <option value="Charity & Community">Charity & Community</option>
+          <option value="Fashion & Beauty">Fashion & Beauty</option>
+          <option value="Science & Education">Science & Education</option>
+          <option value="Nature & Environment">Nature & Environment</option>
+          <option value="Gaming & Entertainment">Gaming & Entertainment</option>
           <option value="Other">Other</option>
         </select>
       </View>
