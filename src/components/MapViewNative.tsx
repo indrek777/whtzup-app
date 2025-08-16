@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image } from 'react-native'
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch } from 'react-native'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { eventsData, totalEventsCount, Event } from '../data/events'
+import { eventsData, totalEventsCount } from '../data/events'
 import { ratingService, EventRating, SharedRating } from '../utils/ratingService'
-import { eventService } from '../utils/eventService'
+import { eventService, Event } from '../utils/eventService'
 import { userService } from '../utils/userService'
 import UserProfile from './UserProfile'
 
@@ -106,6 +106,12 @@ interface NewEvent {
   category: string
   latitude: number
   longitude: number
+  isRecurring: boolean
+  recurringPattern: 'daily' | 'weekly' | 'monthly' | 'custom'
+  recurringDays: number[] // For weekly: [0,1,2,3,4,5,6] (Sunday=0)
+  recurringInterval: number // Every X days/weeks/months
+  recurringEndDate: string // When to stop recurring
+  recurringOccurrences: number // Number of occurrences
 }
 
 const MapViewNative: React.FC = () => {
@@ -131,7 +137,13 @@ const MapViewNative: React.FC = () => {
     startsAt: '',
     category: 'Other',
     latitude: 0,
-    longitude: 0
+    longitude: 0,
+    isRecurring: false,
+    recurringPattern: 'daily',
+    recurringDays: [0],
+    recurringInterval: 1,
+    recurringEndDate: '',
+    recurringOccurrences: 1
   })
   const [isCreatingEvent, setIsCreatingEvent] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number } | null>(null)
@@ -346,7 +358,7 @@ const MapViewNative: React.FC = () => {
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
       if (!userService.hasFeature('advanced_search')) {
-        // For free users, show limited date filtering
+        // For free users, show limited date filtering (1 week ahead only)
         const today = new Date()
         const nextWeek = new Date()
         nextWeek.setDate(today.getDate() + 7)
@@ -370,6 +382,18 @@ const MapViewNative: React.FC = () => {
             return eventDate <= toDate
           }
           return true
+        })
+      }
+    } else {
+      // If no date filter is applied, still limit free users to 1 week ahead
+      if (!userService.hasFeature('advanced_search')) {
+        const today = new Date()
+        const nextWeek = new Date()
+        nextWeek.setDate(today.getDate() + 7)
+        
+        filtered = filtered.filter(event => {
+          const eventDate = new Date(event.startsAt)
+          return eventDate >= today && eventDate <= nextWeek
         })
       }
     }
@@ -517,7 +541,13 @@ const MapViewNative: React.FC = () => {
       startsAt: '',
       category: 'Other',
       latitude: 0,
-      longitude: 0
+      longitude: 0,
+      isRecurring: false,
+      recurringPattern: 'daily',
+      recurringDays: [0],
+      recurringInterval: 1,
+      recurringEndDate: '',
+      recurringOccurrences: 1
     })
     setSelectedLocation(null) // No location selected initially
     setIsMapMode(false) // Start in form mode
@@ -549,6 +579,19 @@ const MapViewNative: React.FC = () => {
       return
     }
 
+    // Validate recurring event settings
+    if (newEvent.isRecurring) {
+      if (newEvent.recurringPattern === 'weekly' && newEvent.recurringDays.length === 0) {
+        Alert.alert('Error', 'Please select at least one day for weekly recurring events')
+        return
+      }
+      
+      if (newEvent.recurringOccurrences <= 0 && !newEvent.recurringEndDate) {
+        Alert.alert('Error', 'Please set either number of occurrences or end date for recurring events')
+        return
+      }
+    }
+
     // Check if user is authenticated for premium features
     const isAuthenticated = userService.isAuthenticated()
     const hasPremium = userService.hasPremiumSubscription()
@@ -560,6 +603,19 @@ const MapViewNative: React.FC = () => {
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Sign In', onPress: () => setShowUserProfile(true) }
+        ]
+      )
+      return
+    }
+
+    // Check daily event creation limit for free users
+    if (!hasPremium && !userService.canCreateEventToday()) {
+      Alert.alert(
+        'Daily Limit Reached',
+        'Free users can create only 1 event per day. Upgrade to Premium for unlimited events.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => setShowUserProfile(true) }
         ]
       )
       return
@@ -578,23 +634,23 @@ const MapViewNative: React.FC = () => {
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
         url: '',
-        category: newEvent.category
+        category: newEvent.category,
+        isRecurring: newEvent.isRecurring,
+        recurringPattern: newEvent.recurringPattern,
+        recurringDays: newEvent.recurringDays,
+        recurringInterval: newEvent.recurringInterval,
+        recurringEndDate: newEvent.recurringEndDate,
+        recurringOccurrences: newEvent.recurringOccurrences
       }
 
       // Use eventService to create and share the event
       const success = await eventService.createEvent(eventData)
       
       if (success) {
-        // Update user stats
-        const currentStats = userService.getUserStats()
-        if (currentStats) {
-          await userService.updateStats({
-            eventsCreated: currentStats.eventsCreated + 1,
-            totalEvents: currentStats.totalEvents + 1
-          })
-        }
+        // Update user stats with daily tracking
+        await userService.incrementDailyEventCount()
 
-        // Reload events to include the new one
+        // Reload events to include the new ones
         try {
           await loadUserCreatedEvents()
         } catch (reloadError) {
@@ -605,7 +661,10 @@ const MapViewNative: React.FC = () => {
         // Check backend status for user feedback
         const syncStatus = await eventService.getSyncStatus()
         
-        let message = 'Your event has been created successfully! 🎉'
+        let message = newEvent.isRecurring 
+          ? `Your recurring event has been created successfully! 🎉\n\n📅 ${newEvent.recurringOccurrences || 'Multiple'} instances created`
+          : 'Your event has been created successfully! 🎉'
+          
         if (!syncStatus.backendAvailable) {
           message += '\n\n📱 Event saved locally (backend not configured)'
         } else if (syncStatus.pendingEvents > 0) {
@@ -629,7 +688,13 @@ const MapViewNative: React.FC = () => {
           startsAt: '',
           category: 'Other',
           latitude: 0,
-          longitude: 0
+          longitude: 0,
+          isRecurring: false,
+          recurringPattern: 'daily',
+          recurringDays: [0],
+          recurringInterval: 1,
+          recurringEndDate: '',
+          recurringOccurrences: 1
         })
         setSelectedLocation(null)
       } else {
@@ -638,7 +703,7 @@ const MapViewNative: React.FC = () => {
 
     } catch (error) {
       console.error('Error creating event:', error)
-      Alert.alert('Error', 'Failed to create event. Please try again.')
+      Alert.alert('Error', 'An unexpected error occurred while creating the event.')
     } finally {
       setIsCreatingEvent(false)
     }
@@ -683,6 +748,69 @@ const MapViewNative: React.FC = () => {
     }
   }
 
+  const generateRecurringPreview = () => {
+    if (!newEvent.isRecurring) {
+      return `${parseDateTime(newEvent.startsAt).date} at ${parseDateTime(newEvent.startsAt).time}`;
+    }
+
+    let previewText = `${parseDateTime(newEvent.startsAt).date} at ${parseDateTime(newEvent.startsAt).time}`;
+
+    if (newEvent.recurringPattern === 'daily') {
+      previewText += `, then every ${newEvent.recurringInterval} day(s)`;
+    } else if (newEvent.recurringPattern === 'weekly') {
+      previewText += `, then every ${newEvent.recurringInterval} week(s) on ${newEvent.recurringDays.map(day => {
+        switch (day) {
+          case 0: return 'Sun';
+          case 1: return 'Mon';
+          case 2: return 'Tue';
+          case 3: return 'Wed';
+          case 4: return 'Thu';
+          case 5: return 'Fri';
+          case 6: return 'Sat';
+          default: return '';
+        }
+      }).join(', ')}`;
+    } else if (newEvent.recurringPattern === 'monthly') {
+      previewText += `, then every ${newEvent.recurringInterval} month(s)`;
+    }
+
+    if (newEvent.recurringOccurrences > 0) {
+      previewText += `, for ${newEvent.recurringOccurrences} occurrence(s)`;
+    } else if (newEvent.recurringEndDate) {
+      previewText += `, until ${newEvent.recurringEndDate}`;
+    }
+
+    return previewText;
+  };
+
+  const parseDateTime = (dateTimeString: string) => {
+    if (!dateTimeString) {
+      return { date: 'No date set', time: 'No time set' };
+    }
+    
+    try {
+      const [datePart, timePart] = dateTimeString.split(' ');
+      const date = new Date(datePart);
+      
+      if (isNaN(date.getTime())) {
+        return { date: 'Invalid date', time: timePart || 'No time set' };
+      }
+      
+      const formattedDate = date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+      
+      return {
+        date: formattedDate,
+        time: timePart || 'No time set'
+      };
+    } catch (error) {
+      return { date: 'Invalid date', time: 'Invalid time' };
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -707,6 +835,7 @@ const MapViewNative: React.FC = () => {
             {searchFilters.distanceFilter && searchFilters.userLocation && (
               ` • Within ${searchFilters.distanceRadius}km`
             )}
+            {!userService.hasFeature('advanced_search') && ' • 1 week ahead only'}
             {!syncStatus.backendAvailable && ' • 📱 Local'}
             {syncStatus.pendingEvents > 0 && ` • ⏳ ${syncStatus.pendingEvents} pending`}
           </Text>
@@ -736,6 +865,13 @@ const MapViewNative: React.FC = () => {
         onPress={openCreateEventModal}
       >
         <Text style={styles.createEventButtonText}>+</Text>
+        {!userService.hasPremiumSubscription() && (
+          <View style={styles.dailyLimitBadge}>
+            <Text style={styles.dailyLimitBadgeText}>
+              {userService.canCreateEventToday() ? '1/day' : '0/1'}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Map */}
@@ -947,6 +1083,187 @@ const MapViewNative: React.FC = () => {
                 </ScrollView>
               </View>
 
+              {/* Recurring Event Section */}
+              <View style={styles.inputGroup}>
+                <View style={styles.recurringHeader}>
+                  <Text style={styles.inputLabel}>Recurring Event</Text>
+                  <Switch
+                    value={newEvent.isRecurring}
+                    onValueChange={(value) => setNewEvent(prev => ({ ...prev, isRecurring: value }))}
+                  />
+                </View>
+                
+                {newEvent.isRecurring && (
+                  <View style={styles.recurringOptions}>
+                    <View style={styles.recurringPatternSection}>
+                      <Text style={styles.recurringSubLabel}>Repeat Pattern</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.patternScroll}>
+                        {[
+                          { key: 'daily', label: 'Daily' },
+                          { key: 'weekly', label: 'Weekly' },
+                          { key: 'monthly', label: 'Monthly' },
+                          { key: 'custom', label: 'Custom' }
+                        ].map((pattern) => (
+                          <TouchableOpacity
+                            key={pattern.key}
+                            style={[
+                              styles.patternButton,
+                              newEvent.recurringPattern === pattern.key && styles.patternButtonActive
+                            ]}
+                            onPress={() => setNewEvent(prev => ({ ...prev, recurringPattern: pattern.key as any }))}
+                          >
+                            <Text style={[
+                              styles.patternButtonText,
+                              newEvent.recurringPattern === pattern.key && styles.patternButtonTextActive
+                            ]}>
+                              {pattern.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    <View style={styles.recurringIntervalSection}>
+                      <Text style={styles.recurringSubLabel}>Repeat Every</Text>
+                      <View style={styles.intervalRow}>
+                        <TextInput
+                          style={[styles.textInput, styles.intervalInput]}
+                          placeholder="1"
+                          value={newEvent.recurringInterval.toString()}
+                          onChangeText={(text) => setNewEvent(prev => ({ 
+                            ...prev, 
+                            recurringInterval: parseInt(text) || 1 
+                          }))}
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.intervalLabel}>
+                          {newEvent.recurringPattern === 'daily' ? 'day(s)' :
+                           newEvent.recurringPattern === 'weekly' ? 'week(s)' :
+                           newEvent.recurringPattern === 'monthly' ? 'month(s)' : 'time(s)'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {newEvent.recurringPattern === 'weekly' && (
+                      <View style={styles.recurringDaysSection}>
+                        <Text style={styles.recurringSubLabel}>Repeat on Days</Text>
+                        <View style={styles.daysRow}>
+                          {[
+                            { key: 0, label: 'Sun' },
+                            { key: 1, label: 'Mon' },
+                            { key: 2, label: 'Tue' },
+                            { key: 3, label: 'Wed' },
+                            { key: 4, label: 'Thu' },
+                            { key: 5, label: 'Fri' },
+                            { key: 6, label: 'Sat' }
+                          ].map((day) => (
+                            <TouchableOpacity
+                              key={day.key}
+                              style={[
+                                styles.dayButton,
+                                newEvent.recurringDays.includes(day.key) && styles.dayButtonActive
+                              ]}
+                              onPress={() => {
+                                const updatedDays = newEvent.recurringDays.includes(day.key)
+                                  ? newEvent.recurringDays.filter(d => d !== day.key)
+                                  : [...newEvent.recurringDays, day.key]
+                                setNewEvent(prev => ({ ...prev, recurringDays: updatedDays }))
+                              }}
+                            >
+                              <Text style={[
+                                styles.dayButtonText,
+                                newEvent.recurringDays.includes(day.key) && styles.dayButtonTextActive
+                              ]}>
+                                {day.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    <View style={styles.recurringEndSection}>
+                      <Text style={styles.recurringSubLabel}>End After</Text>
+                      <View style={styles.endOptionsRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.endOptionButton,
+                            newEvent.recurringOccurrences > 0 && styles.endOptionButtonActive
+                          ]}
+                          onPress={() => setNewEvent(prev => ({ 
+                            ...prev, 
+                            recurringOccurrences: newEvent.recurringOccurrences > 0 ? 0 : 3,
+                            recurringEndDate: ''
+                          }))}
+                        >
+                          <Text style={[
+                            styles.endOptionButtonText,
+                            newEvent.recurringOccurrences > 0 && styles.endOptionButtonTextActive
+                          ]}>
+                            Occurrences
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.endOptionButton,
+                            newEvent.recurringEndDate && styles.endOptionButtonActive
+                          ]}
+                          onPress={() => setNewEvent(prev => ({ 
+                            ...prev, 
+                            recurringOccurrences: 0,
+                            recurringEndDate: newEvent.recurringEndDate ? '' : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+                          }))}
+                        >
+                          <Text style={[
+                            styles.endOptionButtonText,
+                            newEvent.recurringEndDate && styles.endOptionButtonTextActive
+                          ]}>
+                            End Date
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      
+                      {newEvent.recurringOccurrences > 0 && (
+                        <View style={styles.occurrencesRow}>
+                          <TextInput
+                            style={[styles.textInput, styles.occurrencesInput]}
+                            placeholder="3"
+                            value={newEvent.recurringOccurrences.toString()}
+                            onChangeText={(text) => setNewEvent(prev => ({ 
+                              ...prev, 
+                              recurringOccurrences: parseInt(text) || 1 
+                            }))}
+                            keyboardType="numeric"
+                          />
+                          <Text style={styles.occurrencesLabel}>occurrences</Text>
+                        </View>
+                      )}
+                      
+                      {newEvent.recurringEndDate && (
+                        <View style={styles.endDateRow}>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="YYYY-MM-DD"
+                            value={newEvent.recurringEndDate}
+                            onChangeText={(text) => setNewEvent(prev => ({ 
+                              ...prev, 
+                              recurringEndDate: text 
+                            }))}
+                          />
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.recurringPreview}>
+                      <Text style={styles.recurringPreviewTitle}>Preview:</Text>
+                      <Text style={styles.recurringPreviewText}>
+                        {generateRecurringPreview()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
               {selectedLocation ? (
                 <View style={styles.locationInfo}>
                   <Text style={styles.locationInfoText}>
@@ -1010,11 +1327,44 @@ const MapViewNative: React.FC = () => {
             {selectedEvent && (
               <>
                 <View style={styles.eventInfo}>
-                  <Text style={styles.eventTitle}>{selectedEvent.name}</Text>
+                  <Text style={styles.eventTitle}>
+                    {selectedEvent.name}
+                    {selectedEvent.isRecurring && (
+                      <Text style={styles.recurringIndicator}> 🔄</Text>
+                    )}
+                  </Text>
                   <Text style={styles.eventVenue}>{selectedEvent.venue}</Text>
                   <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
                   {selectedEvent.source === 'user' && (
                     <Text style={styles.userCreatedBadge}>👤 Created by you</Text>
+                  )}
+                  {selectedEvent.isRecurring && (
+                    <View style={styles.recurringInfo}>
+                      <Text style={styles.recurringInfoTitle}>🔄 Recurring Event</Text>
+                      <Text style={styles.recurringInfoText}>
+                        {selectedEvent.recurringPattern === 'daily' && `Every ${selectedEvent.recurringInterval || 1} day(s)`}
+                        {selectedEvent.recurringPattern === 'weekly' && `Every ${selectedEvent.recurringInterval || 1} week(s) on ${selectedEvent.recurringDays?.map(day => {
+                          switch (day) {
+                            case 0: return 'Sun';
+                            case 1: return 'Mon';
+                            case 2: return 'Tue';
+                            case 3: return 'Wed';
+                            case 4: return 'Thu';
+                            case 5: return 'Fri';
+                            case 6: return 'Sat';
+                            default: return '';
+                          }
+                        }).join(', ')}`}
+                        {selectedEvent.recurringPattern === 'monthly' && `Every ${selectedEvent.recurringInterval || 1} month(s)`}
+                        {selectedEvent.recurringOccurrences && ` (${selectedEvent.recurringOccurrences} occurrences)`}
+                        {selectedEvent.recurringEndDate && ` (until ${selectedEvent.recurringEndDate})`}
+                      </Text>
+                    </View>
+                  )}
+                  {selectedEvent.parentEventId && (
+                    <Text style={styles.recurringInstanceText}>
+                      📅 This is part of a recurring event series
+                    </Text>
                   )}
                 </View>
 
@@ -1178,7 +1528,10 @@ const MapViewNative: React.FC = () => {
               {!userService.hasFeature('advanced_search') && (
                 <View style={styles.premiumPrompt}>
                   <Text style={styles.premiumPromptText}>
-                    ⭐ Upgrade to Premium for unlimited date filtering
+                    ⭐ Free users can only see events within 1 week ahead
+                  </Text>
+                  <Text style={styles.premiumPromptText}>
+                    Upgrade to Premium for unlimited date filtering
                   </Text>
                   <TouchableOpacity 
                     style={styles.premiumButton}
@@ -1830,6 +2183,203 @@ const styles = StyleSheet.create({
   },
   disabledInput: {
     opacity: 0.7,
+  },
+  recurringHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  recurringOptions: {
+    backgroundColor: '#f0f0f9',
+    borderRadius: 8,
+    padding: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  recurringPatternSection: {
+    marginBottom: 10,
+  },
+  recurringSubLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  patternScroll: {
+    flexDirection: 'row',
+  },
+  patternButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  patternButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  patternButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  patternButtonTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  recurringIntervalSection: {
+    marginBottom: 10,
+  },
+  intervalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  intervalInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  intervalLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  recurringDaysSection: {
+    marginBottom: 10,
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  dayButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    minWidth: 35,
+    alignItems: 'center',
+  },
+  dayButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  dayButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  dayButtonTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  recurringEndSection: {
+    marginTop: 10,
+  },
+  endOptionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+  },
+  endOptionButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flex: 1,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  endOptionButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  endOptionButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  endOptionButtonTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  occurrencesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  occurrencesInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  occurrencesLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  endDateRow: {
+    marginTop: 10,
+  },
+  recurringPreview: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  recurringPreviewTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
+  },
+  recurringPreviewText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  recurringIndicator: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  recurringInstanceText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  recurringInfo: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  recurringInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
+  },
+  recurringInfoText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  dailyLimitBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#ff4444',
+    borderRadius: 10,
+    width: 25,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  dailyLimitBadgeText: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: 'bold',
   },
 })
 

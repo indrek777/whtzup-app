@@ -15,6 +15,14 @@ export interface Event {
   createdAt?: string
   createdBy?: string
   updatedAt?: string
+  // Recurring event properties
+  isRecurring?: boolean
+  recurringPattern?: 'daily' | 'weekly' | 'monthly' | 'custom'
+  recurringDays?: number[]
+  recurringInterval?: number
+  recurringEndDate?: string
+  recurringOccurrences?: number
+  parentEventId?: string // For recurring event instances
 }
 
 export interface EventResponse {
@@ -41,18 +49,94 @@ const STORAGE_KEYS = {
 }
 
 class EventService {
+  // Generate recurring event instances
+  private generateRecurringInstances(parentEvent: Event): Event[] {
+    if (!parentEvent.isRecurring || !parentEvent.startsAt) {
+      return [parentEvent]
+    }
+
+    const instances: Event[] = []
+    const startDate = new Date(parentEvent.startsAt)
+    const timeString = parentEvent.startsAt.split(' ')[1] || '00:00'
+    
+    let currentDate = new Date(startDate)
+    let occurrenceCount = 0
+    const maxOccurrences = parentEvent.recurringOccurrences || 10 // Default to 10 if not specified
+    const endDate = parentEvent.recurringEndDate ? new Date(parentEvent.recurringEndDate) : null
+
+    while (occurrenceCount < maxOccurrences) {
+      // Check if we've reached the end date
+      if (endDate && currentDate > endDate) {
+        break
+      }
+
+      // Create instance
+      const instance: Event = {
+        ...parentEvent,
+        id: `${parentEvent.id}_instance_${occurrenceCount}`,
+        startsAt: `${currentDate.toISOString().slice(0, 10)} ${timeString}`,
+        parentEventId: parentEvent.id
+      }
+      
+      instances.push(instance)
+      occurrenceCount++
+
+      // Calculate next date based on pattern
+      if (parentEvent.recurringPattern === 'daily') {
+        currentDate.setDate(currentDate.getDate() + (parentEvent.recurringInterval || 1))
+      } else if (parentEvent.recurringPattern === 'weekly') {
+        if (parentEvent.recurringDays && parentEvent.recurringDays.length > 0) {
+          // Find next occurrence based on selected days
+          let nextDate = new Date(currentDate)
+          let daysAdded = 0
+          const interval = parentEvent.recurringInterval || 1
+          
+          while (daysAdded < 7 * interval) {
+            nextDate.setDate(nextDate.getDate() + 1)
+            daysAdded++
+            
+            if (parentEvent.recurringDays.includes(nextDate.getDay())) {
+              currentDate = new Date(nextDate)
+              break
+            }
+          }
+          
+          // If no next occurrence found in this interval, move to next interval
+          if (daysAdded >= 7 * interval) {
+            currentDate.setDate(currentDate.getDate() + (7 * interval))
+          }
+        } else {
+          currentDate.setDate(currentDate.getDate() + (7 * (parentEvent.recurringInterval || 1)))
+        }
+      } else if (parentEvent.recurringPattern === 'monthly') {
+        currentDate.setMonth(currentDate.getMonth() + (parentEvent.recurringInterval || 1))
+      } else {
+        // Custom pattern - just increment by days
+        currentDate.setDate(currentDate.getDate() + (parentEvent.recurringInterval || 1))
+      }
+    }
+
+    return instances
+  }
+
   // Create and share a new event
   async createEvent(eventData: Omit<Event, 'id' | 'source'>): Promise<boolean> {
     try {
-      // Save locally first for immediate feedback
-      const localEvent: Event = {
+      // Create the parent event
+      const parentEvent: Event = {
         ...eventData,
         id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         source: 'user',
         createdAt: new Date().toISOString()
       }
       
-      await this.saveEventLocally(localEvent)
+      // Generate recurring instances if needed
+      const allEvents = this.generateRecurringInstances(parentEvent)
+      
+      // Save all events locally
+      for (const event of allEvents) {
+        await this.saveEventLocally(event)
+      }
       
       // Try to share with backend (if configured)
       if (API_BASE_URL) {
@@ -64,7 +148,8 @@ class EventService {
             },
             body: JSON.stringify({
               ...eventData,
-              userId: await this.getUserId()
+              userId: await this.getUserId(),
+              recurringInstances: allEvents.length > 1 ? allEvents : undefined
             })
           })
           
@@ -72,20 +157,24 @@ class EventService {
             const result: EventResponse = await response.json()
             if (result.success && result.event) {
               console.log('Event shared with community successfully')
-              // Update local event with server ID
-              await this.updateLocalEvent(localEvent.id, result.event)
+              // Update local events with server IDs
+              for (const event of allEvents) {
+                await this.updateLocalEvent(event.id, { ...result.event, id: event.id })
+              }
               return true
             }
           } else {
             console.log('Backend responded with error:', response.status, response.statusText)
           }
         } catch (backendError) {
-          console.log('Backend share failed, event saved locally only:', backendError)
+          console.log('Backend share failed, events saved locally only:', backendError)
           // Store for later sync
-          await this.queueForSync(localEvent)
+          for (const event of allEvents) {
+            await this.queueForSync(event)
+          }
         }
       } else {
-        console.log('Backend not configured - event saved locally only')
+        console.log('Backend not configured - events saved locally only')
       }
       
       return true // Success even if backend is not available

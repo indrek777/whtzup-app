@@ -172,6 +172,28 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     )
   }
 
+  const handleReactivateSubscription = async () => {
+    Alert.alert(
+      'Reactivate Subscription',
+      'Would you like to reactivate your subscription?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reactivate', 
+          onPress: async () => {
+            const success = await userService.reactivateSubscription()
+            if (success) {
+              Alert.alert('Success', 'Subscription reactivated successfully')
+              loadUserData()
+            } else {
+              Alert.alert('Error', 'Failed to reactivate subscription')
+            }
+          }
+        }
+      ]
+    )
+  }
+
   const handleUpdatePreferences = async () => {
     const success = await userService.updatePreferences(preferences)
     if (success) {
@@ -196,10 +218,19 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         const now = new Date()
         if (endDate > now) {
           const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          if (!subscription.autoRenew) {
+            return `Premium (${daysLeft} days left, cancelled)`
+          }
           return `Premium (${daysLeft} days left)`
         }
       }
+      if (!subscription.autoRenew) {
+        return 'Premium (cancelled)'
+      }
       return 'Premium'
+    }
+    if (subscription.status === 'expired') {
+      return 'Expired'
     }
     return 'Free'
   }
@@ -448,6 +479,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <View style={styles.statItem}>
                       <Text style={styles.statNumber}>{currentUser.stats.eventsCreated}</Text>
                       <Text style={styles.statLabel}>Events Created</Text>
+                      {currentUser.subscription.status === 'free' && (
+                        <Text style={styles.dailyLimitText}>
+                          {userService.canCreateEventToday() ? '1 event today' : '0 events today'}
+                        </Text>
+                      )}
                     </View>
                     <View style={styles.statItem}>
                       <Text style={styles.statNumber}>{currentUser.stats.ratingsGiven}</Text>
@@ -483,7 +519,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Upgrade to Premium</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : (
+                ) : currentUser?.subscription.status === 'premium' && currentUser?.subscription.autoRenew ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={handleCancelSubscription}
@@ -492,7 +528,25 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Cancel Subscription</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                )}
+                ) : currentUser?.subscription.status === 'premium' && !currentUser?.subscription.autoRenew ? (
+                  <TouchableOpacity 
+                    style={styles.actionItem}
+                    onPress={handleReactivateSubscription}
+                  >
+                    <Text style={styles.actionIcon}>🔄</Text>
+                    <Text style={styles.actionText}>Reactivate Subscription</Text>
+                    <Text style={styles.actionArrow}>›</Text>
+                  </TouchableOpacity>
+                ) : currentUser?.subscription.status === 'expired' ? (
+                  <TouchableOpacity 
+                    style={styles.actionItem}
+                    onPress={() => setShowSubscriptionModal(true)}
+                  >
+                    <Text style={styles.actionIcon}>⭐</Text>
+                    <Text style={styles.actionText}>Renew Subscription</Text>
+                    <Text style={styles.actionArrow}>›</Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 <TouchableOpacity 
                   style={styles.actionItem}
@@ -504,8 +558,27 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                 </TouchableOpacity>
               </View>
 
+              {/* Free User Limitations */}
+              {currentUser?.subscription.status === 'free' && (
+                <View style={styles.limitationsSection}>
+                  <Text style={styles.sectionTitle}>Free Plan Limitations</Text>
+                  <View style={styles.limitationsList}>
+                    <Text style={styles.limitationItem}>• 1 event per day</Text>
+                    <Text style={styles.limitationItem}>• Events visible only 1 week ahead</Text>
+                    <Text style={styles.limitationItem}>• Basic search and filtering</Text>
+                    <Text style={styles.limitationItem}>• Local ratings only</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.upgradeButton}
+                    onPress={() => setShowSubscriptionModal(true)}
+                  >
+                    <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Premium Features */}
-              {currentUser?.subscription.status === 'premium' && (
+              {currentUser?.subscription.status === 'premium' && currentUser?.subscription.autoRenew && (
                 <View style={styles.premiumSection}>
                   <Text style={styles.sectionTitle}>Premium Features</Text>
                   <View style={styles.featuresList}>
@@ -657,6 +730,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
+  },
+  dailyLimitText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
   },
   actionsSection: {
     marginBottom: 30,
@@ -810,6 +888,31 @@ const styles = StyleSheet.create({
   preferenceLabel: {
     fontSize: 16,
     color: '#333',
+  },
+  limitationsSection: {
+    marginBottom: 30,
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+  },
+  limitationsList: {
+    marginBottom: 20,
+  },
+  limitationItem: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  upgradeButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  upgradeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 })
 
