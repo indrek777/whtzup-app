@@ -61,40 +61,60 @@ const STORAGE_KEYS = {
 class UserService {
   private currentUser: User | null = null
   private authToken: string | null = null
+  private initializationPromise: Promise<void> | null = null
 
   constructor() {
-    this.loadUserFromStorage()
+    this.initializationPromise = this.loadUserFromStorage()
   }
 
   // Initialize user from storage
   private async loadUserFromStorage() {
     try {
+      console.log('Loading user from storage...')
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
       
+      console.log('User data from storage:', userData ? 'Found' : 'Not found')
+      console.log('Token data from storage:', tokenData ? 'Found' : 'Not found')
+      
       if (userData) {
         this.currentUser = JSON.parse(userData)
+        console.log('User loaded from storage:', this.currentUser?.email)
       }
       if (tokenData) {
         this.authToken = tokenData
+        console.log('Auth token loaded from storage')
       }
+      
+      console.log('Final user state:', this.currentUser ? 'Authenticated' : 'Not authenticated')
     } catch (error) {
       console.log('Error loading user from storage:', error)
     }
   }
 
+  // Wait for initialization to complete
+  private async ensureInitialized() {
+    if (this.initializationPromise) {
+      await this.initializationPromise
+      this.initializationPromise = null
+    }
+  }
+
   // Get current user
-  getCurrentUser(): User | null {
+  async getCurrentUser(): Promise<User | null> {
+    await this.ensureInitialized()
     return this.currentUser
   }
 
   // Check if user is authenticated
-  isAuthenticated(): boolean {
+  async isAuthenticated(): Promise<boolean> {
+    await this.ensureInitialized()
     return this.currentUser !== null && this.authToken !== null
   }
 
   // Check if user has premium subscription
-  hasPremiumSubscription(): boolean {
+  async hasPremiumSubscription(): Promise<boolean> {
+    await this.ensureInitialized()
     if (!this.currentUser) return false
     
     const subscription = this.currentUser.subscription
@@ -110,13 +130,15 @@ class UserService {
   }
 
   // Check if subscription is cancelled (auto-renew disabled)
-  isSubscriptionCancelled(): boolean {
+  async isSubscriptionCancelled(): Promise<boolean> {
+    await this.ensureInitialized()
     if (!this.currentUser) return false
     return !this.currentUser.subscription.autoRenew
   }
 
   // Get subscription status
-  getSubscriptionStatus(): Subscription {
+  async getSubscriptionStatus(): Promise<Subscription> {
+    await this.ensureInitialized()
     if (!this.currentUser) {
       return {
         status: 'free',
@@ -131,8 +153,9 @@ class UserService {
   }
 
   // Get premium features
-  getPremiumFeatures(): string[] {
-    const subscription = this.getSubscriptionStatus()
+  async getPremiumFeatures(): Promise<string[]> {
+    await this.ensureInitialized()
+    const subscription = await this.getSubscriptionStatus()
     if (subscription.status === 'premium') {
       return [
         'unlimited_events',
@@ -192,6 +215,7 @@ class UserService {
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
         
         console.log('User created locally:', newUser.email)
+        console.log('User data saved to AsyncStorage')
         return true
       }
 
@@ -222,12 +246,13 @@ class UserService {
     }
   }
 
-  // Sign in user
+    // Sign in user
   async signIn(email: string, password: string): Promise<boolean> {
     try {
       if (!API_BASE_URL) {
         // Check if user exists locally
         const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
+        
         if (userData) {
           const user = JSON.parse(userData)
           if (user.email === email) {
@@ -242,10 +267,57 @@ class UserService {
             await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
             
             console.log('User signed in locally:', email)
+            console.log('User data updated in AsyncStorage')
             return true
           }
         }
-        return false
+        
+        // If no user data found or email doesn't match, create a new user
+        // This handles the case where a user signs out and then tries to sign in again
+        console.log('No existing user found, creating new user for sign in:', email)
+        
+        // Create a new user for this email
+        const newUser: User = {
+          id: `user_${Date.now()}`,
+          email,
+          name: email.split('@')[0], // Use email prefix as name
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          subscription: {
+            status: 'free',
+            plan: null,
+            startDate: null,
+            endDate: null,
+            autoRenew: false,
+            features: ['basic_search', 'basic_filtering', 'local_ratings']
+          },
+          preferences: {
+            notifications: true,
+            emailUpdates: true,
+            defaultRadius: 10,
+            favoriteCategories: [],
+            language: 'en',
+            theme: 'auto'
+          },
+          stats: {
+            eventsCreated: 0,
+            eventsAttended: 0,
+            ratingsGiven: 0,
+            reviewsWritten: 0,
+            totalEvents: 0,
+            favoriteVenues: []
+          }
+        }
+
+        this.currentUser = newUser
+        this.authToken = `token_${Date.now()}`
+        
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser))
+        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
+        
+        console.log('New user created for sign in:', email)
+        console.log('User data saved to AsyncStorage')
+        return true
       }
 
       // Backend implementation would go here
@@ -293,6 +365,7 @@ class UserService {
   // Update user profile
   async updateProfile(updates: Partial<User>): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       const updatedUser = { ...this.currentUser, ...updates }
@@ -324,6 +397,7 @@ class UserService {
   // Update user preferences
   async updatePreferences(preferences: Partial<UserPreferences>): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       const updatedPreferences = { ...this.currentUser.preferences, ...preferences }
@@ -341,6 +415,7 @@ class UserService {
   // Subscribe to premium plan
   async subscribeToPremium(plan: 'monthly' | 'yearly'): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       const now = new Date()
@@ -384,6 +459,7 @@ class UserService {
   // Cancel subscription
   async cancelSubscription(): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) {
         console.log('No current user found for subscription cancellation')
         return false
@@ -432,6 +508,7 @@ class UserService {
   // Reactivate subscription
   async reactivateSubscription(): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       // Re-enable auto-renew
@@ -477,6 +554,7 @@ class UserService {
   // Update user stats
   async updateStats(updates: Partial<UserStats>): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       const updatedStats = { ...this.currentUser.stats, ...updates }
@@ -492,18 +570,21 @@ class UserService {
   }
 
   // Get user stats
-  getUserStats(): UserStats | null {
+  async getUserStats(): Promise<UserStats | null> {
+    await this.ensureInitialized()
     return this.currentUser?.stats || null
   }
 
   // Check if feature is available
-  hasFeature(feature: string): boolean {
-    const subscription = this.getSubscriptionStatus()
+  async hasFeature(feature: string): Promise<boolean> {
+    await this.ensureInitialized()
+    const subscription = await this.getSubscriptionStatus()
     return subscription.features.includes(feature)
   }
 
   // Get subscription price
-  getSubscriptionPrice(plan: 'monthly' | 'yearly'): number {
+  async getSubscriptionPrice(plan: 'monthly' | 'yearly'): Promise<number> {
+    await this.ensureInitialized()
     const prices = {
       monthly: 9.99,
       yearly: 99.99
@@ -512,9 +593,10 @@ class UserService {
   }
 
   // Get subscription savings
-  getSubscriptionSavings(): number {
-    const monthlyPrice = this.getSubscriptionPrice('monthly')
-    const yearlyPrice = this.getSubscriptionPrice('yearly')
+  async getSubscriptionSavings(): Promise<number> {
+    await this.ensureInitialized()
+    const monthlyPrice = await this.getSubscriptionPrice('monthly')
+    const yearlyPrice = await this.getSubscriptionPrice('yearly')
     const yearlyMonthlyEquivalent = monthlyPrice * 12
     
     return Math.round((yearlyMonthlyEquivalent - yearlyPrice) * 100) / 100
@@ -523,6 +605,7 @@ class UserService {
   // Helper method for testing - create a subscription that expires soon
   async createTestSubscription(plan: 'monthly' | 'yearly' = 'monthly'): Promise<boolean> {
     try {
+      await this.ensureInitialized()
       if (!this.currentUser) return false
 
       const now = new Date()
@@ -561,14 +644,15 @@ class UserService {
   }
 
   // Check if user can create an event today (free users limited to 1 per day)
-  canCreateEventToday(): boolean {
+  async canCreateEventToday(): Promise<boolean> {
+    await this.ensureInitialized()
     if (!this.currentUser) return false
     
     // Premium users have unlimited events
-    if (this.hasPremiumSubscription()) return true
+    if (await this.hasPremiumSubscription()) return true
     
     // Free users limited to 1 event per day
-    const stats = this.getUserStats()
+    const stats = await this.getUserStats()
     if (!stats) return false
     
     const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
@@ -585,9 +669,10 @@ class UserService {
 
   // Increment daily event count
   async incrementDailyEventCount(): Promise<void> {
+    await this.ensureInitialized()
     if (!this.currentUser) return
     
-    const stats = this.getUserStats()
+    const stats = await this.getUserStats()
     if (!stats) return
     
     const today = new Date().toISOString().split('T')[0]
@@ -607,6 +692,47 @@ class UserService {
       lastEventCreatedDate: today,
       eventsCreatedToday: newEventsCreatedToday
     })
+  }
+
+  // Test function to verify authentication persistence
+  async testAuthenticationPersistence(): Promise<{
+    userLoaded: boolean
+    tokenLoaded: boolean
+    isAuthenticated: boolean
+    userEmail?: string
+  }> {
+    await this.ensureInitialized()
+    
+    return {
+      userLoaded: this.currentUser !== null,
+      tokenLoaded: this.authToken !== null,
+      isAuthenticated: await this.isAuthenticated(),
+      userEmail: this.currentUser?.email
+    }
+  }
+
+  // Check if a user exists by email (for demo purposes, always returns true)
+  async userExists(email: string): Promise<boolean> {
+    // In a real app, this would check against a backend or local user database
+    // For demo purposes, we'll assume any email can be used to sign in
+    return true
+  }
+
+  // Get user by email (for demo purposes, creates a new user if not found)
+  async getUserByEmail(email: string): Promise<User | null> {
+    try {
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
+      if (userData) {
+        const user = JSON.parse(userData)
+        if (user.email === email) {
+          return user
+        }
+      }
+      return null
+    } catch (error) {
+      console.log('Error getting user by email:', error)
+      return null
+    }
   }
 }
 

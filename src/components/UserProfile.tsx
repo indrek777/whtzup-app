@@ -48,9 +48,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     loadUserData()
   }, [visible])
 
-  const loadUserData = () => {
-    const user = userService.getCurrentUser()
-    const authenticated = userService.isAuthenticated()
+  const loadUserData = async () => {
+    const user = await userService.getCurrentUser()
+    const authenticated = await userService.isAuthenticated()
     
     setCurrentUser(user)
     setIsAuthenticated(authenticated)
@@ -91,7 +91,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         loadUserData()
         resetAuthForm()
       } else {
-        Alert.alert('Error', authMode === 'signup' ? 'Failed to create account' : 'Invalid credentials')
+        Alert.alert(
+          'Error', 
+          authMode === 'signup' 
+            ? 'Failed to create account. Please try again.' 
+            : 'Sign in failed. Please check your credentials and try again.'
+        )
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred')

@@ -173,6 +173,17 @@ const MapViewNative: React.FC = () => {
 
   // User profile state
   const [showUserProfile, setShowUserProfile] = useState(false)
+  
+  // User service state
+  const [userFeatures, setUserFeatures] = useState<{
+    hasAdvancedSearch: boolean
+    hasPremium: boolean
+    canCreateEventToday: boolean
+  }>({
+    hasAdvancedSearch: false,
+    hasPremium: false,
+    canCreateEventToday: false
+  })
 
   // Load events from imported data
   useEffect(() => {
@@ -208,6 +219,27 @@ const MapViewNative: React.FC = () => {
     loadRatings()
   }, [])
 
+  // Load user features
+  useEffect(() => {
+    loadUserFeatures()
+  }, [])
+
+  const loadUserFeatures = async () => {
+    try {
+      const hasAdvancedSearch = await userService.hasFeature('advanced_search')
+      const hasPremium = await userService.hasPremiumSubscription()
+      const canCreateEventToday = await userService.canCreateEventToday()
+      
+      setUserFeatures({
+        hasAdvancedSearch,
+        hasPremium,
+        canCreateEventToday
+      })
+    } catch (error) {
+      console.log('Error loading user features:', error)
+    }
+  }
+
   const loadRatings = async () => {
     try {
       // Load user ratings
@@ -233,7 +265,7 @@ const MapViewNative: React.FC = () => {
       
       if (success) {
         // Update user stats
-        const currentStats = userService.getUserStats()
+        const currentStats = await userService.getUserStats()
         if (currentStats) {
           const updates: any = { ratingsGiven: currentStats.ratingsGiven + 1 }
           if (review && review.trim()) {
@@ -357,7 +389,7 @@ const MapViewNative: React.FC = () => {
 
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
-      if (!userService.hasFeature('advanced_search')) {
+      if (!userFeatures.hasAdvancedSearch) {
         // For free users, show limited date filtering (1 week ahead only)
         const today = new Date()
         const nextWeek = new Date()
@@ -386,7 +418,7 @@ const MapViewNative: React.FC = () => {
       }
     } else {
       // If no date filter is applied, still limit free users to 1 week ahead
-      if (!userService.hasFeature('advanced_search')) {
+      if (!userFeatures.hasAdvancedSearch) {
         const today = new Date()
         const nextWeek = new Date()
         nextWeek.setDate(today.getDate() + 7)
@@ -417,7 +449,7 @@ const MapViewNative: React.FC = () => {
   // Apply filters when search criteria change
   useEffect(() => {
     applySearchAndFilters()
-  }, [searchFilters.query, searchFilters.category, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation])
+  }, [searchFilters.query, searchFilters.category, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures])
 
   // Initial region (centered on Estonia)
   const initialRegion = {
@@ -593,8 +625,8 @@ const MapViewNative: React.FC = () => {
     }
 
     // Check if user is authenticated for premium features
-    const isAuthenticated = userService.isAuthenticated()
-    const hasPremium = userService.hasPremiumSubscription()
+    const isAuthenticated = await userService.isAuthenticated()
+    const hasPremium = await userService.hasPremiumSubscription()
     
     if (!isAuthenticated) {
       Alert.alert(
@@ -609,7 +641,7 @@ const MapViewNative: React.FC = () => {
     }
 
     // Check daily event creation limit for free users
-    if (!hasPremium && !userService.canCreateEventToday()) {
+    if (!hasPremium && !(await userService.canCreateEventToday())) {
       Alert.alert(
         'Daily Limit Reached',
         'Free users can create only 1 event per day. Upgrade to Premium for unlimited events.',
@@ -835,7 +867,7 @@ const MapViewNative: React.FC = () => {
             {searchFilters.distanceFilter && searchFilters.userLocation && (
               ` • Within ${searchFilters.distanceRadius}km`
             )}
-            {!userService.hasFeature('advanced_search') && ' • 1 week ahead only'}
+            {!userFeatures.hasAdvancedSearch && ' • 1 week ahead only'}
             {!syncStatus.backendAvailable && ' • 📱 Local'}
             {syncStatus.pendingEvents > 0 && ` • ⏳ ${syncStatus.pendingEvents} pending`}
           </Text>
@@ -865,10 +897,10 @@ const MapViewNative: React.FC = () => {
         onPress={openCreateEventModal}
       >
         <Text style={styles.createEventButtonText}>+</Text>
-        {!userService.hasPremiumSubscription() && (
+        {!userFeatures.hasPremium && (
           <View style={styles.dailyLimitBadge}>
             <Text style={styles.dailyLimitBadgeText}>
-              {userService.canCreateEventToday() ? '1/day' : '0/1'}
+              {userFeatures.canCreateEventToday ? '1/day' : '0/1'}
             </Text>
           </View>
         )}
@@ -1525,7 +1557,7 @@ const MapViewNative: React.FC = () => {
             {/* Date Range */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Date Range</Text>
-              {!userService.hasFeature('advanced_search') && (
+              {!userFeatures.hasAdvancedSearch && (
                 <View style={styles.premiumPrompt}>
                   <Text style={styles.premiumPromptText}>
                     ⭐ Free users can only see events within 1 week ahead
@@ -1548,21 +1580,21 @@ const MapViewNative: React.FC = () => {
                 <View style={styles.dateInput}>
                   <Text style={styles.dateLabel}>From</Text>
                   <TextInput
-                    style={[styles.textInput, !userService.hasFeature('advanced_search') && styles.disabledInput]}
+                    style={[styles.textInput, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
                     placeholder="YYYY-MM-DD"
                     value={searchFilters.dateFrom}
                     onChangeText={(text) => setSearchFilters(prev => ({ ...prev, dateFrom: text }))}
-                    editable={userService.hasFeature('advanced_search')}
+                    editable={userFeatures.hasAdvancedSearch}
                   />
                 </View>
                 <View style={styles.dateInput}>
                   <Text style={styles.dateLabel}>To</Text>
                   <TextInput
-                    style={[styles.textInput, !userService.hasFeature('advanced_search') && styles.disabledInput]}
+                    style={[styles.textInput, !userFeatures.hasAdvancedSearch && styles.disabledInput]}
                     placeholder="YYYY-MM-DD"
                     value={searchFilters.dateTo}
                     onChangeText={(text) => setSearchFilters(prev => ({ ...prev, dateTo: text }))}
-                    editable={userService.hasFeature('advanced_search')}
+                    editable={userFeatures.hasAdvancedSearch}
                   />
                 </View>
               </View>
@@ -1636,10 +1668,13 @@ const MapViewNative: React.FC = () => {
       </Modal>
 
       {/* User Profile Modal */}
-      <UserProfile 
-        visible={showUserProfile} 
-        onClose={() => setShowUserProfile(false)} 
-      />
+              <UserProfile 
+          visible={showUserProfile} 
+          onClose={() => {
+            setShowUserProfile(false)
+            loadUserFeatures() // Reload user features after profile changes
+          }} 
+        />
     </View>
   )
 }
