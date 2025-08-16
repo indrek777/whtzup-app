@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform } from 'react-native'
+import React, { useEffect, useState, useRef } from 'react'
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native'
 import MapView, { Marker, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -291,6 +291,8 @@ const MapViewNative: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [currentRating, setCurrentRating] = useState(0)
   const [reviewText, setReviewText] = useState('')
+  const reviewInputRef = useRef<TextInput>(null)
+  const scrollViewRef = useRef<ScrollView>(null)
   
   // Event creation states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false)
@@ -393,6 +395,22 @@ const MapViewNative: React.FC = () => {
   // Load user features
   useEffect(() => {
     loadUserFeatures()
+  }, [])
+
+  // Keyboard event listeners for review input
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      // Keyboard is shown, no need to scroll manually as KeyboardAvoidingView handles it
+    })
+
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      // Keyboard is hidden
+    })
+
+    return () => {
+      keyboardDidShowListener?.remove()
+      keyboardDidHideListener?.remove()
+    }
   }, [])
 
   const loadUserFeatures = async () => {
@@ -1755,20 +1773,35 @@ const MapViewNative: React.FC = () => {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView 
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Rate Event</Text>
             <TouchableOpacity 
-              onPress={() => setShowRatingModal(false)}
+              onPress={() => {
+                Keyboard.dismiss()
+                setShowRatingModal(false)
+              }}
               style={styles.closeButton}
             >
               <Text style={styles.closeButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
-            {selectedEvent && (
-              <>
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View>
+                {selectedEvent && (
+                  <>
                 <View style={styles.eventInfo}>
                   <Text style={styles.eventTitle}>
                     {selectedEvent.name}
@@ -1828,6 +1861,7 @@ const MapViewNative: React.FC = () => {
                 <View style={styles.reviewSection}>
                   <Text style={styles.inputLabel}>Review (Optional)</Text>
                   <TextInput
+                    ref={reviewInputRef}
                     style={[styles.textInput, styles.reviewInput]}
                     placeholder="Share your experience with this event..."
                     value={reviewText}
@@ -1835,7 +1869,22 @@ const MapViewNative: React.FC = () => {
                     multiline
                     numberOfLines={4}
                     textAlignVertical="top"
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    onFocus={() => {
+                      // Simple scroll to bottom when input is focused
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true })
+                      }, 100)
+                    }}
                   />
+                  <TouchableOpacity 
+                    style={styles.dismissKeyboardButton}
+                    onPress={() => Keyboard.dismiss()}
+                  >
+                    <Text style={styles.dismissKeyboardButtonText}>Done</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.syncInfo}>
@@ -1851,10 +1900,12 @@ const MapViewNative: React.FC = () => {
                 >
                   <Text style={styles.submitButtonText}>Submit Rating</Text>
                 </TouchableOpacity>
-              </>
-            )}
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
                                          {/* Search Modal */}
@@ -2399,6 +2450,19 @@ const styles = StyleSheet.create({
   reviewInput: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  dismissKeyboardButton: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+  },
+  dismissKeyboardButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
   },
   syncInfo: {
     marginBottom: 25,
