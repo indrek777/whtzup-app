@@ -986,54 +986,125 @@ const MapViewNative: React.FC = () => {
     return previewText;
   };
 
+  // Date/Time picker states for temporary values
+  const [tempDateFrom, setTempDateFrom] = useState<Date | null>(null)
+  const [tempDateTo, setTempDateTo] = useState<Date | null>(null)
+  const [tempEventTime, setTempEventTime] = useState<Date | null>(null)
+  const [tempEndDate, setTempEndDate] = useState<Date | null>(null)
+
   // Date/Time picker handlers
   const handleDateFromChange = (event: any, selectedDate?: Date) => {
-    setShowDateFromPicker(false)
-    if (selectedDate) {
-      const dateString = selectedDate.toISOString().split('T')[0]
-      setSearchFilters(prev => ({ ...prev, dateFrom: dateString }))
+    if (Platform.OS === 'ios') {
+      // On iOS, just update the temporary value
+      setTempDateFrom(selectedDate || new Date())
+    } else {
+      // On Android, close immediately
+      setShowDateFromPicker(false)
+      if (selectedDate) {
+        const dateString = selectedDate.toISOString().split('T')[0]
+        setSearchFilters(prev => ({ ...prev, dateFrom: dateString }))
+      }
     }
   }
 
   const handleDateToChange = (event: any, selectedDate?: Date) => {
-    setShowDateToPicker(false)
-    if (selectedDate) {
-      const dateString = selectedDate.toISOString().split('T')[0]
-      setSearchFilters(prev => ({ ...prev, dateTo: dateString }))
+    if (Platform.OS === 'ios') {
+      // On iOS, just update the temporary value
+      setTempDateTo(selectedDate || new Date())
+    } else {
+      // On Android, close immediately
+      setShowDateToPicker(false)
+      if (selectedDate) {
+        const dateString = selectedDate.toISOString().split('T')[0]
+        setSearchFilters(prev => ({ ...prev, dateTo: dateString }))
+      }
     }
   }
 
   const handleEventTimeChange = (event: any, selectedDate?: Date) => {
-    setShowEventTimePicker(false)
-    if (selectedDate) {
-      const dateString = selectedDate.toISOString().slice(0, 16).replace('T', ' ')
-      setNewEvent(prev => ({ ...prev, startsAt: dateString }))
+    if (Platform.OS === 'ios') {
+      // On iOS, just update the temporary value
+      setTempEventTime(selectedDate || new Date())
+    } else {
+      // On Android, close immediately
+      setShowEventTimePicker(false)
+      if (selectedDate) {
+        const dateString = selectedDate.toISOString().slice(0, 16).replace('T', ' ')
+        setNewEvent(prev => ({ ...prev, startsAt: dateString }))
+      }
     }
   }
 
   const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    setShowEndDatePicker(false)
-    if (selectedDate) {
-      const dateString = selectedDate.toISOString().split('T')[0]
+    if (Platform.OS === 'ios') {
+      // On iOS, just update the temporary value
+      setTempEndDate(selectedDate || new Date())
+    } else {
+      // On Android, close immediately
+      setShowEndDatePicker(false)
+      if (selectedDate) {
+        const dateString = selectedDate.toISOString().split('T')[0]
+        setNewEvent(prev => ({ ...prev, recurringEndDate: dateString }))
+      }
+    }
+  }
+
+  // Confirm handlers for iOS
+  const handleDateFromConfirm = () => {
+    if (tempDateFrom) {
+      const dateString = tempDateFrom.toISOString().split('T')[0]
+      setSearchFilters(prev => ({ ...prev, dateFrom: dateString }))
+    }
+    setShowDateFromPicker(false)
+    setTempDateFrom(null)
+  }
+
+  const handleDateToConfirm = () => {
+    if (tempDateTo) {
+      const dateString = tempDateTo.toISOString().split('T')[0]
+      setSearchFilters(prev => ({ ...prev, dateTo: dateString }))
+    }
+    setShowDateToPicker(false)
+    setTempDateTo(null)
+  }
+
+  const handleEventTimeConfirm = () => {
+    if (tempEventTime) {
+      const dateString = tempEventTime.toISOString().slice(0, 16).replace('T', ' ')
+      setNewEvent(prev => ({ ...prev, startsAt: dateString }))
+    }
+    setShowEventTimePicker(false)
+    setTempEventTime(null)
+  }
+
+  const handleEndDateConfirm = () => {
+    if (tempEndDate) {
+      const dateString = tempEndDate.toISOString().split('T')[0]
       setNewEvent(prev => ({ ...prev, recurringEndDate: dateString }))
     }
+    setShowEndDatePicker(false)
+    setTempEndDate(null)
   }
 
   // Cancel handlers for DateTimePicker
   const handleDateFromCancel = () => {
     setShowDateFromPicker(false)
+    setTempDateFrom(null)
   }
 
   const handleDateToCancel = () => {
     setShowDateToPicker(false)
+    setTempDateTo(null)
   }
 
   const handleEventTimeCancel = () => {
     setShowEventTimePicker(false)
+    setTempEventTime(null)
   }
 
   const handleEndDateCancel = () => {
     setShowEndDatePicker(false)
+    setTempEndDate(null)
   }
 
   const formatDateForDisplay = (dateString: string) => {
@@ -1333,24 +1404,42 @@ const MapViewNative: React.FC = () => {
                     </Text>
                   </TouchableOpacity>
                   
-                  {/* Event Time Picker integrated into create event modal */}
-                  {showEventTimePicker && (
-                    <View style={styles.inlineDatePicker}>
-                      <Text style={styles.inlineDatePickerLabel}>Select Date & Time:</Text>
-                      <DateTimePicker
-                        value={newEvent.startsAt ? new Date(newEvent.startsAt) : new Date()}
-                        mode="datetime"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={handleEventTimeChange}
-                      />
-                      <TouchableOpacity 
-                        style={styles.inlineDatePickerCancelButton}
-                        onPress={handleEventTimeCancel}
-                      >
-                        <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                                     {/* Event Time Picker integrated into create event modal */}
+                   {showEventTimePicker && (
+                     <View style={styles.inlineDatePicker}>
+                       <Text style={styles.inlineDatePickerLabel}>Select Date & Time:</Text>
+                       <DateTimePicker
+                         value={tempEventTime || (newEvent.startsAt ? new Date(newEvent.startsAt) : new Date())}
+                         mode="datetime"
+                         display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                         onChange={handleEventTimeChange}
+                       />
+                       {Platform.OS === 'ios' && (
+                         <View style={styles.datePickerButtons}>
+                           <TouchableOpacity 
+                             style={styles.datePickerCancelButton}
+                             onPress={handleEventTimeCancel}
+                           >
+                             <Text style={styles.datePickerCancelText}>Cancel</Text>
+                           </TouchableOpacity>
+                           <TouchableOpacity 
+                             style={styles.datePickerConfirmButton}
+                             onPress={handleEventTimeConfirm}
+                           >
+                             <Text style={styles.datePickerConfirmText}>Confirm</Text>
+                           </TouchableOpacity>
+                         </View>
+                       )}
+                       {Platform.OS !== 'ios' && (
+                         <TouchableOpacity 
+                           style={styles.inlineDatePickerCancelButton}
+                           onPress={handleEventTimeCancel}
+                         >
+                           <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                         </TouchableOpacity>
+                       )}
+                     </View>
+                   )}
                 </View>
 
                              <View style={styles.inputGroup}>
@@ -1570,24 +1659,42 @@ const MapViewNative: React.FC = () => {
                           </View>
                         )}
                         
-                        {/* Recurring End Date Picker integrated into create event modal */}
-                        {showEndDatePicker && (
-                          <View style={styles.inlineDatePicker}>
-                            <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
-                            <DateTimePicker
-                              value={newEvent.recurringEndDate ? new Date(newEvent.recurringEndDate) : new Date()}
-                              mode="date"
-                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                              onChange={handleEndDateChange}
-                            />
-                            <TouchableOpacity 
-                              style={styles.inlineDatePickerCancelButton}
-                              onPress={handleEndDateCancel}
-                            >
-                              <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
+                                                 {/* Recurring End Date Picker integrated into create event modal */}
+                         {showEndDatePicker && (
+                           <View style={styles.inlineDatePicker}>
+                             <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
+                             <DateTimePicker
+                               value={tempEndDate || (newEvent.recurringEndDate ? new Date(newEvent.recurringEndDate) : new Date())}
+                               mode="date"
+                               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                               onChange={handleEndDateChange}
+                             />
+                             {Platform.OS === 'ios' && (
+                               <View style={styles.datePickerButtons}>
+                                 <TouchableOpacity 
+                                   style={styles.datePickerCancelButton}
+                                   onPress={handleEndDateCancel}
+                                 >
+                                   <Text style={styles.datePickerCancelText}>Cancel</Text>
+                                 </TouchableOpacity>
+                                 <TouchableOpacity 
+                                   style={styles.datePickerConfirmButton}
+                                   onPress={handleEndDateConfirm}
+                                 >
+                                   <Text style={styles.datePickerConfirmText}>Confirm</Text>
+                                 </TouchableOpacity>
+                               </View>
+                             )}
+                             {Platform.OS !== 'ios' && (
+                               <TouchableOpacity 
+                                 style={styles.inlineDatePickerCancelButton}
+                                 onPress={handleEndDateCancel}
+                               >
+                                 <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                               </TouchableOpacity>
+                             )}
+                           </View>
+                         )}
                     </View>
 
                     <View style={styles.recurringPreview}>
@@ -1941,42 +2048,78 @@ const MapViewNative: React.FC = () => {
                   </TouchableOpacity>
                 </View>
                 
-                {/* Date Pickers integrated into search modal */}
-                {showDateFromPicker && userFeatures.hasAdvancedSearch && (
-                  <View style={styles.inlineDatePicker}>
-                    <Text style={styles.inlineDatePickerLabel}>Select Start Date:</Text>
-                    <DateTimePicker
-                      value={searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      onChange={handleDateFromChange}
-                    />
-                    <TouchableOpacity 
-                      style={styles.inlineDatePickerCancelButton}
-                      onPress={handleDateFromCancel}
-                    >
-                      <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                
-                {showDateToPicker && userFeatures.hasAdvancedSearch && (
-                  <View style={styles.inlineDatePicker}>
-                    <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
-                    <DateTimePicker
-                      value={searchFilters.dateTo ? new Date(searchFilters.dateTo) : new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      onChange={handleDateToChange}
-                    />
-                    <TouchableOpacity 
-                      style={styles.inlineDatePickerCancelButton}
-                      onPress={handleDateToCancel}
-                    >
-                      <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                                 {/* Date Pickers integrated into search modal */}
+                 {showDateFromPicker && userFeatures.hasAdvancedSearch && (
+                   <View style={styles.inlineDatePicker}>
+                     <Text style={styles.inlineDatePickerLabel}>Select Start Date:</Text>
+                     <DateTimePicker
+                       value={tempDateFrom || (searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date())}
+                       mode="date"
+                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                       onChange={handleDateFromChange}
+                     />
+                     {Platform.OS === 'ios' && (
+                       <View style={styles.datePickerButtons}>
+                         <TouchableOpacity 
+                           style={styles.datePickerCancelButton}
+                           onPress={handleDateFromCancel}
+                         >
+                           <Text style={styles.datePickerCancelText}>Cancel</Text>
+                         </TouchableOpacity>
+                         <TouchableOpacity 
+                           style={styles.datePickerConfirmButton}
+                           onPress={handleDateFromConfirm}
+                         >
+                           <Text style={styles.datePickerConfirmText}>Confirm</Text>
+                         </TouchableOpacity>
+                       </View>
+                     )}
+                     {Platform.OS !== 'ios' && (
+                       <TouchableOpacity 
+                         style={styles.inlineDatePickerCancelButton}
+                         onPress={handleDateFromCancel}
+                       >
+                         <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                       </TouchableOpacity>
+                     )}
+                   </View>
+                 )}
+                 
+                 {showDateToPicker && userFeatures.hasAdvancedSearch && (
+                   <View style={styles.inlineDatePicker}>
+                     <Text style={styles.inlineDatePickerLabel}>Select End Date:</Text>
+                     <DateTimePicker
+                       value={tempDateTo || (searchFilters.dateTo ? new Date(searchFilters.dateTo) : new Date())}
+                       mode="date"
+                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                       onChange={handleDateToChange}
+                     />
+                     {Platform.OS === 'ios' && (
+                       <View style={styles.datePickerButtons}>
+                         <TouchableOpacity 
+                           style={styles.datePickerCancelButton}
+                           onPress={handleDateToCancel}
+                         >
+                           <Text style={styles.datePickerCancelText}>Cancel</Text>
+                         </TouchableOpacity>
+                         <TouchableOpacity 
+                           style={styles.datePickerConfirmButton}
+                           onPress={handleDateToConfirm}
+                         >
+                           <Text style={styles.datePickerConfirmText}>Confirm</Text>
+                         </TouchableOpacity>
+                       </View>
+                     )}
+                     {Platform.OS !== 'ios' && (
+                       <TouchableOpacity 
+                         style={styles.inlineDatePickerCancelButton}
+                         onPress={handleDateToCancel}
+                       >
+                         <Text style={styles.inlineDatePickerCancelText}>Cancel</Text>
+                       </TouchableOpacity>
+                     )}
+                   </View>
+                 )}
               </View>
 
                          {/* Search Results Preview */}
@@ -2615,8 +2758,8 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     position: 'absolute',
-    top: 50,
-    right: 20,
+    bottom: 30,
+    right: 90,
     backgroundColor: '#f0f0f0',
     padding: 10,
     borderRadius: 20,
@@ -2727,11 +2870,43 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  inlineDatePickerCancelText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+     inlineDatePickerCancelText: {
+     color: 'white',
+     fontSize: 14,
+     fontWeight: '600',
+   },
+   datePickerButtons: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     marginTop: 15,
+     gap: 10,
+   },
+   datePickerCancelButton: {
+     flex: 1,
+     paddingHorizontal: 20,
+     paddingVertical: 10,
+     backgroundColor: '#6c757d',
+     borderRadius: 8,
+     alignItems: 'center',
+   },
+   datePickerCancelText: {
+     color: 'white',
+     fontSize: 14,
+     fontWeight: '600',
+   },
+   datePickerConfirmButton: {
+     flex: 1,
+     paddingHorizontal: 20,
+     paddingVertical: 10,
+     backgroundColor: '#007AFF',
+     borderRadius: 8,
+     alignItems: 'center',
+   },
+   datePickerConfirmText: {
+     color: 'white',
+     fontSize: 14,
+     fontWeight: '600',
+   },
   recurringHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
