@@ -1,6 +1,6 @@
 # 📱 Expo Setup Guide for iOS App Store Deployment
 
-This guide will help you convert your Event Discovery web app to a native iOS app using Expo and deploy it to TestFlight and the App Store.
+This guide will help you convert your Event web app to a native iOS app using Expo and deploy it to TestFlight and the App Store.
 
 ## 🚀 Quick Start
 

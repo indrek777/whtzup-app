@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Event Discovery",
-    "slug": "event-discovery",
+    "name": "Event",
+    "slug": "event",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/ios_iphone_120.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eventdiscovery.app",
+      "bundleIdentifier": "com.event.app",
       "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
@@ -31,7 +31,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.yourcompany.eventdiscovery",
+      "package": "com.event.app",
       "versionCode": 1,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",

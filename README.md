@@ -1,6 +1,6 @@
-# Event - Event Discovery App
+# Event - iOS Event Discovery App
 
-A modern, mobile-first web application for discovering events happening around you. Built with React, TypeScript, and Tailwind CSS, featuring an interactive map as the central element.
+A modern iOS application for discovering events happening around you. Built with React Native, Expo, and TypeScript, featuring an interactive map as the central element.
 
 ## Features
 
@@ -9,27 +9,29 @@ A modern, mobile-first web application for discovering events happening around y
 - 🎯 **Smart Filtering**: Filter events by category, price, date, and radius
 - ⚙️ **Event Management**: Create, edit, and delete events through settings
 - 📥 **Data Import**: Import events from CSV files with automatic category detection
-- 📱 **Mobile-First Design**: Optimized for mobile devices with iOS-like UI
+- 📱 **iOS Native App**: Built specifically for iOS with native performance
 - 🎨 **Beautiful UI**: Modern design with smooth animations and transitions
 - 🔍 **Event Details**: Comprehensive event information and booking
 - 📊 **Real-time Data**: Mock data structure ready for real API integration
 
 ## Tech Stack
 
-- **Frontend**: React 18 + TypeScript
-- **Styling**: Tailwind CSS
-- **Maps**: Leaflet + React-Leaflet
-- **Icons**: Lucide React
+- **Frontend**: React Native + TypeScript
+- **Framework**: Expo SDK 53
+- **Maps**: React Native Maps
+- **Navigation**: React Navigation
 - **Date Handling**: date-fns
-- **Build Tool**: Vite
-- **Routing**: React Router DOM
+- **Storage**: AsyncStorage
+- **Platform**: iOS
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (version 16 or higher)
+- Node.js (version 18 or higher)
 - npm or yarn
+- Expo CLI
+- iOS Simulator (for testing)
 
 ### Installation
 
@@ -46,46 +48,45 @@ npm install
 
 3. Start the development server:
 ```bash
-npm run dev
+npm start
 ```
 
-4. Open your browser and navigate to `http://localhost:5555`
+4. Open iOS Simulator or scan QR code with Expo Go app
 
 ### Building for Production
 
 ```bash
-npm run build
+npm run build:ios
 ```
 
-The built files will be in the `dist` directory.
+This will create an iOS build ready for App Store submission.
 
 ## Project Structure
 
 ```
 src/
-├── components/          # React components
-│   ├── MapView.tsx     # Main map interface
-│   ├── EventList.tsx   # Event list bottom sheet
-│   ├── EventDetail.tsx # Event detail page
-│   ├── FilterModal.tsx # Filter interface
-│   └── Settings.tsx    # Event management interface
+├── components/          # React Native components
+│   ├── MapViewNative.tsx # Main iOS map interface
+│   ├── UserProfile.tsx   # User profile component
+│   └── ErrorBoundary.tsx # Error handling component
 ├── context/            # React context
 │   └── EventContext.tsx # Event state management
+├── utils/              # Utility functions
+├── data/               # Data files
 ├── App.tsx             # Main app component
-├── main.tsx           # App entry point
-└── index.css          # Global styles
+└── index.js            # Expo entry point
 ```
 
 ## Features in Detail
 
 ### Map Interface
-- Interactive map with OpenStreetMap tiles
+- Interactive map with Apple Maps integration
 - Custom colored markers for different event categories
-- Click markers to view event details
-- Automatic location detection (with fallback to NYC)
+- Tap markers to view event details
+- Automatic location detection with GPS
 
 ### Event Discovery
-- Browse events in a bottom sheet interface
+- Browse events in a native iOS interface
 - Filter by category (Music, Food, Sports, Art, Business, Other)
 - Filter by price range and date
 - Adjust search radius
