@@ -1,12 +1,8 @@
-import express from 'express'
-import multer from 'multer'
-import { promises as fs } from 'fs'
-import path from 'path'
-import cors from 'cors'
-import { fileURLToPath } from 'url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const express = require('express')
+const multer = require('multer')
+const fs = require('fs').promises
+const path = require('path')
+const cors = require('cors')
 
 const app = express()
 const PORT = process.env.PORT || 5555
