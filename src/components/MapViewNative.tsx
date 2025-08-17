@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native'
-import MapView, { Marker, Circle, Region } from 'react-native-maps'
+import MapView, { Marker, Circle, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Event } from '../data/events'
@@ -301,6 +301,10 @@ const MapViewNative: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null)
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
   const [eventDetails, setEventDetails] = useState<{event: Event, distanceInfo: string, ratingInfo: string, userRatingInfo: string, syncInfo: string, date: string, time: string, category: string} | null>(null)
+  
+  // State for two-click marker behavior
+  const markerRefs = useRef<{ [key: string]: any }>({})
+  const clickedMarkerIdRef = useRef<string | null>(null)
   
   // Simple map state
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -764,7 +768,46 @@ const MapViewNative: React.FC = () => {
     longitudeDelta: 2.5,
   }
 
-  const handleMarkerPress = (event: Event) => {
+
+
+  // Create a stable marker press handler that doesn't depend on clickedMarkerId
+  const createMarkerPressHandler = useCallback((event: Event) => {
+    return () => {
+      console.log('Marker pressed for event:', event.id, 'Current clicked ID:', clickedMarkerIdRef.current)
+      
+      // If this is the first click on this marker, just show the callout
+      if (clickedMarkerIdRef.current !== event.id) {
+        clickedMarkerIdRef.current = event.id
+        console.log('First click - showing callout for event:', event.id)
+        
+        // Use setTimeout to ensure the ref is set before trying to show callout
+        setTimeout(() => {
+          if (markerRefs.current[event.id]) {
+            markerRefs.current[event.id].showCallout()
+            console.log('Callout shown for event:', event.id)
+          } else {
+            console.log('Marker ref not found for event:', event.id)
+          }
+        }, 50) // Reduced delay for faster response
+        return
+      }
+      
+      // If this is the second click on the same marker, open the full modal
+      console.log('Second click - opening modal for event:', event.id)
+      openEventDetailsModal(event)
+    }
+  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
+
+  // Handle callout press to open event details modal
+  const handleCalloutPress = useCallback((event: Event) => {
+    console.log('Callout pressed for event:', event.id)
+    // Reset the clicked marker ref since we're opening the modal directly
+    clickedMarkerIdRef.current = null
+    openEventDetailsModal(event)
+  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
+
+  // Helper function to open event details modal
+  const openEventDetailsModal = useCallback((event: Event) => {
     const { date, time } = parseDateTime(event.startsAt)
     const category = determineCategory(event.name, event.description)
     const averageRating = getAverageRating(event.id)
@@ -786,6 +829,7 @@ const MapViewNative: React.FC = () => {
     const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
     const syncInfo = '📱 Local rating only (backend not configured)'
     
+    console.log('Setting event details and opening modal for event:', event.id)
     setEventDetails({
       event,
       distanceInfo,
@@ -797,37 +841,57 @@ const MapViewNative: React.FC = () => {
       category
     })
     setShowEventDetailsModal(true)
-  }
+    console.log('Modal state set to true')
+    clickedMarkerIdRef.current = null
+  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
 
   // Memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
-    console.log(`Rendering ${filteredEvents.length} markers`)
+    console.log('Creating markers for', filteredEvents.length, 'events')
     return filteredEvents.map((event) => {
       const category = determineCategory(event.name, event.description)
       
       return (
         <Marker
           key={event.id}
+          ref={(ref) => {
+            if (ref) {
+              markerRefs.current[event.id] = ref
+            }
+          }}
           coordinate={{
             latitude: event.latitude,
             longitude: event.longitude,
           }}
-          onPress={() => handleMarkerPress(event)}
+          onPress={createMarkerPressHandler(event)}
           pinColor={event.source === 'user' ? 'purple' : getMarkerColor(category)}
-          title={event.name}
-          description={`${event.venue} - ${parseDateTime(event.startsAt).date}`}
           tracksViewChanges={false}
           anchor={{ x: 0.5, y: 1.0 }}
           centerOffset={{ x: 0, y: 0 }}
-          calloutAnchor={{ x: 0.5, y: 0 }}
           flat={false}
           opacity={1}
           draggable={false}
           zIndex={event.source === 'user' ? 1000 : 1}
-        />
+        >
+          <Callout
+            tooltip={false}
+            alphaHitTest={true}
+            onPress={() => handleCalloutPress(event)}
+          >
+            <TouchableOpacity 
+              style={styles.calloutContainer}
+              onPress={() => handleCalloutPress(event)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.calloutTitle}>{event.name}</Text>
+              <Text style={styles.calloutDescription}>{event.venue} - {parseDateTime(event.startsAt).date}</Text>
+              <Text style={styles.calloutHint}>Tap for details</Text>
+            </TouchableOpacity>
+          </Callout>
+        </Marker>
       )
     })
-  }, [filteredEvents, handleMarkerPress])
+  }, [filteredEvents, createMarkerPressHandler, handleCalloutPress, searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -937,7 +1001,19 @@ const MapViewNative: React.FC = () => {
     setShowCreateEventModal(true)
   }
 
-  const handleMapPress = (event: any) => {
+  const handleMapPress = useCallback((event: any) => {
+    // Add a small delay to prevent interference with marker press events
+    setTimeout(() => {
+      // Reset clicked marker when tapping elsewhere on the map
+      if (clickedMarkerIdRef.current) {
+        // Hide the callout
+        if (markerRefs.current[clickedMarkerIdRef.current]) {
+          markerRefs.current[clickedMarkerIdRef.current].hideCallout()
+        }
+        clickedMarkerIdRef.current = null
+      }
+    }, 200) // Slightly longer delay to ensure marker press events complete
+    
     if (showCreateEventModal && isMapMode) {
       const { latitude, longitude } = event.nativeEvent.coordinate
       setSelectedLocation({ latitude, longitude })
@@ -949,7 +1025,7 @@ const MapViewNative: React.FC = () => {
       // Switch back to form mode after selecting location
       setIsMapMode(false)
     }
-  }
+  }, [showCreateEventModal, isMapMode])
 
   const createEvent = async () => {
     if (!newEvent.name.trim() || !newEvent.description.trim() || !newEvent.venue.trim()) {
@@ -1352,34 +1428,9 @@ const MapViewNative: React.FC = () => {
         </View>
       </TouchableOpacity>
 
-      {/* Debug Info Button */}
-      <TouchableOpacity 
-        style={[styles.createEventButton, { bottom: 100, backgroundColor: '#28a745' }]}
-        onPress={() => {
-          Alert.alert(
-            'Debug Info', 
-            `Total Events: ${events.length}\nFiltered Events: ${filteredEvents.length}\nUser Location: ${searchFilters.userLocation ? 'Set' : 'Not set'}\nAdvanced Search: ${userFeatures.hasAdvancedSearch ? 'Yes' : 'No'}\nDistance Filter: ${searchFilters.distanceFilter ? 'ON' : 'OFF'}\nMap Region: ${mapRegion.latitude.toFixed(4)}, ${mapRegion.longitude.toFixed(4)}\nZoom Level: ${Math.round(14 - Math.log2(mapRegion.latitudeDelta))}\nActive Filters: ${searchFilters.query ? 'Search' : ''}${searchFilters.category !== 'All' ? ' Category' : ''}${searchFilters.source !== 'All' ? ' Source' : ''}${searchFilters.dateFrom || searchFilters.dateTo ? ' Date' : ''}`
-          )
-        }}
-      >
-        <Text style={styles.createEventButtonText}>🔍</Text>
-      </TouchableOpacity>
 
-      {/* Marker Test Button */}
-      <TouchableOpacity 
-        style={[styles.createEventButton, { bottom: 160, backgroundColor: '#ff6b6b' }]}
-        onPress={() => {
-          // Test with a small subset of events to see if rendering is stable
-          const testEvents = filteredEvents.slice(0, 10)
-          console.log(`Testing with ${testEvents.length} events`)
-          Alert.alert(
-            'Marker Test', 
-            `Testing with ${testEvents.length} events\nFirst event: ${testEvents[0]?.name || 'None'}\nLast event: ${testEvents[testEvents.length-1]?.name || 'None'}`
-          )
-        }}
-      >
-        <Text style={styles.createEventButtonText}>🧪</Text>
-      </TouchableOpacity>
+
+
 
       {/* Create Event Button */}
       <TouchableOpacity 
@@ -2406,7 +2457,39 @@ const MapViewNative: React.FC = () => {
                        style={styles.resultItem}
                        onPress={() => {
                          setSearchFilters(prev => ({ ...prev, showSearchModal: false }))
-                         handleMarkerPress(event)
+                         // Open event details modal directly from search results
+                         const { date, time } = parseDateTime(event.startsAt)
+                         const category = determineCategory(event.name, event.description)
+                         const averageRating = getAverageRating(event.id)
+                         const ratingCount = getRatingCount(event.id)
+                         const userRating = getUserRating(event.id)
+                         
+                         let distanceInfo = ''
+                         if (searchFilters.userLocation) {
+                           const distance = calculateDistance(
+                             searchFilters.userLocation.latitude,
+                             searchFilters.userLocation.longitude,
+                             event.latitude,
+                             event.longitude
+                           )
+                           distanceInfo = `📍 Distance: ${distance.toFixed(1)} km from you`
+                         }
+                         
+                         const ratingInfo = `⭐ Community Rating: ${averageRating}/5 (${ratingCount} reviews)`
+                         const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
+                         const syncInfo = '📱 Local rating only (backend not configured)'
+                         
+                         setEventDetails({
+                           event,
+                           distanceInfo,
+                           ratingInfo,
+                           userRatingInfo,
+                           syncInfo,
+                           date,
+                           time,
+                           category
+                         })
+                         setShowEventDetailsModal(true)
                        }}
                      >
                        <View style={styles.resultHeader}>
@@ -2459,6 +2542,7 @@ const MapViewNative: React.FC = () => {
         animationType="fade"
         statusBarTranslucent={true}
         onRequestClose={() => setShowEventDetailsModal(false)}
+        onShow={() => console.log('Event details modal shown')}
       >
         <TouchableWithoutFeedback onPress={() => setShowEventDetailsModal(false)}>
           <View style={styles.eventDetailsOverlay}>
@@ -3595,13 +3679,13 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: Platform.OS === 'ios' ? 16 : 20,
   },
-              eventDetailsFooter: {
-              padding: Platform.OS === 'ios' ? 15 : 20,
-              paddingTop: Platform.OS === 'ios' ? 10 : 15, // Reduced top padding to move button back to original position
-              borderTopWidth: 1,
-              borderTopColor: 'rgba(0, 0, 0, 0.1)',
-              // Remove separate background and border radius since it's part of the main container
-            },
+  eventDetailsFooter: {
+    padding: Platform.OS === 'ios' ? 15 : 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15, // Reduced top padding to move button back to original position
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+    // Remove separate background and border radius since it's part of the main container
+  },
   eventDetailsRateButton: {
     backgroundColor: '#007AFF',
     paddingVertical: Platform.OS === 'ios' ? 10 : 12,
@@ -3613,6 +3697,43 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: Platform.OS === 'ios' ? 14 : 16,
     fontWeight: '600',
+  },
+  // Callout styles
+  calloutContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    padding: 12,
+    minWidth: 200,
+    maxWidth: 280,
+    minHeight: 80,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+    // Make the entire callout area clickable
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Ensure touch events are properly handled
+    pointerEvents: 'auto',
+  },
+  calloutTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  calloutDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+  },
+  calloutHint: {
+    fontSize: 10,
+    color: '#007AFF',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
  })
 
