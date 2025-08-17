@@ -299,6 +299,8 @@ const MapViewNative: React.FC = () => {
   const [reviewText, setReviewText] = useState('')
   const reviewInputRef = useRef<TextInput>(null)
   const scrollViewRef = useRef<ScrollView>(null)
+  const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
+  const [eventDetails, setEventDetails] = useState<{event: Event, distanceInfo: string, ratingInfo: string, userRatingInfo: string, syncInfo: string, date: string, time: string, category: string} | null>(null)
   
   // Simple map state
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -758,21 +760,24 @@ const MapViewNative: React.FC = () => {
         event.latitude,
         event.longitude
       )
-      distanceInfo = `\n📍 Distance: ${distance.toFixed(1)} km from you`
+      distanceInfo = `📍 Distance: ${distance.toFixed(1)} km from you`
     }
     
-    const ratingInfo = `\n⭐ Community Rating: ${averageRating}/5 (${ratingCount} reviews)`
-    const userRatingInfo = userRating > 0 ? `\n👤 Your Rating: ${userRating}/5` : ''
-    const syncInfo = '\n📱 Local rating only (backend not configured)'
+    const ratingInfo = `⭐ Community Rating: ${averageRating}/5 (${ratingCount} reviews)`
+    const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
+    const syncInfo = '📱 Local rating only (backend not configured)'
     
-    Alert.alert(
-      event.name,
-      `${event.description}\n\n📍 ${event.venue}\n📅 ${date} at ${time}\n🎯 Category: ${category}${distanceInfo}${ratingInfo}${userRatingInfo}${syncInfo}`,
-      [
-        { text: 'Rate Event', onPress: () => openRatingModal(event) },
-        { text: 'OK' }
-      ]
-    )
+    setEventDetails({
+      event,
+      distanceInfo,
+      ratingInfo,
+      userRatingInfo,
+      syncInfo,
+      date,
+      time,
+      category
+    })
+    setShowEventDetailsModal(true)
   }
 
   const openRatingModal = (event: Event) => {
@@ -2395,6 +2400,66 @@ const MapViewNative: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Event Details Modal */}
+      <Modal
+        visible={showEventDetailsModal}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowEventDetailsModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowEventDetailsModal(false)}>
+          <View style={styles.eventDetailsOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.eventDetailsContainer}>
+                {eventDetails && (
+                  <>
+                    <View style={styles.eventDetailsHeader}>
+                      <Text style={styles.eventDetailsTitle}>{eventDetails.event.name}</Text>
+                      <TouchableOpacity
+                        style={styles.eventDetailsCloseButton}
+                        onPress={() => setShowEventDetailsModal(false)}
+                      >
+                        <Text style={styles.eventDetailsCloseButtonText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.eventDetailsContent} showsVerticalScrollIndicator={false}>
+                      <Text style={styles.eventDetailsDescription}>
+                        {eventDetails.event.description}
+                      </Text>
+                      <View style={styles.eventDetailsInfo}>
+                        <Text style={styles.eventDetailsInfoText}>📍 {eventDetails.event.venue}</Text>
+                        <Text style={styles.eventDetailsInfoText}>📅 {eventDetails.date} at {eventDetails.time}</Text>
+                        <Text style={styles.eventDetailsInfoText}>🎯 Category: {eventDetails.category}</Text>
+                        {eventDetails.distanceInfo && (
+                          <Text style={styles.eventDetailsInfoText}>{eventDetails.distanceInfo}</Text>
+                        )}
+                        <Text style={styles.eventDetailsInfoText}>{eventDetails.ratingInfo}</Text>
+                        {eventDetails.userRatingInfo && (
+                          <Text style={styles.eventDetailsInfoText}>{eventDetails.userRatingInfo}</Text>
+                        )}
+                        <Text style={styles.eventDetailsInfoText}>{eventDetails.syncInfo}</Text>
+                      </View>
+                    </ScrollView>
+                    <View style={styles.eventDetailsFooter}>
+                      <TouchableOpacity
+                        style={styles.eventDetailsRateButton}
+                        onPress={() => {
+                          setShowEventDetailsModal(false)
+                          openRatingModal(eventDetails.event)
+                        }}
+                      >
+                        <Text style={styles.eventDetailsRateButtonText}>Rate Event</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
              {/* User Profile Modal */}
        <UserProfile 
          visible={showUserProfile} 
@@ -3405,6 +3470,96 @@ const styles = StyleSheet.create({
       fontWeight: 'bold',
       color: '#333',
     },
+  // Event Details Modal Styles
+              eventDetailsOverlay: {
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.1)', // 90% transparency - very transparent background
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            },
+            eventDetailsContainer: {
+              backgroundColor: 'rgba(255, 255, 255, 0.5)', // 50% white - very transparent event window
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: Platform.OS === 'ios' ? 350 : 400,
+              maxHeight: Platform.OS === 'ios' ? '80%' : '75%', // Reduced max height to ensure it doesn't go out of screen
+              minHeight: Platform.OS === 'ios' ? 320 : 380, // Increased minimum height to accommodate button and content
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+              flexDirection: 'column', // Ensure proper flex layout
+            },
+  eventDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Platform.OS === 'ios' ? 15 : 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  eventDetailsTitle: {
+    fontSize: Platform.OS === 'ios' ? 16 : 18,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+    marginRight: 10,
+  },
+  eventDetailsCloseButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 20,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventDetailsCloseButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  eventDetailsContent: {
+    flex: 1,
+    padding: Platform.OS === 'ios' ? 15 : 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15, // Reduced top padding to start text from top
+    minHeight: Platform.OS === 'ios' ? 180 : 220, // Reduced minimum height to use screen space more efficiently
+    paddingBottom: Platform.OS === 'ios' ? 15 : 20, // Reduced bottom padding to move button back to original position
+  },
+  eventDetailsDescription: {
+    fontSize: Platform.OS === 'ios' ? 14 : 16,
+    color: '#333',
+    lineHeight: Platform.OS === 'ios' ? 20 : 24,
+    marginBottom: Platform.OS === 'ios' ? 15 : 20,
+  },
+  eventDetailsInfo: {
+    gap: Platform.OS === 'ios' ? 6 : 8,
+  },
+  eventDetailsInfoText: {
+    fontSize: Platform.OS === 'ios' ? 12 : 14,
+    color: '#666',
+    lineHeight: Platform.OS === 'ios' ? 16 : 20,
+  },
+              eventDetailsFooter: {
+              padding: Platform.OS === 'ios' ? 15 : 20,
+              paddingTop: Platform.OS === 'ios' ? 10 : 15, // Reduced top padding to move button back to original position
+              borderTopWidth: 1,
+              borderTopColor: 'rgba(0, 0, 0, 0.1)',
+              // Remove separate background and border radius since it's part of the main container
+            },
+  eventDetailsRateButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
+    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventDetailsRateButtonText: {
+    color: 'white',
+    fontSize: Platform.OS === 'ios' ? 14 : 16,
+    fontWeight: '600',
+  },
  })
 
 module.exports = MapViewNative
