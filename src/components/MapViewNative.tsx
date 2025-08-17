@@ -1454,12 +1454,12 @@ const MapViewNative: React.FC = () => {
                   💡 The purple marker shows your selected location
                 </Text>
                 {selectedLocation && (
-                  <TouchableOpacity 
-                    style={styles.confirmLocationButton}
-                    onPress={() => setIsMapMode(false)}
-                  >
-                    <Text style={styles.confirmLocationButtonText}>Confirm Location</Text>
-                  </TouchableOpacity>
+                                  <TouchableOpacity 
+                  style={styles.confirmLocationButton}
+                  onPress={() => setIsMapMode(false)}
+                >
+                  <Text style={styles.confirmLocationButtonText}>Confirm</Text>
+                </TouchableOpacity>
                 )}
               </View>
             </View>
@@ -2010,7 +2010,7 @@ const MapViewNative: React.FC = () => {
                   onPress={submitRating}
                   disabled={currentRating === 0}
                 >
-                  <Text style={styles.submitButtonText}>Submit Rating</Text>
+                  <Text style={styles.submitButtonText}>Submit</Text>
                 </TouchableOpacity>
                   </>
                 )}
@@ -2449,7 +2449,7 @@ const MapViewNative: React.FC = () => {
                           openRatingModal(eventDetails.event)
                         }}
                       >
-                        <Text style={styles.eventDetailsRateButtonText}>Rate Event</Text>
+                        <Text style={styles.eventDetailsRateButtonText}>Rate</Text>
                       </TouchableOpacity>
                     </View>
                   </>
@@ -3529,6 +3529,7 @@ const styles = StyleSheet.create({
   },
   eventDetailsDescription: {
     fontSize: Platform.OS === 'ios' ? 14 : 16,
+    fontWeight: 'bold',
     color: '#333',
     lineHeight: Platform.OS === 'ios' ? 20 : 24,
     marginBottom: Platform.OS === 'ios' ? 15 : 20,
@@ -3538,6 +3539,7 @@ const styles = StyleSheet.create({
   },
   eventDetailsInfoText: {
     fontSize: Platform.OS === 'ios' ? 12 : 14,
+    fontWeight: 'bold',
     color: '#666',
     lineHeight: Platform.OS === 'ios' ? 16 : 20,
   },

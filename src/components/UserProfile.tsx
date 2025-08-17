@@ -341,7 +341,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             }}
           >
             <Text style={styles.switchModeText}>
-              {authMode === 'signin' ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
+              {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -405,7 +405,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 
           <TouchableOpacity style={styles.submitButton} onPress={handleSubscribe}>
             <Text style={styles.submitButtonText}>
-              Subscribe to {selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'} Plan
+              Subscribe
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -452,7 +452,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
           </View>
 
           <TouchableOpacity style={styles.submitButton} onPress={handleUpdatePreferences}>
-            <Text style={styles.submitButtonText}>Save Preferences</Text>
+            <Text style={styles.submitButtonText}>Save</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -549,7 +549,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     onPress={() => setShowSubscriptionModal(true)}
                   >
                     <Text style={styles.actionIcon}>⭐</Text>
-                    <Text style={styles.actionText}>Upgrade to Premium</Text>
+                    <Text style={styles.actionText}>Upgrade</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
                 ) : currentUser?.subscription.status === 'premium' && currentUser?.subscription.autoRenew ? (
@@ -558,7 +558,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     onPress={handleCancelSubscription}
                   >
                     <Text style={styles.actionIcon}>❌</Text>
-                    <Text style={styles.actionText}>Cancel Subscription</Text>
+                    <Text style={styles.actionText}>Cancel</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
                 ) : currentUser?.subscription.status === 'premium' && !currentUser?.subscription.autoRenew ? (
@@ -567,7 +567,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     onPress={handleReactivateSubscription}
                   >
                     <Text style={styles.actionIcon}>🔄</Text>
-                    <Text style={styles.actionText}>Reactivate Subscription</Text>
+                    <Text style={styles.actionText}>Reactivate</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
                 ) : currentUser?.subscription.status === 'expired' ? (
@@ -576,7 +576,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     onPress={() => setShowSubscriptionModal(true)}
                   >
                     <Text style={styles.actionIcon}>⭐</Text>
-                    <Text style={styles.actionText}>Renew Subscription</Text>
+                    <Text style={styles.actionText}>Renew</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -605,7 +605,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     style={styles.upgradeButton}
                     onPress={() => setShowSubscriptionModal(true)}
                   >
-                    <Text style={styles.upgradeButtonText}>Upgrade to Premium</Text>
+                    <Text style={styles.upgradeButtonText}>Upgrade</Text>
                   </TouchableOpacity>
                 </View>
               )}
