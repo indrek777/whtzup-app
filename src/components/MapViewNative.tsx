@@ -415,12 +415,12 @@ const MapViewNative: React.FC = () => {
     clickedMarkerIdRef.current = null
   }, [])
   
-  // Simple map state
+  // Simple map state - initialize with Estonia, will be updated to user location
   const [mapRegion, setMapRegion] = useState<Region>({
     latitude: 58.3776252,
     longitude: 26.7290063,
-    latitudeDelta: 2.5,
-    longitudeDelta: 2.5,
+    latitudeDelta: 0.2, // Approximately 20km view
+    longitudeDelta: 0.2, // Approximately 20km view
   })
   
   // Event creation states
@@ -504,24 +504,25 @@ const MapViewNative: React.FC = () => {
 
   // Simple event limiting - no clustering needed
 
-  // Load events partially based on user location
+  // Load events and center map based on user location
   useEffect(() => {
-    const loadEvents = async () => {
+    const loadEventsAndCenterMap = async () => {
       try {
         setIsLoading(true)
         
         // Get user location for initial loading
         let { status } = await Location.requestForegroundPermissionsAsync()
         if (status !== 'granted') {
-                  // Load events without location filtering
-        const radius = await getEventLoadingRadius()
-        const initialEvents = await loadEventsPartially({
-          userLocation: {
-            latitude: 59.436962,
-            longitude: 24.753574
-          },
-          maxDistance: radius
-        })
+          setErrorMsg('Permission to access location was denied')
+          // Load events without location filtering and center on Estonia
+          const radius = await getEventLoadingRadius()
+          const initialEvents = await loadEventsPartially({
+            userLocation: {
+              latitude: 59.436962,
+              longitude: 24.753574
+            },
+            maxDistance: radius
+          })
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
           setIsLoading(false)
@@ -534,6 +535,21 @@ const MapViewNative: React.FC = () => {
           longitude: location.coords.longitude
         }
         setUserLocation(userLoc)
+        setLocation(location)
+        
+        // Update search filters with user location
+        setSearchFilters(prev => ({
+          ...prev,
+          userLocation: userLoc
+        }))
+        
+        // Center map on user location with 20km view
+        setMapRegion({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.2, // Approximately 20km view
+          longitudeDelta: 0.2, // Approximately 20km view
+        })
 
         const radius = await getEventLoadingRadius()
         const initialEvents = await loadEventsPartially({
@@ -569,7 +585,7 @@ const MapViewNative: React.FC = () => {
       }
     }
 
-    loadEvents()
+    loadEventsAndCenterMap()
   }, [])
 
   // Load user ratings and shared ratings
@@ -760,28 +776,7 @@ const MapViewNative: React.FC = () => {
     return Math.floor(Math.random() * 50) + 5
   }
 
-  // Get user location
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied')
-        return
-      }
 
-      let location = await Location.getCurrentPositionAsync({})
-      setLocation(location)
-      
-      // Update search filters with user location
-      setSearchFilters(prev => ({
-        ...prev,
-        userLocation: {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude
-        }
-      }))
-    })()
-  }, [])
 
   // Add new state variables for smart filtering
   const [addressSuggestions, setAddressSuggestions] = useState<GeocodingSearchResult[]>([])
