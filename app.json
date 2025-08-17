@@ -2,7 +2,7 @@
   "expo": {
     "name": "Event",
     "slug": "event-discovery",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "assets/icon_assets/Expo/icon.png",
     "userInterfaceStyle": "light",
