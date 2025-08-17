@@ -4,7 +4,7 @@
     "slug": "event",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/ios_iphone_120.png",
+    "icon": "assets/icon_assets/Expo/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -18,6 +18,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.event.app",
       "buildNumber": "1",
+      "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to show events near you",
@@ -28,9 +29,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "assets/icon_assets/Expo/icon.png",
         "backgroundColor": "#FFFFFF"
       },
+      "icon": "assets/icon_assets/Expo/icon.png",
       "package": "com.event.app",
       "versionCode": 1,
       "permissions": [

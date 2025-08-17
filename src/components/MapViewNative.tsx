@@ -284,7 +284,54 @@ interface NewEvent {
   recurringOccurrences: number // Number of occurrences
 }
 
-
+// Custom marker component to prevent icon replacement issues
+const CustomMarker = React.memo(({ 
+  event, 
+  category, 
+  onPress, 
+  markerRef
+}: {
+  event: Event
+  category: string
+  onPress: () => void
+  markerRef: (ref: any) => void
+}) => {
+  const markerColor = event.source === 'user' ? 'purple' : getMarkerColor(category)
+  
+  // Create a simple colored circle as marker to avoid icon replacement issues
+  return (
+    <Marker
+      ref={markerRef}
+      coordinate={{
+        latitude: event.latitude,
+        longitude: event.longitude,
+      }}
+      onPress={onPress}
+      tracksViewChanges={false}
+      anchor={{ x: 0.5, y: 0.5 }}
+      centerOffset={{ x: 0, y: 0 }}
+      flat={false}
+      opacity={1}
+      draggable={false}
+      zIndex={event.source === 'user' ? 1000 : 1}
+    >
+      <View style={[
+        styles.customMarker,
+        { 
+          backgroundColor: markerColor,
+          borderColor: markerColor === 'yellow' || markerColor === 'lightgray' ? '#333' : 'white'
+        }
+      ]}>
+        <Text style={[
+          styles.markerText,
+          { color: markerColor === 'yellow' || markerColor === 'lightgray' ? '#333' : 'white' }
+        ]}>
+          {event.name.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+    </Marker>
+  )
+})
 
 const MapViewNative: React.FC = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
@@ -304,9 +351,39 @@ const MapViewNative: React.FC = () => {
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
   const [eventDetails, setEventDetails] = useState<{event: Event, distanceInfo: string, ratingInfo: string, userRatingInfo: string, syncInfo: string, date: string, time: string, category: string} | null>(null)
   
-  // State for two-click marker behavior
+  // State for marker behavior
   const markerRefs = useRef<{ [key: string]: any }>({})
   const clickedMarkerIdRef = useRef<string | null>(null)
+  const isProcessingClickRef = useRef<boolean>(false)
+  
+  // Debug logging for ref state
+  console.log('🔄 MapViewNative render - ref states:', {
+    isProcessingClick: isProcessingClickRef.current,
+    clickedMarkerId: clickedMarkerIdRef.current,
+    markerRefsCount: Object.keys(markerRefs.current).length
+  })
+  
+  // Track component lifecycle and ref initialization
+  useEffect(() => {
+    console.log('🔄 MapViewNative component mounted - initializing refs')
+    isProcessingClickRef.current = false
+    clickedMarkerIdRef.current = null
+    console.log('🔄 MapViewNative refs initialized:', {
+      isProcessingClick: isProcessingClickRef.current,
+      clickedMarkerId: clickedMarkerIdRef.current
+    })
+  }, [])
+  
+  // Function to manually reset refs for debugging
+  const resetRefs = useCallback(() => {
+    console.log('🔄 Manually resetting refs')
+    isProcessingClickRef.current = false
+    clickedMarkerIdRef.current = null
+    console.log('🔄 Refs reset:', {
+      isProcessingClick: isProcessingClickRef.current,
+      clickedMarkerId: clickedMarkerIdRef.current
+    })
+  }, [])
   
   // Simple map state
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -852,33 +929,49 @@ const MapViewNative: React.FC = () => {
 
 
 
-  // Create a stable marker press handler that doesn't depend on clickedMarkerId
+
+
+  // Create marker press handler for each event
   const createMarkerPressHandler = useCallback((event: Event) => {
     return () => {
-      // If this is the first click on this marker, just show the callout
-      if (clickedMarkerIdRef.current !== event.id) {
-        clickedMarkerIdRef.current = event.id
-        
-        // Use setTimeout to ensure the ref is set before trying to show callout
-        setTimeout(() => {
-          if (markerRefs.current[event.id]) {
-            markerRefs.current[event.id].showCallout()
-          }
-        }, 50) // Reduced delay for faster response
+      const now = Date.now()
+      
+      console.log('🟢 createMarkerPressHandler called:', {
+        eventId: event.id,
+        now,
+        isProcessing: isProcessingClickRef.current
+      })
+      
+      // Prevent multiple rapid clicks within 300ms
+      if (isProcessingClickRef.current) {
+        console.log('🟢 createMarkerPressHandler BLOCKED by debounce')
         return
       }
       
-      // If this is the second click on the same marker, open the full modal
+      console.log('🟢 createMarkerPressHandler PROCEEDING')
+      isProcessingClickRef.current = true
+      
+      // Set the clicked marker
+      clickedMarkerIdRef.current = event.id
+      
+      // Open the event details modal directly instead of showing callout
+      console.log('🟢 Opening event details modal directly for event:', event.id)
       openEventDetailsModal(event)
+      
+      // Reset the processing flag after a delay
+      console.log('🟢 Scheduling setTimeout to reset processing flag')
+      const timeoutId = setTimeout(() => {
+        console.log('🟢 setTimeout callback executing')
+        isProcessingClickRef.current = false
+              console.log('🟢 createMarkerPressHandler processing flag reset - new state:', {
+        isProcessingClick: isProcessingClickRef.current
+      })
+      }, 300)
+      
+      // Log the timeout ID for debugging
+      console.log('🟢 setTimeout scheduled with ID:', timeoutId)
     }
-  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
-
-  // Handle callout press to open event details modal
-  const handleCalloutPress = useCallback((event: Event) => {
-    // Reset the clicked marker ref since we're opening the modal directly
-    clickedMarkerIdRef.current = null
-    openEventDetailsModal(event)
-  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
+  }, [])
 
   // Helper function to open event details modal
   const openEventDetailsModal = useCallback((event: Event) => {
@@ -915,7 +1008,9 @@ const MapViewNative: React.FC = () => {
     })
     setShowEventDetailsModal(true)
     clickedMarkerIdRef.current = null
-  }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
+  }, []) // Remove dependencies to prevent recreation
+
+
 
   // Memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
@@ -923,46 +1018,20 @@ const MapViewNative: React.FC = () => {
       const category = determineCategory(event.name, event.description)
       
       return (
-        <Marker
+        <CustomMarker
           key={event.id}
-          ref={(ref) => {
+          event={event}
+          category={category}
+          onPress={createMarkerPressHandler(event)}
+          markerRef={(ref) => {
             if (ref) {
               markerRefs.current[event.id] = ref
             }
           }}
-          coordinate={{
-            latitude: event.latitude,
-            longitude: event.longitude,
-          }}
-          onPress={createMarkerPressHandler(event)}
-          pinColor={event.source === 'user' ? 'purple' : getMarkerColor(category)}
-          tracksViewChanges={false}
-          anchor={{ x: 0.5, y: 1.0 }}
-          centerOffset={{ x: 0, y: 0 }}
-          flat={false}
-          opacity={1}
-          draggable={false}
-          zIndex={event.source === 'user' ? 1000 : 1}
-        >
-          <Callout
-            tooltip={false}
-            alphaHitTest={true}
-            onPress={() => handleCalloutPress(event)}
-          >
-            <TouchableOpacity 
-              style={styles.calloutContainer}
-              onPress={() => handleCalloutPress(event)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.calloutTitle}>{event.name}</Text>
-              <Text style={styles.calloutDescription}>{event.venue} - {parseDateTime(event.startsAt).date}</Text>
-              <Text style={styles.calloutHint}>Tap for details</Text>
-            </TouchableOpacity>
-          </Callout>
-        </Marker>
+        />
       )
     })
-  }, [filteredEvents, createMarkerPressHandler, handleCalloutPress])
+  }, [filteredEvents]) // Remove function dependencies since they're now stable
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -1073,17 +1142,25 @@ const MapViewNative: React.FC = () => {
   }
 
   const handleMapPress = useCallback(async (event: any) => {
-    // Add a small delay to prevent interference with marker press events
-    setTimeout(() => {
-      // Reset clicked marker when tapping elsewhere on the map
-      if (clickedMarkerIdRef.current) {
-        // Hide the callout
-        if (markerRefs.current[clickedMarkerIdRef.current]) {
-          markerRefs.current[clickedMarkerIdRef.current].hideCallout()
-        }
-        clickedMarkerIdRef.current = null
+    console.log('🗺️ Map pressed - current state before handling:', {
+      clickedMarkerId: clickedMarkerIdRef.current,
+      isProcessingClick: isProcessingClickRef.current
+    })
+
+    // Don't handle map press if we're currently processing a marker click
+    if (isProcessingClickRef.current) {
+      console.log('🗺️ Map press ignored - currently processing marker click')
+      return
+    }
+    
+    // Reset clicked marker when tapping elsewhere on the map
+    if (clickedMarkerIdRef.current) {
+      // Hide the callout
+      if (markerRefs.current[clickedMarkerIdRef.current]) {
+        markerRefs.current[clickedMarkerIdRef.current].hideCallout()
       }
-    }, 200) // Slightly longer delay to ensure marker press events complete
+      clickedMarkerIdRef.current = null
+    }
     
     if (showCreateEventModal && isMapMode) {
       const { latitude, longitude } = event.nativeEvent.coordinate
@@ -1149,6 +1226,11 @@ const MapViewNative: React.FC = () => {
       // Switch back to form mode after selecting location
       setIsMapMode(false)
     }
+    
+    console.log('🗺️ Map pressed - state after handling:', {
+      clickedMarkerId: clickedMarkerIdRef.current,
+      isProcessingClick: isProcessingClickRef.current
+    })
   }, [showCreateEventModal, isMapMode])
 
   const createEvent = async () => {
@@ -1750,6 +1832,14 @@ const MapViewNative: React.FC = () => {
             </Text>
           </View>
         )}
+      </TouchableOpacity>
+      
+      {/* Debug Reset Button */}
+      <TouchableOpacity 
+        style={[styles.createEventButton, { backgroundColor: '#ff6b6b', top: 120 }]}
+        onPress={resetRefs}
+      >
+        <Text style={styles.createEventButtonText}>🔄</Text>
       </TouchableOpacity>
       
       {/* Test button to create a user event programmatically */}
@@ -4333,6 +4423,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#007AFF',
     fontStyle: 'italic',
+  },
+  customMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: 'bold',
   },
  })
 
