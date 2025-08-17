@@ -722,7 +722,17 @@ const MapViewNative: React.FC = () => {
     // No artificial limits - show all filtered events
     setFilteredEvents(filtered)
     
-    console.log(`Performance: ${filtered.length}/${events.length} events visible (no limits)`)
+    console.log(`Map Events: ${filtered.length}/${events.length} events visible`)
+    console.log(`Active filters:`, {
+      query: searchFilters.query,
+      category: searchFilters.category,
+      source: searchFilters.source,
+      dateFrom: searchFilters.dateFrom,
+      dateTo: searchFilters.dateTo,
+      distanceFilter: searchFilters.distanceFilter,
+      distanceRadius: searchFilters.distanceRadius,
+      hasAdvancedSearch: userFeatures.hasAdvancedSearch
+    })
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
@@ -1325,8 +1335,21 @@ const MapViewNative: React.FC = () => {
       >
         <Text style={styles.settingsIcon}>👤</Text>
         <View style={styles.eventCountBadge}>
-          <Text style={styles.eventCountBadgeText}>{events.length}</Text>
+          <Text style={styles.eventCountBadgeText}>{filteredEvents.length}</Text>
         </View>
+      </TouchableOpacity>
+
+      {/* Debug Info Button */}
+      <TouchableOpacity 
+        style={[styles.createEventButton, { bottom: 100, backgroundColor: '#28a745' }]}
+        onPress={() => {
+          Alert.alert(
+            'Debug Info', 
+            `Total Events: ${events.length}\nFiltered Events: ${filteredEvents.length}\nUser Location: ${searchFilters.userLocation ? 'Set' : 'Not set'}\nAdvanced Search: ${userFeatures.hasAdvancedSearch ? 'Yes' : 'No'}\nDistance Filter: ${searchFilters.distanceFilter ? 'ON' : 'OFF'}\nActive Filters: ${searchFilters.query ? 'Search' : ''}${searchFilters.category !== 'All' ? ' Category' : ''}${searchFilters.source !== 'All' ? ' Source' : ''}${searchFilters.dateFrom || searchFilters.dateTo ? ' Date' : ''}`
+          )
+        }}
+      >
+        <Text style={styles.createEventButtonText}>🔍</Text>
       </TouchableOpacity>
 
       {/* Create Event Button */}
@@ -1348,7 +1371,6 @@ const MapViewNative: React.FC = () => {
       <MapView
         style={styles.map}
         initialRegion={initialRegion}
-        region={mapRegion}
         showsUserLocation={true}
         showsMyLocationButton={true}
         onPress={handleMapPress}
@@ -1390,6 +1412,8 @@ const MapViewNative: React.FC = () => {
               }}
               onPress={() => handleMarkerPress(event)}
               pinColor={event.source === 'user' ? 'purple' : getMarkerColor(category)}
+              title={event.name}
+              description={`${event.venue} - ${parseDateTime(event.startsAt).date}`}
             />
           )
         })}
