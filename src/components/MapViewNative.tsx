@@ -390,7 +390,6 @@ const MapViewNative: React.FC = () => {
         // Get user location for initial loading
         let { status } = await Location.requestForegroundPermissionsAsync()
         if (status !== 'granted') {
-          console.log('Location permission denied')
           // Load events without location filtering
           const initialEvents = await loadEventsPartially({
             userLocation: {
@@ -412,12 +411,10 @@ const MapViewNative: React.FC = () => {
         }
         setUserLocation(userLoc)
 
-        console.log('Loading events within 500km of user location:', userLoc)
         const initialEvents = await loadEventsPartially({
           userLocation: userLoc,
           maxDistance: 500 // 500km radius
         })
-        console.log(`Loaded ${initialEvents.length} events within 500km`)
         
         setEvents(initialEvents)
         setFilteredEvents(initialEvents)
@@ -426,7 +423,6 @@ const MapViewNative: React.FC = () => {
         // Load user-created events separately to merge with existing events
         loadUserCreatedEvents(initialEvents)
       } catch (error) {
-        console.log('Error loading events:', error)
         // Fallback to sample events if error
         const sampleEvents = [
           {
@@ -725,18 +721,6 @@ const MapViewNative: React.FC = () => {
 
     // No artificial limits - show all filtered events
     setFilteredEvents(filtered)
-    
-    console.log(`Map Events: ${filtered.length}/${events.length} events visible`)
-    console.log(`Active filters:`, {
-      query: searchFilters.query,
-      category: searchFilters.category,
-      source: searchFilters.source,
-      dateFrom: searchFilters.dateFrom,
-      dateTo: searchFilters.dateTo,
-      distanceFilter: searchFilters.distanceFilter,
-      distanceRadius: searchFilters.distanceRadius,
-      hasAdvancedSearch: userFeatures.hasAdvancedSearch
-    })
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
@@ -755,7 +739,6 @@ const MapViewNative: React.FC = () => {
     
     // Only update if change is significant (prevents excessive re-renders)
     if (latDiff > 0.001 || lngDiff > 0.001 || latDeltaDiff > 0.1 || lngDeltaDiff > 0.1) {
-      console.log(`Map region changed: ${latDiff.toFixed(4)}, ${lngDiff.toFixed(4)}, ${latDeltaDiff.toFixed(2)}, ${lngDeltaDiff.toFixed(2)}`)
       setMapRegion(region)
     }
   }, [mapRegion])
@@ -773,34 +756,26 @@ const MapViewNative: React.FC = () => {
   // Create a stable marker press handler that doesn't depend on clickedMarkerId
   const createMarkerPressHandler = useCallback((event: Event) => {
     return () => {
-      console.log('Marker pressed for event:', event.id, 'Current clicked ID:', clickedMarkerIdRef.current)
-      
       // If this is the first click on this marker, just show the callout
       if (clickedMarkerIdRef.current !== event.id) {
         clickedMarkerIdRef.current = event.id
-        console.log('First click - showing callout for event:', event.id)
         
         // Use setTimeout to ensure the ref is set before trying to show callout
         setTimeout(() => {
           if (markerRefs.current[event.id]) {
             markerRefs.current[event.id].showCallout()
-            console.log('Callout shown for event:', event.id)
-          } else {
-            console.log('Marker ref not found for event:', event.id)
           }
         }, 50) // Reduced delay for faster response
         return
       }
       
       // If this is the second click on the same marker, open the full modal
-      console.log('Second click - opening modal for event:', event.id)
       openEventDetailsModal(event)
     }
   }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
 
   // Handle callout press to open event details modal
   const handleCalloutPress = useCallback((event: Event) => {
-    console.log('Callout pressed for event:', event.id)
     // Reset the clicked marker ref since we're opening the modal directly
     clickedMarkerIdRef.current = null
     openEventDetailsModal(event)
@@ -829,7 +804,6 @@ const MapViewNative: React.FC = () => {
     const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
     const syncInfo = '📱 Local rating only (backend not configured)'
     
-    console.log('Setting event details and opening modal for event:', event.id)
     setEventDetails({
       event,
       distanceInfo,
@@ -841,13 +815,11 @@ const MapViewNative: React.FC = () => {
       category
     })
     setShowEventDetailsModal(true)
-    console.log('Modal state set to true')
     clickedMarkerIdRef.current = null
   }, [searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
 
   // Memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
-    console.log('Creating markers for', filteredEvents.length, 'events')
     return filteredEvents.map((event) => {
       const category = determineCategory(event.name, event.description)
       
@@ -2542,7 +2514,7 @@ const MapViewNative: React.FC = () => {
         animationType="fade"
         statusBarTranslucent={true}
         onRequestClose={() => setShowEventDetailsModal(false)}
-        onShow={() => console.log('Event details modal shown')}
+        onShow={() => {}}
       >
         <TouchableWithoutFeedback onPress={() => setShowEventDetailsModal(false)}>
           <View style={styles.eventDetailsOverlay}>
@@ -3609,13 +3581,13 @@ const styles = StyleSheet.create({
   // Event Details Modal Styles
               eventDetailsOverlay: {
               flex: 1,
-              backgroundColor: 'rgba(0, 0, 0, 0.1)', // 90% transparency - very transparent background
+              backgroundColor: 'rgba(0, 0, 0, 0.5)', // Solid background - no transparency
               justifyContent: 'center',
               alignItems: 'center',
               padding: 20,
             },
             eventDetailsContainer: {
-              backgroundColor: 'rgba(255, 255, 255, 0.5)', // 50% white - very transparent event window
+              backgroundColor: 'rgba(255, 255, 255, 1)', // Solid white - no transparency
               borderRadius: 12,
               width: '100%',
               maxWidth: Platform.OS === 'ios' ? 350 : 400,
