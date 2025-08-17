@@ -1,12 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native'
-import MapView, { Marker, Circle } from 'react-native-maps'
+import MapView, { Marker, Circle, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { eventsData, totalEventsCount } from '../data/events'
+import { Event } from '../data/events'
 import { ratingService, EventRating, SharedRating } from '../utils/ratingService'
-import { eventService, Event } from '../utils/eventService'
+import { eventService } from '../utils/eventService'
 import { userService } from '../utils/userService'
+import { loadEventsPartially, getTotalEventsCount } from '../utils/eventLoader'
+
 const UserProfile = require('./UserProfile')
 import DateTimePicker from '@react-native-community/datetimepicker'
 
@@ -253,6 +255,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 interface SearchFilters {
   query: string
   category: string
+  source: string
   dateFrom: string
   dateTo: string
   showSearchModal: boolean
@@ -279,8 +282,11 @@ interface NewEvent {
   recurringOccurrences: number // Number of occurrences
 }
 
+
+
 const MapViewNative: React.FC = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [events, setEvents] = useState<Event[]>([])
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
@@ -293,6 +299,14 @@ const MapViewNative: React.FC = () => {
   const [reviewText, setReviewText] = useState('')
   const reviewInputRef = useRef<TextInput>(null)
   const scrollViewRef = useRef<ScrollView>(null)
+  
+  // Simple map state
+  const [mapRegion, setMapRegion] = useState<Region>({
+    latitude: 58.3776252,
+    longitude: 26.7290063,
+    latitudeDelta: 2.5,
+    longitudeDelta: 2.5,
+  })
   
   // Event creation states
   const [showCreateEventModal, setShowCreateEventModal] = useState(false)
@@ -319,8 +333,9 @@ const MapViewNative: React.FC = () => {
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: '',
     category: 'All',
-    dateFrom: '',
-    dateTo: '',
+    source: 'All',
+    dateFrom: new Date().toISOString().split('T')[0], // Today
+    dateTo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from now
     showSearchModal: false,
     distanceFilter: false,
     distanceRadius: 10, // Default 10km radius
@@ -358,33 +373,76 @@ const MapViewNative: React.FC = () => {
   const [showEventTimePicker, setShowEventTimePicker] = useState(false)
   const [showEndDatePicker, setShowEndDatePicker] = useState(false)
 
-  // Load events from imported data
+  // Simple event limiting - no clustering needed
+
+  // Load events partially based on user location
   useEffect(() => {
-    try {
-      console.log(`Loaded ${eventsData.length} events from data file`)
-      loadUserCreatedEvents()
-      setIsLoading(false)
-    } catch (error) {
-      console.log('Error loading events:', error)
-      // Fallback to sample events if error
-      const sampleEvents = [
-        {
-          id: '1',
-          name: 'Jazz Night',
-          description: 'Live jazz music at the local cafe',
-          latitude: 59.436962,
-          longitude: 24.753574,
-          startsAt: '2024-01-15 20:00',
-          url: '',
-          venue: 'Cafe Central',
-          address: 'Downtown',
-          source: 'sample'
+    const loadEvents = async () => {
+      try {
+        setIsLoading(true)
+        
+        // Get user location for initial loading
+        let { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          console.log('Location permission denied')
+          // Load events without location filtering
+          const initialEvents = await loadEventsPartially({
+            userLocation: {
+              latitude: 59.436962,
+              longitude: 24.753574
+            },
+            maxDistance: 500 // 500km radius
+          })
+          setEvents(initialEvents)
+          setFilteredEvents(initialEvents)
+          setIsLoading(false)
+          return
         }
-      ]
-      setEvents(sampleEvents)
-      setFilteredEvents(sampleEvents)
-      setIsLoading(false)
+
+        let location = await Location.getCurrentPositionAsync({})
+        const userLoc = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        }
+        setUserLocation(userLoc)
+
+        console.log('Loading events within 500km of user location:', userLoc)
+        const initialEvents = await loadEventsPartially({
+          userLocation: userLoc,
+          maxDistance: 500 // 500km radius
+        })
+        console.log(`Loaded ${initialEvents.length} events within 500km`)
+        
+        setEvents(initialEvents)
+        setFilteredEvents(initialEvents)
+        setIsLoading(false)
+        
+        // Load user-created events separately to merge with existing events
+        loadUserCreatedEvents(initialEvents)
+      } catch (error) {
+        console.log('Error loading events:', error)
+        // Fallback to sample events if error
+        const sampleEvents = [
+          {
+            id: '1',
+            name: 'Jazz Night',
+            description: 'Live jazz music at the local cafe',
+            latitude: 59.436962,
+            longitude: 24.753574,
+            startsAt: '2024-01-15 20:00',
+            url: '',
+            venue: 'Cafe Central',
+            address: 'Downtown',
+            source: 'sample'
+          }
+        ]
+        setEvents(sampleEvents)
+        setFilteredEvents(sampleEvents)
+        setIsLoading(false)
+      }
     }
+
+    loadEvents()
   }, [])
 
   // Load user ratings and shared ratings
@@ -412,6 +470,8 @@ const MapViewNative: React.FC = () => {
       keyboardDidHideListener?.remove()
     }
   }, [])
+
+  // No longer need to reload events when filters change since we load everything at startup
 
   const loadUserFeatures = async () => {
     try {
@@ -553,8 +613,14 @@ const MapViewNative: React.FC = () => {
     })()
   }, [])
 
-  // Search and filter function
-  const applySearchAndFilters = () => {
+  // Optimized search and filter function - no limits, only country filter
+  const applySearchAndFilters = useCallback(() => {
+    // Only process if we have events
+    if (!events || events.length === 0) {
+      setFilteredEvents([])
+      return
+    }
+
     let filtered = events
 
     // Text search
@@ -576,6 +642,25 @@ const MapViewNative: React.FC = () => {
       })
     }
 
+    // Source filter
+    if (searchFilters.source !== 'All') {
+      filtered = filtered.filter(event => {
+        if (searchFilters.source === 'AI') {
+          return event.source === 'ai'
+        } else if (searchFilters.source === 'App') {
+          return event.source === 'app'
+        }
+        return true
+      })
+    }
+
+    // Always filter out past events - never show events that have already happened
+    const now = new Date()
+    filtered = filtered.filter(event => {
+      const eventDate = new Date(event.startsAt)
+      return eventDate > now
+    })
+
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
       if (!userFeatures.hasAdvancedSearch) {
@@ -592,7 +677,7 @@ const MapViewNative: React.FC = () => {
         // Premium users get full date range filtering
         filtered = filtered.filter(event => {
           const eventDate = new Date(event.startsAt)
-          const fromDate = searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : null
+          const fromDate = searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date()
           const toDate = searchFilters.dateTo ? new Date(searchFilters.dateTo) : null
 
           if (fromDate && toDate) {
@@ -632,13 +717,23 @@ const MapViewNative: React.FC = () => {
       })
     }
 
+    // No artificial limits - show all filtered events
     setFilteredEvents(filtered)
-  }
+    
+    console.log(`Performance: ${filtered.length}/${events.length} events visible (no limits)`)
+  }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
   useEffect(() => {
     applySearchAndFilters()
-  }, [searchFilters.query, searchFilters.category, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures])
+  }, [searchFilters.query, searchFilters.category, searchFilters.source, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures, applySearchAndFilters])
+
+  // Handle map region changes - just update the region, no need to reload events
+  const handleRegionChange = useCallback((region: Region) => {
+    setMapRegion(region)
+  }, [])
+
+
 
   // Initial region (centered on Estonia)
   const initialRegion = {
@@ -704,6 +799,7 @@ const MapViewNative: React.FC = () => {
       ...prev,
       query: '',
       category: 'All',
+      source: 'All',
       dateFrom: '',
       dateTo: '',
       distanceFilter: false,
@@ -716,6 +812,18 @@ const MapViewNative: React.FC = () => {
     return events.filter(event => {
       const eventCategory = determineCategory(event.name, event.description)
       return eventCategory === category
+    }).length
+  }
+
+  const getSourceCount = (source: string) => {
+    if (source === 'All') return events.length
+    return events.filter(event => {
+      if (source === 'AI') {
+        return event.source === 'ai'
+      } else if (source === 'App') {
+        return event.source === 'app'
+      }
+      return true
     }).length
   }
 
@@ -930,13 +1038,13 @@ const MapViewNative: React.FC = () => {
     }
   }
 
-  const loadUserCreatedEvents = async () => {
+  const loadUserCreatedEvents = async (currentEvents: Event[] = events) => {
     try {
-      // Load all events (imported + user-created + shared)
-      const allEvents = await eventService.getAllEvents()
+      // Load user-created events using getAllEvents (which includes local events)
+      const userEvents = await eventService.getAllEvents()
       
-      // Merge with imported events, avoiding duplicates
-      const mergedEvents = [...eventsData, ...allEvents]
+      // Merge with current events, avoiding duplicates
+      const mergedEvents = [...currentEvents, ...userEvents]
       const uniqueEvents = mergedEvents.filter((event, index, self) => 
         index === self.findIndex(e => e.id === event.id)
       )
@@ -960,12 +1068,8 @@ const MapViewNative: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('Error loading events:', error)
-      // Fallback to imported events only
-      setEvents(eventsData)
-      setFilteredEvents(eventsData)
-    } finally {
-      setIsLoading(false)
+      console.error('Error loading user events:', error)
+      // Keep current events if error
     }
   }
 
@@ -1196,18 +1300,27 @@ const MapViewNative: React.FC = () => {
 
   return (
     <View style={styles.container}>
-                     {/* Search Button */}
-        <TouchableOpacity 
-          style={styles.searchButton}
-          onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: true }))}
-        >
-          <Text style={styles.searchButtonIcon}>🔍</Text>
-          {(searchFilters.query || searchFilters.category !== 'All' || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.distanceFilter) && (
-            <View style={styles.searchButtonBadge}>
-              <Text style={styles.searchButtonBadgeText}>{filteredEvents.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      {/* Simple Performance Info */}
+                      <View style={styles.performanceInfo}>
+                  <Text style={styles.performanceText}>
+                    📍 {filteredEvents.length} events visible
+                  </Text>
+                </View>
+
+
+
+      {/* Search Button */}
+      <TouchableOpacity 
+        style={styles.searchButton}
+        onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: true }))}
+      >
+        <Text style={styles.searchButtonIcon}>🔍</Text>
+        {(searchFilters.query || searchFilters.category !== 'All' || searchFilters.source !== 'All' || searchFilters.dateFrom || searchFilters.dateTo || searchFilters.distanceFilter) && (
+          <View style={styles.searchButtonBadge}>
+            <Text style={styles.searchButtonBadgeText}>{filteredEvents.length}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Settings Icon */}
       <TouchableOpacity 
@@ -1239,9 +1352,11 @@ const MapViewNative: React.FC = () => {
       <MapView
         style={styles.map}
         initialRegion={initialRegion}
+        region={mapRegion}
         showsUserLocation={true}
         showsMyLocationButton={true}
         onPress={handleMapPress}
+        onRegionChangeComplete={handleRegionChange}
       >
         {/* Distance radius circle */}
         {searchFilters.distanceFilter && searchFilters.userLocation && (
@@ -1264,6 +1379,7 @@ const MapViewNative: React.FC = () => {
           />
         )}
 
+                        {/* Render individual events - no limits */}
         {filteredEvents.map((event) => {
           const category = determineCategory(event.name, event.description)
           const averageRating = getAverageRating(event.id)
@@ -2054,6 +2170,46 @@ const MapViewNative: React.FC = () => {
                </ScrollView>
              </View>
 
+                         {/* Source Filter */}
+             <View style={styles.inputGroup}>
+               <Text style={styles.inputLabel}>Source</Text>
+               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                 {[
+                   { key: 'All', icon: '🌐', label: 'All Sources' },
+                   { key: 'App', icon: '📱', label: 'App Events' },
+                   { key: 'AI', icon: '🤖', label: 'AI Generated' }
+                 ].map((source) => (
+                   <TouchableOpacity
+                     key={source.key}
+                     style={[
+                       styles.categoryIconButton,
+                       searchFilters.source === source.key && styles.categoryIconButtonActive
+                     ]}
+                     onPress={() => setSearchFilters(prev => ({ ...prev, source: source.key }))}
+                   >
+                     <Text style={[
+                       styles.categoryIcon,
+                       searchFilters.source === source.key && styles.categoryIconActive
+                     ]}>
+                       {source.icon}
+                     </Text>
+                     <Text style={[
+                       styles.categoryIconLabel,
+                       searchFilters.source === source.key && styles.categoryIconLabelActive
+                     ]}>
+                       {source.label}
+                     </Text>
+                     <Text style={[
+                       styles.categoryIconCount,
+                       searchFilters.source === source.key && styles.categoryIconCountActive
+                     ]}>
+                       {getSourceCount(source.key)}
+                     </Text>
+                   </TouchableOpacity>
+                 ))}
+               </ScrollView>
+             </View>
+
                                                    {/* Date Range */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Date Range</Text>
@@ -2276,6 +2432,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
   },
+
      searchButton: {
      position: 'absolute',
      top: 50,
@@ -2880,6 +3037,74 @@ const styles = StyleSheet.create({
   },
   disabledInput: {
     opacity: 0.7,
+  },
+  clusterMarker: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 15,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    minWidth: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clusterText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  performanceInfo: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 10,
+    borderRadius: 8,
+    zIndex: 1000,
+  },
+  performanceText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  clusterToggle: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  clusterToggleActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  clusterToggleText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '600',
+  },
+  performanceButton: {
+    position: 'absolute',
+    top: 160,
+    left: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#28a745',
+  },
+  performanceButtonText: {
+    fontSize: 12,
+    color: '#28a745',
+    fontWeight: '600',
   },
                    datePickerButton: {
           flex: 1,

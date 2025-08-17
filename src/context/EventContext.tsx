@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { loadEventsFromFile } from '../utils/eventDataImporter'
+import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
 import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
 
@@ -162,10 +162,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
           console.log('Loaded', processedEvents.length, 'events from storage')
         } else {
           // Fallback to JSON file if no stored events
-          const importedEvents = await loadEventsFromFile()
+          const importedEvents = await loadAllEvents()
           const processedEvents = processEventsWithVenueStorage(importedEvents)
           setEvents(processedEvents)
-          console.log('Loaded', processedEvents.length, 'events from imported data')
+          console.log('Loaded', processedEvents.length, 'events from imported data (including AI events)')
         }
       } catch (error) {
         console.error('Error loading events:', error)

@@ -22,35 +22,52 @@ const determineCategory = (name: string, description: string): Event['category']
   if (text.includes('kontsert') || text.includes('muusika') || text.includes('festival') || 
       text.includes('orkester') || text.includes('koor') || text.includes('kitarr') ||
       text.includes('klaver') || text.includes('jazz') || text.includes('rock') ||
-      text.includes('ooper') || text.includes('sümfoonia')) {
+      text.includes('ooper') || text.includes('sümfoonia') || text.includes('concert') ||
+      text.includes('music') || text.includes('orchestra') || text.includes('choir') ||
+      text.includes('guitar') || text.includes('piano') || text.includes('opera') ||
+      text.includes('symphony')) {
     return 'music'
   }
   
   // Food events
   if (text.includes('söök') || text.includes('restoran') || text.includes('kohvik') ||
       text.includes('vein') || text.includes('kokteili') || text.includes('õhtusöök') ||
-      text.includes('pakett') || text.includes('dinner')) {
+      text.includes('pakett') || text.includes('dinner') || text.includes('food') ||
+      text.includes('restaurant') || text.includes('cafe') || text.includes('wine') ||
+      text.includes('cocktail') || text.includes('dining') || text.includes('cuisine') ||
+      text.includes('tasting') || text.includes('gastronomy')) {
     return 'food'
   }
   
   // Sports events
   if (text.includes('jalgpall') || text.includes('spordi') || text.includes('jää') ||
       text.includes('võistlus') || text.includes('mäng') || text.includes('liiga') ||
-      text.includes('staadion') || text.includes('arena') || text.includes('kardisõit')) {
+      text.includes('staadion') || text.includes('arena') || text.includes('kardisõit') ||
+      text.includes('football') || text.includes('sport') || text.includes('ice') ||
+      text.includes('competition') || text.includes('game') || text.includes('league') ||
+      text.includes('stadium') || text.includes('race') || text.includes('marathon') ||
+      text.includes('tournament') || text.includes('championship')) {
     return 'sports'
   }
   
   // Art events
   if (text.includes('näitus') || text.includes('galerii') || text.includes('kunst') ||
       text.includes('muuseum') || text.includes('arhitektuur') || text.includes('keraamika') ||
-      text.includes('fotograafia') || text.includes('skulptuur')) {
+      text.includes('fotograafia') || text.includes('skulptuur') || text.includes('exhibition') ||
+      text.includes('gallery') || text.includes('art') || text.includes('museum') ||
+      text.includes('architecture') || text.includes('ceramics') || text.includes('photography') ||
+      text.includes('sculpture') || text.includes('painting') || text.includes('drawing') ||
+      text.includes('workshop') || text.includes('creative')) {
     return 'art'
   }
   
   // Business events
   if (text.includes('konverents') || text.includes('festival') || text.includes('konverents') ||
       text.includes('seminar') || text.includes('workshop') || text.includes('töötuba') ||
-      text.includes('networking') || text.includes('konverents')) {
+      text.includes('networking') || text.includes('konverents') || text.includes('conference') ||
+      text.includes('seminar') || text.includes('business') || text.includes('meeting') ||
+      text.includes('summit') || text.includes('forum') || text.includes('presentation') ||
+      text.includes('lecture') || text.includes('training')) {
     return 'business'
   }
   
@@ -174,7 +191,8 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
         },
         date,
         time,
-        organizer: item.source === 'csv' ? 'Local Organizer' : 'Event Organizer',
+        organizer: item.source === 'csv' ? 'Local Organizer' : 
+                  item.source === 'ai' ? 'AI Generated' : 'Event Organizer',
         attendees,
         maxAttendees
       }
@@ -212,6 +230,75 @@ export const loadEventsFromFile = async (): Promise<Event[]> => {
     return transformedEvents
   } catch (error) {
     console.error('Error in loadEventsFromFile:', error)
+    throw error
+  }
+}
+
+// New function to load AI events from external file
+export const loadAIEventsFromFile = async (): Promise<Event[]> => {
+  try {
+    console.log('Starting to load AI events from external file...')
+    
+    // For React Native/Expo, we need to use a different approach
+    // We'll copy the file to the public directory first
+    const response = await fetch('/ai-events.json')
+    console.log('AI events fetch response status:', response.status)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('AI events raw data loaded:', data)
+    console.log('AI events data type:', typeof data)
+    console.log('AI events data length:', Array.isArray(data) ? data.length : 'Not an array')
+    
+    if (!Array.isArray(data)) {
+      console.error('AI events data is not an array:', data)
+      throw new Error('AI events data is not an array')
+    }
+    
+    // Mark all events as AI source
+    const aiEvents = data.map((event: ImportedEvent) => ({
+      ...event,
+      source: 'ai'
+    }))
+    
+    const transformedEvents = transformImportedEvents(aiEvents)
+    console.log('AI events transformation completed, returning', transformedEvents.length, 'events')
+    return transformedEvents
+  } catch (error) {
+    console.error('Error in loadAIEventsFromFile:', error)
+    throw error
+  }
+}
+
+// Function to combine all event sources
+export const loadAllEvents = async (): Promise<Event[]> => {
+  try {
+    console.log('Loading all event sources...')
+    
+    // Load regular events
+    const regularEvents = await loadEventsFromFile()
+    console.log('Loaded regular events:', regularEvents.length)
+    
+    // Load AI events
+    let aiEvents: Event[] = []
+    try {
+      aiEvents = await loadAIEventsFromFile()
+      console.log('Loaded AI events:', aiEvents.length)
+    } catch (error) {
+      console.warn('Could not load AI events:', error)
+      // Continue without AI events if they're not available
+    }
+    
+    // Combine all events
+    const allEvents = [...regularEvents, ...aiEvents]
+    console.log('Total events loaded:', allEvents.length)
+    
+    return allEvents
+  } catch (error) {
+    console.error('Error in loadAllEvents:', error)
     throw error
   }
 }

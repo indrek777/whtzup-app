@@ -1,8 +1,6 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { EventProvider } from './context/EventContext'
-const MapView = require('./components/MapView')
-import './index.css'
+const MapViewNative = require('./components/MapViewNative')
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -56,11 +54,7 @@ function App() {
   return (
     <ErrorBoundary>
       <EventProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<MapView />} />
-          </Routes>
-        </Router>
+        <MapViewNative />
       </EventProvider>
     </ErrorBoundary>
   )
