@@ -1,29 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-
-export interface Event {
-  id: string
-  name: string
-  description: string
-  latitude: number
-  longitude: number
-  startsAt: string
-  url: string
-  venue: string
-  address: string
-  source: string
-  category?: string
-  createdAt?: string
-  createdBy?: string
-  updatedAt?: string
-  // Recurring event properties
-  isRecurring?: boolean
-  recurringPattern?: 'daily' | 'weekly' | 'monthly' | 'custom'
-  recurringDays?: number[]
-  recurringInterval?: number
-  recurringEndDate?: string
-  recurringOccurrences?: number
-  parentEventId?: string // For recurring event instances
-}
+import { Event } from '../data/events'
 
 export interface EventResponse {
   success: boolean
@@ -74,7 +50,12 @@ class EventService {
       const instance: Event = {
         ...parentEvent,
         id: `${parentEvent.id}_instance_${occurrenceCount}`,
-        startsAt: `${currentDate.toISOString().slice(0, 10)} ${timeString}`,
+        startsAt: (() => {
+          const year = currentDate.getFullYear()
+          const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+          const day = String(currentDate.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day} ${timeString}`
+        })(),
         parentEventId: parentEvent.id
       }
       
@@ -156,25 +137,19 @@ class EventService {
           if (response.ok) {
             const result: EventResponse = await response.json()
             if (result.success && result.event) {
-              console.log('Event shared with community successfully')
               // Update local events with server IDs
               for (const event of allEvents) {
                 await this.updateLocalEvent(event.id, { ...result.event, id: event.id })
               }
               return true
             }
-          } else {
-            console.log('Backend responded with error:', response.status, response.statusText)
           }
         } catch (backendError) {
-          console.log('Backend share failed, events saved locally only:', backendError)
           // Store for later sync
           for (const event of allEvents) {
             await this.queueForSync(event)
           }
         }
-      } else {
-        console.log('Backend not configured - events saved locally only')
       }
       
       return true // Success even if backend is not available
@@ -222,14 +197,10 @@ class EventService {
               await this.cacheSharedEvents(result.events)
               return result.events
             }
-          } else {
-            console.log('Backend responded with error:', response.status, response.statusText)
           }
         } catch (backendError) {
-          console.log('Backend fetch failed, using cached data:', backendError)
+          // Fallback to cached data
         }
-      } else {
-        console.log('Backend not configured - using cached data only')
       }
       
       // Fallback to cached data
@@ -245,7 +216,6 @@ class EventService {
   async syncEvents(): Promise<void> {
     // Skip sync if backend is not configured
     if (!API_BASE_URL) {
-      console.log('Backend not configured - skipping sync')
       return
     }
     
@@ -253,11 +223,8 @@ class EventService {
       const pendingEvents = await this.getPendingSync()
       
       if (pendingEvents.length === 0) {
-        console.log('No pending events to sync')
         return
       }
-      
-      console.log(`Attempting to sync ${pendingEvents.length} pending events...`)
       
       for (const event of pendingEvents) {
         try {
@@ -274,12 +241,9 @@ class EventService {
           
           if (response.ok) {
             await this.removeFromSyncQueue(event)
-            console.log(`Synced event: ${event.name}`)
-          } else {
-            console.log(`Failed to sync event ${event.name}: ${response.status} ${response.statusText}`)
           }
         } catch (error) {
-          console.log(`Failed to sync event ${event.name}:`, error)
+          // Continue with next event
         }
       }
       
@@ -302,14 +266,10 @@ class EventService {
             if (result.success) {
               return result.stats
             }
-          } else {
-            console.log('Backend stats failed:', response.status, response.statusText)
           }
         } catch (backendError) {
-          console.log('Backend stats failed:', backendError)
+          // Fallback to local stats
         }
-      } else {
-        console.log('Backend not configured - using local stats only')
       }
       
       // Fallback to local stats
@@ -347,7 +307,6 @@ class EventService {
       })
       return response.ok
     } catch (error) {
-      console.log('Backend health check failed:', error)
       return false
     }
   }
@@ -375,6 +334,146 @@ class EventService {
         pendingEvents: 0,
         lastSync: null
       }
+    }
+  }
+  
+  // Update an existing event
+  async updateEvent(eventId: string, updatedData: Partial<Event>): Promise<boolean> {
+    try {
+      // Get all local events
+      const localEvents = await this.getLocalEvents()
+      
+      // Find the event to update
+      const eventIndex = localEvents.findIndex(event => event.id === eventId)
+      if (eventIndex === -1) {
+        console.error('Event not found for update:', eventId)
+        return false
+      }
+      
+      const originalEvent = localEvents[eventIndex]
+      
+      // Update the event with new data
+      const updatedEvent: Event = {
+        ...originalEvent,
+        ...updatedData,
+        id: eventId, // Preserve the original ID
+        updatedAt: new Date().toISOString()
+      }
+      
+      // If this is a recurring event, we need to handle all instances
+      if (originalEvent.parentEventId || originalEvent.isRecurring) {
+        // Find all related events (parent and instances)
+        const relatedEvents = localEvents.filter(event => 
+          event.id === eventId || 
+          event.parentEventId === eventId || 
+          event.id === originalEvent.parentEventId ||
+          (originalEvent.parentEventId && event.parentEventId === originalEvent.parentEventId)
+        )
+        
+        // Remove all related events
+        const filteredEvents = localEvents.filter(event => 
+          !relatedEvents.some(related => related.id === event.id)
+        )
+        
+        // Generate new instances if needed
+        let newEvents: Event[] = []
+        if (updatedEvent.isRecurring) {
+          newEvents = this.generateRecurringInstances(updatedEvent)
+        } else {
+          newEvents = [updatedEvent]
+        }
+        
+        // Save all new events
+        const allEvents = [...filteredEvents, ...newEvents]
+        await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(allEvents))
+      } else {
+        // Simple update for non-recurring events
+        localEvents[eventIndex] = updatedEvent
+        await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
+      }
+      
+      // Try to sync with backend (if configured)
+      if (API_BASE_URL) {
+        try {
+          const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updatedData)
+          })
+          
+          if (!response.ok) {
+            // Queue for later sync if backend update fails
+            await this.queueForSync(updatedEvent)
+          }
+        } catch (backendError) {
+          // Queue for later sync if backend is unavailable
+          await this.queueForSync(updatedEvent)
+        }
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error updating event:', error)
+      return false
+    }
+  }
+  
+  // Delete an event
+  async deleteEvent(eventId: string): Promise<boolean> {
+    try {
+      // Get all local events
+      const localEvents = await this.getLocalEvents()
+      
+      // Find the event to delete
+      const eventToDelete = localEvents.find(event => event.id === eventId)
+      if (!eventToDelete) {
+        console.error('Event not found for deletion:', eventId)
+        return false
+      }
+      
+      // If this is a recurring event, delete all related instances
+      let eventsToDelete: Event[] = []
+      if (eventToDelete.parentEventId || eventToDelete.isRecurring) {
+        eventsToDelete = localEvents.filter(event => 
+          event.id === eventId || 
+          event.parentEventId === eventId || 
+          event.id === eventToDelete.parentEventId ||
+          (eventToDelete.parentEventId && event.parentEventId === eventToDelete.parentEventId)
+        )
+      } else {
+        eventsToDelete = [eventToDelete]
+      }
+      
+      // Remove events from local storage
+      const remainingEvents = localEvents.filter(event => 
+        !eventsToDelete.some(toDelete => toDelete.id === event.id)
+      )
+      await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(remainingEvents))
+      
+      // Try to delete from backend (if configured)
+      if (API_BASE_URL) {
+        try {
+          const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          })
+          
+          if (!response.ok) {
+            console.warn('Backend deletion failed, but event removed locally')
+          }
+        } catch (backendError) {
+          console.warn('Backend unavailable, but event removed locally')
+        }
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      return false
     }
   }
   

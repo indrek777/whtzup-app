@@ -11,6 +11,8 @@ import { loadEventsPartially, getTotalEventsCount } from '../utils/eventLoader'
 
 const UserProfile = require('./UserProfile')
 import DateTimePicker from '@react-native-community/datetimepicker'
+import { GeocodingSearchResult, searchAddress, reverseGeocode } from '../utils/geocoding'
+import debounce from 'lodash/debounce'
 
 // Marker color function
 const getMarkerColor = (category: string): string => {
@@ -336,6 +338,10 @@ const MapViewNative: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number } | null>(null)
   const [isMapMode, setIsMapMode] = useState(false) // New state for map interaction mode
   
+  // Event editing states
+  const [isEditingEvent, setIsEditingEvent] = useState(false)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: '',
     category: 'All',
@@ -415,6 +421,9 @@ const MapViewNative: React.FC = () => {
           userLocation: userLoc,
           maxDistance: 500 // 500km radius
         })
+        
+        console.log('=== Initial events loaded ===')
+        console.log('Initial events count:', initialEvents.length)
         
         setEvents(initialEvents)
         setFilteredEvents(initialEvents)
@@ -615,6 +624,42 @@ const MapViewNative: React.FC = () => {
     })()
   }, [])
 
+  // Add new state variables for smart filtering
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingSearchResult[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false)
+
+  // Smart address search function
+  const searchAddressSuggestions = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setAddressSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    setIsSearchingAddress(true)
+    try {
+      // Search for addresses and venues
+      const results = await searchAddress(query)
+      setAddressSuggestions(results)
+      setShowSuggestions(results.length > 0)
+    } catch (error) {
+      console.error('Error searching addresses:', error)
+      setAddressSuggestions([])
+      setShowSuggestions(false)
+    } finally {
+      setIsSearchingAddress(false)
+    }
+  }, [])
+
+  // Debounced address search
+  const debouncedAddressSearch = useCallback(
+    debounce((query: string) => {
+      searchAddressSuggestions(query)
+    }, 300),
+    [searchAddressSuggestions]
+  )
+
   // Optimized search and filter function - no limits, only country filter
   const applySearchAndFilters = useCallback(() => {
     // Only process if we have events
@@ -625,15 +670,50 @@ const MapViewNative: React.FC = () => {
 
     let filtered = events
 
-    // Text search
+    // Smart text search with venue/address prioritization
     if (searchFilters.query.trim()) {
       const query = searchFilters.query.toLowerCase()
-      filtered = filtered.filter(event => 
-        event.name.toLowerCase().includes(query) ||
-        event.description.toLowerCase().includes(query) ||
-        event.venue.toLowerCase().includes(query) ||
-        event.address.toLowerCase().includes(query)
-      )
+      const queryWords = query.split(' ').filter(word => word.length > 0)
+      
+      filtered = filtered.filter(event => {
+        const eventName = event.name.toLowerCase()
+        const eventDescription = event.description.toLowerCase()
+        const eventVenue = event.venue.toLowerCase()
+        const eventAddress = event.address.toLowerCase()
+        
+        // Check if all query words are found in any field
+        const allWordsFound = queryWords.every(word => 
+          eventName.includes(word) ||
+          eventDescription.includes(word) ||
+          eventVenue.includes(word) ||
+          eventAddress.includes(word)
+        )
+        
+        if (!allWordsFound) return false
+        
+        // Calculate relevance score for smart ordering
+        let relevanceScore = 0
+        
+        // Venue matches get highest priority
+        queryWords.forEach(word => {
+          if (eventVenue.includes(word)) relevanceScore += 10
+          if (eventAddress.includes(word)) relevanceScore += 8
+          if (eventName.includes(word)) relevanceScore += 5
+          if (eventDescription.includes(word)) relevanceScore += 2
+        })
+        
+        // Add the score to the event for sorting
+        ;(event as any).relevanceScore = relevanceScore
+        
+        return true
+      })
+      
+      // Sort by relevance score (highest first)
+      filtered.sort((a, b) => {
+        const scoreA = (a as any).relevanceScore || 0
+        const scoreB = (b as any).relevanceScore || 0
+        return scoreB - scoreA
+      })
     }
 
     // Category filter
@@ -658,10 +738,20 @@ const MapViewNative: React.FC = () => {
 
     // Always filter out past events - never show events that have already happened
     const now = new Date()
+    console.log('=== Filtering past events ===')
+    console.log('Current time:', now.toISOString())
+    console.log('Events before past filter:', filtered.length)
+    
     filtered = filtered.filter(event => {
       const eventDate = new Date(event.startsAt)
+      const isPast = eventDate <= now
+              if (isPast) {
+          return false
+        }
       return eventDate > now
     })
+    
+    console.log('Events after past filter:', filtered.length)
 
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
@@ -720,11 +810,25 @@ const MapViewNative: React.FC = () => {
     }
 
     // No artificial limits - show all filtered events
+    console.log('=== Final filtered events ===')
+    console.log('Total filtered events:', filtered.length)
+    console.log('Filtered events by source:', filtered.reduce((acc, event) => {
+      acc[event.source] = (acc[event.source] || 0) + 1
+      return acc
+    }, {} as Record<string, number>))
+    
     setFilteredEvents(filtered)
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
   useEffect(() => {
+    console.log('=== Applying search and filters ===')
+    console.log('Current events count:', events.length)
+    console.log('Events by source:', events.reduce((acc, event) => {
+      acc[event.source] = (acc[event.source] || 0) + 1
+      return acc
+    }, {} as Record<string, number>))
+    
     applySearchAndFilters()
   }, [searchFilters.query, searchFilters.category, searchFilters.source, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures, applySearchAndFilters])
 
@@ -743,13 +847,8 @@ const MapViewNative: React.FC = () => {
     }
   }, [mapRegion])
 
-  // Initial region (centered on Estonia)
-  const initialRegion = {
-    latitude: 58.3776252,
-    longitude: 26.7290063,
-    latitudeDelta: 2.5,
-    longitudeDelta: 2.5,
-  }
+  // Use current map region instead of hardcoded Estonia coordinates
+  const initialRegion = mapRegion
 
 
 
@@ -863,7 +962,7 @@ const MapViewNative: React.FC = () => {
         </Marker>
       )
     })
-  }, [filteredEvents, createMarkerPressHandler, handleCalloutPress, searchFilters.userLocation, getAverageRating, getRatingCount, getUserRating])
+  }, [filteredEvents, createMarkerPressHandler, handleCalloutPress])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -973,7 +1072,7 @@ const MapViewNative: React.FC = () => {
     setShowCreateEventModal(true)
   }
 
-  const handleMapPress = useCallback((event: any) => {
+  const handleMapPress = useCallback(async (event: any) => {
     // Add a small delay to prevent interference with marker press events
     setTimeout(() => {
       // Reset clicked marker when tapping elsewhere on the map
@@ -989,11 +1088,64 @@ const MapViewNative: React.FC = () => {
     if (showCreateEventModal && isMapMode) {
       const { latitude, longitude } = event.nativeEvent.coordinate
       setSelectedLocation({ latitude, longitude })
-      setNewEvent(prev => ({
-        ...prev,
-        latitude,
-        longitude
-      }))
+      
+      // Get location data using reverse geocoding
+      try {
+        const locationData = await reverseGeocode(latitude, longitude)
+        if (locationData) {
+          // Extract venue name and address from the reverse geocoding result
+          let venueName = ''
+          let address = locationData.display_name
+          
+          // Try to extract venue name from address components
+          if (locationData.address) {
+            // Look for common venue indicators
+            const venueIndicators = ['building', 'amenity', 'shop', 'leisure', 'tourism']
+            for (const indicator of venueIndicators) {
+              if (locationData.address[indicator]) {
+                venueName = locationData.address[indicator]
+                break
+              }
+            }
+            
+            // If no specific venue found, use the first meaningful part of the address
+            if (!venueName) {
+              const addressParts = locationData.display_name.split(', ')
+              if (addressParts.length > 0) {
+                venueName = addressParts[0]
+              }
+            }
+          }
+          
+          setNewEvent(prev => ({
+            ...prev,
+            latitude,
+            longitude,
+            venue: venueName || 'Selected Location',
+            address: address || ''
+          }))
+        } else {
+          // Fallback if reverse geocoding fails
+          setNewEvent(prev => ({
+            ...prev,
+            latitude,
+            longitude,
+            venue: 'Selected Location',
+            address: ''
+          }))
+        }
+      } catch (error) {
+        console.error('Error getting location data:', error)
+        // Fallback if reverse geocoding fails
+        setNewEvent(prev => ({
+          ...prev,
+          latitude,
+          longitude,
+          venue: 'Selected Location',
+          address: ''
+        }))
+      }
+      
       // Switch back to form mode after selecting location
       setIsMapMode(false)
     }
@@ -1061,7 +1213,15 @@ const MapViewNative: React.FC = () => {
         description: newEvent.description.trim(),
         venue: newEvent.venue.trim(),
         address: newEvent.address.trim(),
-        startsAt: newEvent.startsAt || new Date().toISOString().slice(0, 16).replace('T', ' '),
+        startsAt: newEvent.startsAt || (() => {
+          const now = new Date()
+          const year = now.getFullYear()
+          const month = String(now.getMonth() + 1).padStart(2, '0')
+          const day = String(now.getDate()).padStart(2, '0')
+          const hours = String(now.getHours()).padStart(2, '0')
+          const minutes = String(now.getMinutes()).padStart(2, '0')
+          return `${year}-${month}-${day} ${hours}:${minutes}`
+        })(),
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
         url: '',
@@ -1145,8 +1305,21 @@ const MapViewNative: React.FC = () => {
       // Load user-created events using getAllEvents (which includes local events)
       const userEvents = await eventService.getAllEvents()
       
+      // Ensure all user events have required fields
+      const validatedUserEvents = userEvents.map(event => ({
+        ...event,
+        name: event.name || 'Untitled Event',
+        description: event.description || '',
+        latitude: event.latitude || 0,
+        longitude: event.longitude || 0,
+        venue: event.venue || '',
+        address: event.address || '',
+        source: event.source || 'user',
+        category: event.category || 'Other'
+      }))
+      
       // Merge with current events, avoiding duplicates
-      const mergedEvents = [...currentEvents, ...userEvents]
+      const mergedEvents = [...currentEvents, ...validatedUserEvents]
       const uniqueEvents = mergedEvents.filter((event, index, self) => 
         index === self.findIndex(e => e.id === event.id)
       )
@@ -1210,6 +1383,154 @@ const MapViewNative: React.FC = () => {
     return previewText;
   };
 
+  // Event management functions
+  const startEditingEvent = (event: Event) => {
+    setEditingEventId(event.id)
+    setNewEvent({
+      name: event.name || '',
+      description: event.description || '',
+      venue: event.venue || '',
+      address: event.address || '',
+      startsAt: event.startsAt || '',
+      category: event.category || 'Other',
+      latitude: event.latitude || 0,
+      longitude: event.longitude || 0,
+      isRecurring: event.isRecurring || false,
+      recurringPattern: event.recurringPattern || 'daily',
+      recurringDays: event.recurringDays || [0],
+      recurringInterval: event.recurringInterval || 1,
+      recurringEndDate: event.recurringEndDate || '',
+      recurringOccurrences: event.recurringOccurrences || 1
+    })
+    setSelectedLocation({ latitude: event.latitude || 0, longitude: event.longitude || 0 })
+    setIsEditingEvent(true)
+    setShowEventDetailsModal(false)
+    setShowCreateEventModal(true)
+  }
+
+  const updateEvent = async () => {
+    if (!editingEventId || !selectedLocation) {
+      Alert.alert('Error', 'Missing event data for update.')
+      return
+    }
+
+    setIsCreatingEvent(true)
+
+    try {
+      const updatedData = {
+        name: newEvent.name.trim(),
+        description: newEvent.description.trim(),
+        venue: newEvent.venue.trim(),
+        address: newEvent.address.trim(),
+        startsAt: newEvent.startsAt,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        category: newEvent.category,
+        isRecurring: newEvent.isRecurring,
+        recurringPattern: newEvent.recurringPattern,
+        recurringDays: newEvent.recurringDays,
+        recurringInterval: newEvent.recurringInterval,
+        recurringEndDate: newEvent.recurringEndDate,
+        recurringOccurrences: newEvent.recurringOccurrences
+      }
+
+      const success = await eventService.updateEvent(editingEventId, updatedData)
+      
+      if (success) {
+        Alert.alert(
+          'Success!', 
+          'Event updated successfully! 🎉',
+          [{ text: 'OK', onPress: () => {
+            setShowCreateEventModal(false)
+            setIsEditingEvent(false)
+            setEditingEventId(null)
+          }}]
+        )
+
+        // Reload events to reflect changes
+        await loadUserCreatedEvents()
+        
+        // Reset form
+        setNewEvent({
+          name: '',
+          description: '',
+          venue: '',
+          address: '',
+          startsAt: '',
+          category: 'Other',
+          latitude: 0,
+          longitude: 0,
+          isRecurring: false,
+          recurringPattern: 'daily',
+          recurringDays: [0],
+          recurringInterval: 1,
+          recurringEndDate: '',
+          recurringOccurrences: 1
+        })
+        setSelectedLocation(null)
+      } else {
+        Alert.alert('Error', 'Failed to update event. Please try again.')
+      }
+
+    } catch (error) {
+      console.error('Error updating event:', error)
+      Alert.alert('Error', 'An unexpected error occurred while updating the event.')
+    } finally {
+      setIsCreatingEvent(false)
+    }
+  }
+
+  const deleteEvent = async (eventId: string) => {
+    Alert.alert(
+      'Delete Event',
+      'Are you sure you want to delete this event? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const success = await eventService.deleteEvent(eventId)
+              
+              if (success) {
+                Alert.alert('Success', 'Event deleted successfully!')
+                setShowEventDetailsModal(false)
+                
+                // Reload events to reflect changes
+                await loadUserCreatedEvents()
+              } else {
+                Alert.alert('Error', 'Failed to delete event. Please try again.')
+              }
+            } catch (error) {
+              console.error('Error deleting event:', error)
+              Alert.alert('Error', 'An unexpected error occurred while deleting the event.')
+            }
+          }
+        }
+      ]
+    )
+  }
+
+  const shareEvent = (event: Event) => {
+    const { date, time } = parseDateTime(event.startsAt)
+    const shareText = `🎉 ${event.name}\n\n📅 ${date} at ${time}\n📍 ${event.venue}\n${event.address ? `📍 ${event.address}\n` : ''}📝 ${event.description}\n\nCheck it out on WhtzUp!`
+    
+    // For now, we'll use Alert to show the share text
+    // In a real app, you'd use the Share API or a third-party sharing library
+    Alert.alert(
+      'Share Event',
+      shareText,
+      [
+        { text: 'Copy Text', onPress: () => {
+          // In a real app, you'd copy to clipboard here
+          Alert.alert('Copied!', 'Event details copied to clipboard.')
+        }},
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    )
+  }
+
   // Date/Time picker states for temporary values
   const [tempDateFrom, setTempDateFrom] = useState<Date | null>(null)
   const [tempDateTo, setTempDateTo] = useState<Date | null>(null)
@@ -1253,7 +1574,13 @@ const MapViewNative: React.FC = () => {
       // On Android, close immediately
       setShowEventTimePicker(false)
       if (selectedDate) {
-        const dateString = selectedDate.toISOString().slice(0, 16).replace('T', ' ')
+        // Format date and time in local timezone (not UTC)
+        const year = selectedDate.getFullYear()
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+        const day = String(selectedDate.getDate()).padStart(2, '0')
+        const hours = String(selectedDate.getHours()).padStart(2, '0')
+        const minutes = String(selectedDate.getMinutes()).padStart(2, '0')
+        const dateString = `${year}-${month}-${day} ${hours}:${minutes}`
         setNewEvent(prev => ({ ...prev, startsAt: dateString }))
       }
     }
@@ -1294,7 +1621,13 @@ const MapViewNative: React.FC = () => {
 
   const handleEventTimeConfirm = () => {
     if (tempEventTime) {
-      const dateString = tempEventTime.toISOString().slice(0, 16).replace('T', ' ')
+      // Format date and time in local timezone (not UTC)
+      const year = tempEventTime.getFullYear()
+      const month = String(tempEventTime.getMonth() + 1).padStart(2, '0')
+      const day = String(tempEventTime.getDate()).padStart(2, '0')
+      const hours = String(tempEventTime.getHours()).padStart(2, '0')
+      const minutes = String(tempEventTime.getMinutes()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day} ${hours}:${minutes}`
       setNewEvent(prev => ({ ...prev, startsAt: dateString }))
     }
     setShowEventTimePicker(false)
@@ -1418,6 +1751,11 @@ const MapViewNative: React.FC = () => {
           </View>
         )}
       </TouchableOpacity>
+      
+      {/* Test button to create a user event programmatically */}
+
+      
+
 
       {/* Map */}
       <MapView
@@ -1479,7 +1817,7 @@ const MapViewNative: React.FC = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              {isMapMode ? 'Select Location' : 'Create New Event'}
+              {isMapMode ? 'Select Location' : (isEditingEvent ? 'Edit Event' : 'Create New Event')}
             </Text>
             <View style={styles.modalHeaderButtons}>
               {!isMapMode && (
@@ -1494,6 +1832,26 @@ const MapViewNative: React.FC = () => {
                 onPress={() => {
                   setShowCreateEventModal(false)
                   setIsMapMode(false)
+                  setIsEditingEvent(false)
+                  setEditingEventId(null)
+                  // Reset form
+                  setNewEvent({
+                    name: '',
+                    description: '',
+                    venue: '',
+                    address: '',
+                    startsAt: '',
+                    category: 'Other',
+                    latitude: 0,
+                    longitude: 0,
+                    isRecurring: false,
+                    recurringPattern: 'daily',
+                    recurringDays: [0],
+                    recurringInterval: 1,
+                    recurringEndDate: '',
+                    recurringOccurrences: 1
+                  })
+                  setSelectedLocation(null)
                 }}
                 style={styles.closeButton}
               >
@@ -1937,15 +2295,17 @@ const MapViewNative: React.FC = () => {
 
               <TouchableOpacity 
                 style={[styles.submitButton, isCreatingEvent && styles.submitButtonDisabled]}
-                onPress={createEvent}
+                onPress={isEditingEvent ? updateEvent : createEvent}
                 disabled={isCreatingEvent}
               >
                 <Text style={styles.submitButtonText}>
                   {isCreatingEvent 
-                    ? 'Creating...' 
-                    : syncStatus.backendAvailable 
-                      ? 'Create & Share Event'
-                      : 'Create Event (Local)'
+                    ? (isEditingEvent ? 'Updating...' : 'Creating...')
+                    : isEditingEvent
+                      ? 'Update Event'
+                      : syncStatus.backendAvailable 
+                        ? 'Create & Share Event'
+                        : 'Create Event (Local)'
                   }
                 </Text>
               </TouchableOpacity>
@@ -2104,24 +2464,114 @@ const MapViewNative: React.FC = () => {
             <View style={styles.searchModalContainer}>
               <View style={styles.searchModalHeader}>
                 <Text style={styles.searchModalTitle}>🔍 Search & Filter</Text>
-                <TouchableOpacity 
-                  onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: false }))}
-                  style={styles.closeButton}
-                >
-                  <Text style={styles.closeButtonText}>Done</Text>
-                </TouchableOpacity>
+                <View style={styles.searchModalHeaderButtons}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      // Reset all filters to default values
+                      setSearchFilters({
+                        query: '',
+                        category: 'All',
+                        source: 'All',
+                        dateFrom: new Date().toISOString().split('T')[0], // Today
+                        dateTo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from now
+                        showSearchModal: true,
+                        distanceFilter: false,
+                        distanceRadius: 10, // Default 10km radius
+                        userLocation: searchFilters.userLocation // Keep user location
+                      })
+                      // Clear address suggestions
+                      setAddressSuggestions([])
+                      setShowSuggestions(false)
+                    }}
+                    style={styles.cleanFilterButton}
+                  >
+                    <Text style={styles.cleanFilterButtonText}>🧹 Clean</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={() => setSearchFilters(prev => ({ ...prev, showSearchModal: false }))}
+                    style={styles.closeButton}
+                  >
+                    <Text style={styles.closeButtonText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
            <ScrollView style={styles.modalContent}>
-            {/* Search Input */}
+            {/* Smart Search Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Search Events</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Search by name, venue, or description..."
-                value={searchFilters.query}
-                onChangeText={(text) => setSearchFilters(prev => ({ ...prev, query: text }))}
-              />
+              <View style={styles.searchLabelContainer}>
+                <Text style={styles.inputLabel}>Search Events</Text>
+                <Text style={styles.smartFilterIndicator}>🧠 Smart Filtering</Text>
+              </View>
+              <View style={styles.searchInputContainer}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Search by name, venue, or description..."
+                  value={searchFilters.query}
+                  onChangeText={(text) => {
+                    setSearchFilters(prev => ({ ...prev, query: text }))
+                    // Trigger smart address search for venue/address suggestions
+                    if (text.trim().length >= 2) {
+                      debouncedAddressSearch(text)
+                    } else {
+                      setAddressSuggestions([])
+                      setShowSuggestions(false)
+                    }
+                  }}
+                  onFocus={() => {
+                    if (searchFilters.query.trim().length >= 2) {
+                      setShowSuggestions(true)
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay hiding suggestions to allow for touch events
+                    setTimeout(() => setShowSuggestions(false), 200)
+                  }}
+                />
+                {isSearchingAddress && (
+                  <View style={styles.searchIndicator}>
+                    <Text style={styles.searchIndicatorText}>🔍</Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Address/Venue Suggestions */}
+              {showSuggestions && addressSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <View style={styles.suggestionsHeader}>
+                    <Text style={styles.suggestionsTitle}>📍 Venue & Address Suggestions</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowSuggestions(false)
+                        setAddressSuggestions([])
+                      }}
+                      style={styles.clearSuggestionsButton}
+                    >
+                      <Text style={styles.clearSuggestionsText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {addressSuggestions.map((suggestion, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionItem}
+                      onPress={() => {
+                        setSearchFilters(prev => ({ ...prev, query: suggestion.display_name }))
+                        setShowSuggestions(false)
+                        setAddressSuggestions([])
+                      }}
+                    >
+                      <Text style={styles.suggestionText} numberOfLines={2}>
+                        {suggestion.display_name}
+                      </Text>
+                      {suggestion.importance && (
+                        <Text style={styles.suggestionImportance}>
+                          Relevance: {Math.round(suggestion.importance * 100)}%
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Distance Filter */}
@@ -2559,6 +3009,30 @@ const MapViewNative: React.FC = () => {
                       >
                         <Text style={styles.eventDetailsRateButtonText}>Rate</Text>
                       </TouchableOpacity>
+                      
+                      {/* Show edit and delete buttons only for user-created events */}
+                      {eventDetails.event.source === 'user' && (
+                        <View style={styles.eventDetailsActionButtons}>
+                          <TouchableOpacity
+                            style={styles.eventDetailsEditButton}
+                            onPress={() => startEditingEvent(eventDetails.event)}
+                          >
+                            <Text style={styles.eventDetailsEditButtonText}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.eventDetailsShareButton}
+                            onPress={() => shareEvent(eventDetails.event)}
+                          >
+                            <Text style={styles.eventDetailsShareButtonText}>Share</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.eventDetailsDeleteButton}
+                            onPress={() => deleteEvent(eventDetails.event.id)}
+                          >
+                            <Text style={styles.eventDetailsDeleteButtonText}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   </>
                 )}
@@ -3578,6 +4052,23 @@ const styles = StyleSheet.create({
       fontWeight: 'bold',
       color: '#333',
     },
+    searchModalHeaderButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    cleanFilterButton: {
+      backgroundColor: '#FF6B6B',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      marginRight: 8,
+    },
+    cleanFilterButtonText: {
+      color: 'white',
+      fontSize: 14,
+      fontWeight: '600',
+    },
   // Event Details Modal Styles
               eventDetailsOverlay: {
               flex: 1,
@@ -3670,6 +4161,50 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'ios' ? 14 : 16,
     fontWeight: '600',
   },
+  eventDetailsActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  eventDetailsEditButton: {
+    flex: 1,
+    backgroundColor: '#28a745',
+    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
+    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventDetailsEditButtonText: {
+    color: 'white',
+    fontSize: Platform.OS === 'ios' ? 14 : 16,
+    fontWeight: '600',
+  },
+  eventDetailsShareButton: {
+    flex: 1,
+    backgroundColor: '#17a2b8',
+    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
+    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventDetailsShareButtonText: {
+    color: 'white',
+    fontSize: Platform.OS === 'ios' ? 14 : 16,
+    fontWeight: '600',
+  },
+  eventDetailsDeleteButton: {
+    flex: 1,
+    backgroundColor: '#dc3545',
+    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
+    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  eventDetailsDeleteButtonText: {
+    color: 'white',
+    fontSize: Platform.OS === 'ios' ? 14 : 16,
+    fontWeight: '600',
+  },
   // Callout styles
   calloutContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -3706,6 +4241,98 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  // Smart Search styles
+  searchInputContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchIndicator: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 20,
+  },
+  searchIndicatorText: {
+    fontSize: 16,
+    color: '#007AFF',
+  },
+  suggestionsContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    maxHeight: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 8,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  suggestionsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    flex: 1,
+  },
+  clearSuggestionsButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearSuggestionsText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  searchLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  smartFilterIndicator: {
+    fontSize: 10,
+    color: '#007AFF',
+    fontStyle: 'italic',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: 'transparent',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  suggestionImportance: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontStyle: 'italic',
   },
  })
 

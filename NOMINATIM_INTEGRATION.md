@@ -2,7 +2,7 @@
 
 ## 🎯 **Overview**
 
-The app now integrates with your local Nominatim server running on `http://localhost:7070/` to provide automatic address lookup and coordinate finding.
+The app now integrates with the public Nominatim service (`https://nominatim.openstreetmap.org`) to provide automatic address lookup and coordinate finding.
 
 ## 📋 **Features**
 
@@ -53,21 +53,22 @@ The app now integrates with your local Nominatim server running on `http://local
 
 ### **Search Address**
 ```
-GET http://localhost:7070/search?q={query}&format=json&limit=5&addressdetails=1
+GET https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=5&addressdetails=1
 ```
 
 ### **Reverse Geocoding**
 ```
-GET http://localhost:7070/reverse?lat={lat}&lon={lon}&format=json&addressdetails=1
+GET https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&addressdetails=1
 ```
 
 ## 🔧 **Configuration**
 
 ### **Nominatim Server**
-- **URL**: `http://localhost:7070/`
-- **Port**: 7070
+- **URL**: `https://nominatim.openstreetmap.org/`
+- **Service**: Public Nominatim API
 - **Format**: JSON
 - **Limit**: 5 results per search
+- **Rate Limit**: 1 request per second (enforced)
 
 ### **Geocoding Settings**
 - **Search Delay**: 3 characters minimum

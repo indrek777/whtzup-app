@@ -1,13 +1,32 @@
-// Geocoding utility using local Nominatim server
+// Geocoding utility using public Nominatim server
 // Configured for Estonia-wide coverage (57.5°N to 59.7°N, 21.5°E to 28.2°E)
 // Covers all of Estonia including: Tallinn, Tartu, Pärnu, Narva, Kohtla-Järve, Viljandi, Rakvere, Maardu, Kuressaare, Sillamäe, Valga, Võru, Jõhvi, Haapsalu, Keila, Paide, Tapa, Põlva, Jõgeva, Türi, Elva, Saue, Põltsamaa, Paldiski, Sindi, Kunda, Kärdla, Loksa, Tõrva, Kiviõli, Antsla, Mustvee, Lihula, Otepää, Kehra, Abja-Paluoja, Suure-Jaani, Kallaste, Mõisaküla, Võhma, and all rural areas
-const NOMINATIM_BASE_URL = 'http://localhost:7070'
+const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org'
 
 export interface GeocodingResult {
   lat: string
   lon: string
   display_name: string
   type: string
+  address?: {
+    house_number?: string
+    road?: string
+    suburb?: string
+    city?: string
+    town?: string
+    village?: string
+    county?: string
+    state?: string
+    postcode?: string
+    country?: string
+    country_code?: string
+    building?: string
+    amenity?: string
+    shop?: string
+    leisure?: string
+    tourism?: string
+    [key: string]: string | undefined
+  }
 }
 
 export interface GeocodingSearchResult {
@@ -28,6 +47,9 @@ export interface GeocodingSearchResult {
 // Search for addresses/places using Nominatim - Estonia-wide
 export const searchAddress = async (query: string): Promise<GeocodingSearchResult[]> => {
   try {
+    // Add small delay to comply with Nominatim usage policy
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
     const encodedQuery = encodeURIComponent(query)
     
     // Estonia bounding box: [min_lat, max_lat, min_lon, max_lon]
@@ -35,7 +57,12 @@ export const searchAddress = async (query: string): Promise<GeocodingSearchResul
     const estoniaBounds = '57.5,59.7,21.5,28.2'
     
     const response = await fetch(
-      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=10&addressdetails=1&countrycodes=ee&viewbox=${estoniaBounds}&bounded=1`
+      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=10&addressdetails=1&countrycodes=ee&viewbox=${estoniaBounds}&bounded=1`,
+      {
+        headers: {
+          'User-Agent': 'WhtzUpApp/1.0 (https://github.com/your-repo; your-email@example.com)'
+        }
+      }
     )
     
     if (!response.ok) {
@@ -62,7 +89,12 @@ export const searchAddress = async (query: string): Promise<GeocodingSearchResul
 export const reverseGeocode = async (lat: number, lon: number): Promise<GeocodingResult | null> => {
   try {
     const response = await fetch(
-      `${NOMINATIM_BASE_URL}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`
+      `${NOMINATIM_BASE_URL}/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'WhtzUpApp/1.0 (https://github.com/your-repo; your-email@example.com)'
+        }
+      }
     )
     
     if (!response.ok) {
@@ -96,7 +128,12 @@ export const getCoordinates = async (address: string): Promise<[number, number] 
     // If no Estonia results found, try a broader search but still prioritize Estonia
     const encodedQuery = encodeURIComponent(`${address}, Estonia`)
     const response = await fetch(
-      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=3&addressdetails=1&countrycodes=ee`
+      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=3&addressdetails=1&countrycodes=ee`,
+      {
+        headers: {
+          'User-Agent': 'WhtzUpApp/1.0 (https://github.com/your-repo; your-email@example.com)'
+        }
+      }
     )
     
     if (response.ok) {
@@ -136,7 +173,12 @@ export const searchEstonianPlaces = async (query: string): Promise<GeocodingSear
     
     // Search with Estonia-specific parameters
     const response = await fetch(
-      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=15&addressdetails=1&countrycodes=ee&viewbox=${estoniaBounds}&bounded=1&featuretype=city,town,village,suburb,neighbourhood`
+      `${NOMINATIM_BASE_URL}/search?q=${encodedQuery}&format=json&limit=15&addressdetails=1&countrycodes=ee&viewbox=${estoniaBounds}&bounded=1&featuretype=city,town,village,suburb,neighbourhood`,
+      {
+        headers: {
+          'User-Agent': 'WhtzUpApp/1.0 (https://github.com/your-repo; your-email@example.com)'
+        }
+      }
     )
     
     if (!response.ok) {
