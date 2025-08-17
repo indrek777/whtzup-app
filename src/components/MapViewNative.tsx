@@ -742,10 +742,19 @@ const MapViewNative: React.FC = () => {
 
   // Handle map region changes - just update the region, no need to reload events
   const handleRegionChange = useCallback((region: Region) => {
-    setMapRegion(region)
-  }, [])
-
-
+    // Only update if the region has actually changed significantly
+    const currentRegion = mapRegion
+    const latDiff = Math.abs(region.latitude - currentRegion.latitude)
+    const lngDiff = Math.abs(region.longitude - currentRegion.longitude)
+    const latDeltaDiff = Math.abs(region.latitudeDelta - currentRegion.latitudeDelta)
+    const lngDeltaDiff = Math.abs(region.longitudeDelta - currentRegion.longitudeDelta)
+    
+    // Only update if change is significant (prevents excessive re-renders)
+    if (latDiff > 0.001 || lngDiff > 0.001 || latDeltaDiff > 0.1 || lngDeltaDiff > 0.1) {
+      console.log(`Map region changed: ${latDiff.toFixed(4)}, ${lngDiff.toFixed(4)}, ${latDeltaDiff.toFixed(2)}, ${lngDeltaDiff.toFixed(2)}`)
+      setMapRegion(region)
+    }
+  }, [mapRegion])
 
   // Initial region (centered on Estonia)
   const initialRegion = {
@@ -789,6 +798,36 @@ const MapViewNative: React.FC = () => {
     })
     setShowEventDetailsModal(true)
   }
+
+  // Memoized markers to prevent unnecessary re-renders
+  const memoizedMarkers = useMemo(() => {
+    console.log(`Rendering ${filteredEvents.length} markers`)
+    return filteredEvents.map((event) => {
+      const category = determineCategory(event.name, event.description)
+      
+      return (
+        <Marker
+          key={event.id}
+          coordinate={{
+            latitude: event.latitude,
+            longitude: event.longitude,
+          }}
+          onPress={() => handleMarkerPress(event)}
+          pinColor={event.source === 'user' ? 'purple' : getMarkerColor(category)}
+          title={event.name}
+          description={`${event.venue} - ${parseDateTime(event.startsAt).date}`}
+          tracksViewChanges={false}
+          anchor={{ x: 0.5, y: 1.0 }}
+          centerOffset={{ x: 0, y: 0 }}
+          calloutAnchor={{ x: 0.5, y: 0 }}
+          flat={false}
+          opacity={1}
+          draggable={false}
+          zIndex={event.source === 'user' ? 1000 : 1}
+        />
+      )
+    })
+  }, [filteredEvents, handleMarkerPress])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -1277,33 +1316,7 @@ const MapViewNative: React.FC = () => {
     }
   }
 
-  const parseDateTime = (dateTimeString: string) => {
-    if (!dateTimeString) {
-      return { date: 'No date set', time: 'No time set' };
-    }
-    
-    try {
-      const [datePart, timePart] = dateTimeString.split(' ');
-      const date = new Date(datePart);
-      
-      if (isNaN(date.getTime())) {
-        return { date: 'Invalid date', time: timePart || 'No time set' };
-      }
-      
-      const formattedDate = date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric'
-      });
-      
-      return {
-        date: formattedDate,
-        time: timePart || 'No time set'
-      };
-    } catch (error) {
-      return { date: 'Invalid date', time: 'Invalid time' };
-    }
-  };
+
 
   if (isLoading) {
     return (
@@ -1345,11 +1358,27 @@ const MapViewNative: React.FC = () => {
         onPress={() => {
           Alert.alert(
             'Debug Info', 
-            `Total Events: ${events.length}\nFiltered Events: ${filteredEvents.length}\nUser Location: ${searchFilters.userLocation ? 'Set' : 'Not set'}\nAdvanced Search: ${userFeatures.hasAdvancedSearch ? 'Yes' : 'No'}\nDistance Filter: ${searchFilters.distanceFilter ? 'ON' : 'OFF'}\nActive Filters: ${searchFilters.query ? 'Search' : ''}${searchFilters.category !== 'All' ? ' Category' : ''}${searchFilters.source !== 'All' ? ' Source' : ''}${searchFilters.dateFrom || searchFilters.dateTo ? ' Date' : ''}`
+            `Total Events: ${events.length}\nFiltered Events: ${filteredEvents.length}\nUser Location: ${searchFilters.userLocation ? 'Set' : 'Not set'}\nAdvanced Search: ${userFeatures.hasAdvancedSearch ? 'Yes' : 'No'}\nDistance Filter: ${searchFilters.distanceFilter ? 'ON' : 'OFF'}\nMap Region: ${mapRegion.latitude.toFixed(4)}, ${mapRegion.longitude.toFixed(4)}\nZoom Level: ${Math.round(14 - Math.log2(mapRegion.latitudeDelta))}\nActive Filters: ${searchFilters.query ? 'Search' : ''}${searchFilters.category !== 'All' ? ' Category' : ''}${searchFilters.source !== 'All' ? ' Source' : ''}${searchFilters.dateFrom || searchFilters.dateTo ? ' Date' : ''}`
           )
         }}
       >
         <Text style={styles.createEventButtonText}>🔍</Text>
+      </TouchableOpacity>
+
+      {/* Marker Test Button */}
+      <TouchableOpacity 
+        style={[styles.createEventButton, { bottom: 160, backgroundColor: '#ff6b6b' }]}
+        onPress={() => {
+          // Test with a small subset of events to see if rendering is stable
+          const testEvents = filteredEvents.slice(0, 10)
+          console.log(`Testing with ${testEvents.length} events`)
+          Alert.alert(
+            'Marker Test', 
+            `Testing with ${testEvents.length} events\nFirst event: ${testEvents[0]?.name || 'None'}\nLast event: ${testEvents[testEvents.length-1]?.name || 'None'}`
+          )
+        }}
+      >
+        <Text style={styles.createEventButtonText}>🧪</Text>
       </TouchableOpacity>
 
       {/* Create Event Button */}
@@ -1375,6 +1404,23 @@ const MapViewNative: React.FC = () => {
         showsMyLocationButton={true}
         onPress={handleMapPress}
         onRegionChangeComplete={handleRegionChange}
+        mapType="standard"
+        showsCompass={true}
+        showsScale={true}
+        showsTraffic={false}
+        showsBuildings={true}
+        showsIndoors={true}
+        showsIndoorLevelPicker={false}
+        showsPointsOfInterest={true}
+        followsUserLocation={false}
+        toolbarEnabled={false}
+        loadingEnabled={true}
+        loadingIndicatorColor="#007AFF"
+        loadingBackgroundColor="rgba(255, 255, 255, 0.8)"
+        moveOnMarkerPress={false}
+        mapPadding={{ top: 0, right: 0, bottom: 0, left: 0 }}
+        maxZoomLevel={20}
+        minZoomLevel={3}
       >
         {/* Distance radius circle */}
         {searchFilters.distanceFilter && searchFilters.userLocation && (
@@ -1397,26 +1443,8 @@ const MapViewNative: React.FC = () => {
           />
         )}
 
-                        {/* Render individual events - no limits */}
-        {filteredEvents.map((event) => {
-          const category = determineCategory(event.name, event.description)
-          const averageRating = getAverageRating(event.id)
-          const userRating = getUserRating(event.id)
-          
-          return (
-            <Marker
-              key={event.id}
-              coordinate={{
-                latitude: event.latitude,
-                longitude: event.longitude,
-              }}
-              onPress={() => handleMarkerPress(event)}
-              pinColor={event.source === 'user' ? 'purple' : getMarkerColor(category)}
-              title={event.name}
-              description={`${event.venue} - ${parseDateTime(event.startsAt).date}`}
-            />
-          )
-        })}
+                        {/* Render memoized markers for better performance */}
+        {memoizedMarkers}
       </MapView>
 
       {/* Create Event Modal */}
