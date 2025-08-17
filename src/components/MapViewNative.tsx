@@ -486,6 +486,16 @@ const MapViewNative: React.FC = () => {
     canCreateEventToday: false
   })
 
+  // Current loading radius state
+  const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(20)
+
+  // Ensure free users can't have radius greater than 20km
+  useEffect(() => {
+    if (!userFeatures.hasPremium && searchFilters.distanceRadius > 20) {
+      setSearchFilters(prev => ({ ...prev, distanceRadius: 20 }))
+    }
+  }, [userFeatures.hasPremium, searchFilters.distanceRadius])
+
   // Date/Time picker states
   const [showDateFromPicker, setShowDateFromPicker] = useState(false)
   const [showDateToPicker, setShowDateToPicker] = useState(false)
@@ -503,14 +513,15 @@ const MapViewNative: React.FC = () => {
         // Get user location for initial loading
         let { status } = await Location.requestForegroundPermissionsAsync()
         if (status !== 'granted') {
-          // Load events without location filtering
-          const initialEvents = await loadEventsPartially({
-            userLocation: {
-              latitude: 59.436962,
-              longitude: 24.753574
-            },
-            maxDistance: 500 // 500km radius
-          })
+                  // Load events without location filtering
+        const radius = await getEventLoadingRadius()
+        const initialEvents = await loadEventsPartially({
+          userLocation: {
+            latitude: 59.436962,
+            longitude: 24.753574
+          },
+          maxDistance: radius
+        })
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
           setIsLoading(false)
@@ -524,9 +535,10 @@ const MapViewNative: React.FC = () => {
         }
         setUserLocation(userLoc)
 
+        const radius = await getEventLoadingRadius()
         const initialEvents = await loadEventsPartially({
           userLocation: userLoc,
-          maxDistance: 500 // 500km radius
+          maxDistance: radius
         })
         
         setEvents(initialEvents)
@@ -570,6 +582,14 @@ const MapViewNative: React.FC = () => {
     loadUserFeatures()
   }, [])
 
+  // Reload events when premium status changes
+  useEffect(() => {
+    if (userFeatures.hasPremium !== undefined) {
+      // Reload events with new radius when premium status is determined
+      reloadEventsWithNewRadius()
+    }
+  }, [userFeatures.hasPremium])
+
   // Keyboard event listeners for review input
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
@@ -588,6 +608,38 @@ const MapViewNative: React.FC = () => {
 
   // No longer need to reload events when filters change since we load everything at startup
 
+  // Get event loading radius based on user's premium status
+  const getEventLoadingRadius = async (): Promise<number> => {
+    try {
+      const hasPremium = await userService.hasPremiumSubscription()
+      const radius = hasPremium ? 500 : 20 // 500km for premium, 20km for free users
+      setCurrentLoadingRadius(radius)
+      return radius
+    } catch (error) {
+      // Fallback to free user radius if there's an error
+      setCurrentLoadingRadius(20)
+      return 20
+    }
+  }
+
+  // Reload events with new radius when premium status changes
+  const reloadEventsWithNewRadius = async () => {
+    try {
+      if (!userLocation) return
+
+      const radius = await getEventLoadingRadius()
+      const newEvents = await loadEventsPartially({
+        userLocation,
+        maxDistance: radius
+      })
+      
+      setEvents(newEvents)
+      setFilteredEvents(newEvents)
+    } catch (error) {
+      // Error reloading events
+    }
+  }
+
   const loadUserFeatures = async () => {
     try {
       const hasAdvancedSearch = await userService.hasFeature('advanced_search')
@@ -599,6 +651,10 @@ const MapViewNative: React.FC = () => {
         hasPremium,
         canCreateEventToday
       })
+
+      // Update loading radius based on premium status
+      const radius = hasPremium ? 500 : 20
+      setCurrentLoadingRadius(radius)
     } catch (error) {
       // Error loading user features
     }
@@ -2682,24 +2738,47 @@ const MapViewNative: React.FC = () => {
                     )}
                   </Text>
                   
+                  {/* Premium status and loading radius info */}
+                  <View style={styles.premiumStatusContainer}>
+                    <Text style={styles.premiumStatusText}>
+                      {userFeatures.hasPremium ? '⭐ Premium' : '🔒 Free'} • Loading events within {currentLoadingRadius}km
+                    </Text>
+                    {!userFeatures.hasPremium && (
+                      <Text style={styles.premiumUpgradeText}>
+                        Upgrade to Premium for 500km radius
+                      </Text>
+                    )}
+                  </View>
+                  
                   <View style={styles.radiusSelector}>
-                    {[5, 10, 25, 50, 100].map((radius) => (
-                      <TouchableOpacity
-                        key={radius}
-                        style={[
-                          styles.radiusButton,
-                          searchFilters.distanceRadius === radius && styles.radiusButtonActive
-                        ]}
-                        onPress={() => setSearchFilters(prev => ({ ...prev, distanceRadius: radius }))}
-                      >
-                        <Text style={[
-                          styles.radiusButtonText,
-                          searchFilters.distanceRadius === radius && styles.radiusButtonTextActive
-                        ]}>
-                          {radius}km
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                    {[5, 10, 25, 50, 100].map((radius) => {
+                      const isPremiumOnly = radius > 20 && !userFeatures.hasPremium
+                      return (
+                        <TouchableOpacity
+                          key={radius}
+                          style={[
+                            styles.radiusButton,
+                            searchFilters.distanceRadius === radius && styles.radiusButtonActive,
+                            isPremiumOnly && styles.radiusButtonDisabled
+                          ]}
+                          onPress={() => {
+                            if (!isPremiumOnly) {
+                              setSearchFilters(prev => ({ ...prev, distanceRadius: radius }))
+                            }
+                          }}
+                          disabled={isPremiumOnly}
+                        >
+                          <Text style={[
+                            styles.radiusButtonText,
+                            searchFilters.distanceRadius === radius && styles.radiusButtonTextActive,
+                            isPremiumOnly && styles.radiusButtonTextDisabled
+                          ]}>
+                            {radius}km
+                            {isPremiumOnly && ' 🔒'}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
                   </View>
                   
                   {!searchFilters.userLocation && (
@@ -3414,6 +3493,25 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 10,
   },
+  premiumStatusContainer: {
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  premiumStatusText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  premiumUpgradeText: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
   radiusSelector: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -3429,6 +3527,10 @@ const styles = StyleSheet.create({
   radiusButtonActive: {
     backgroundColor: '#007AFF',
   },
+  radiusButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
   radiusButtonText: {
     fontSize: 14,
     color: '#666',
@@ -3436,6 +3538,10 @@ const styles = StyleSheet.create({
   radiusButtonTextActive: {
     color: 'white',
     fontWeight: '600',
+  },
+  radiusButtonTextDisabled: {
+    color: '#999',
+    fontStyle: 'italic',
   },
   locationWarning: {
     marginTop: 15,

@@ -157,7 +157,8 @@ class UserService {
         'custom_categories',
         'export_data',
         'no_ads',
-        'early_access'
+        'early_access',
+        'extended_event_radius'
       ]
     }
     return ['basic_search', 'basic_filtering', 'local_ratings']
@@ -424,7 +425,8 @@ class UserService {
           'custom_categories',
           'export_data',
           'no_ads',
-          'early_access'
+          'early_access',
+          'extended_event_radius'
         ]
       }
 
@@ -504,7 +506,8 @@ class UserService {
           'custom_categories',
           'export_data',
           'no_ads',
-          'early_access'
+          'early_access',
+          'extended_event_radius'
         ]
       }
       
@@ -594,7 +597,8 @@ class UserService {
           'custom_categories',
           'export_data',
           'no_ads',
-          'early_access'
+          'early_access',
+          'extended_event_radius'
         ]
       }
 
