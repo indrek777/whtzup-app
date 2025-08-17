@@ -1300,15 +1300,6 @@ const MapViewNative: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Simple Performance Info */}
-                      <View style={styles.performanceInfo}>
-                  <Text style={styles.performanceText}>
-                    📍 {filteredEvents.length} events visible
-                  </Text>
-                </View>
-
-
-
       {/* Search Button */}
       <TouchableOpacity 
         style={styles.searchButton}
@@ -3054,20 +3045,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007AFF',
   },
-  performanceInfo: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 10,
-    borderRadius: 8,
-    zIndex: 1000,
-  },
-  performanceText: {
-    fontSize: 12,
-    color: '#333',
-    fontWeight: '500',
-  },
+
   clusterToggle: {
     position: 'absolute',
     top: 120,
