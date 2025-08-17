@@ -144,7 +144,7 @@ const validateCoordinates = (lat: number, lng: number): boolean => {
 
 // Main function to transform imported data
 export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] => {
-  console.log(`Starting transformation of ${importedData.length} imported events`)
+
   
   let invalidCoordinates = 0
   let invalidNames = 0
@@ -199,34 +199,26 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
     })
     // Removed the 100 event limit to show all events
   
-  console.log(`Transformed ${importedData.length} imported events to ${result.length} valid events`)
-  console.log(`Filtered out: ${invalidCoordinates} invalid coordinates, ${invalidNames} invalid names, ${oldEvents} old events`)
+
   return result
 }
 
 // Function to fetch and load events from the JSON file
 export const loadEventsFromFile = async (): Promise<Event[]> => {
   try {
-    console.log('Starting to load events from file...')
     const response = await fetch('/events-user.json')
-    console.log('Fetch response status:', response.status)
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
     const data = await response.json()
-    console.log('Raw data loaded:', data)
-    console.log('Data type:', typeof data)
-    console.log('Data length:', Array.isArray(data) ? data.length : 'Not an array')
     
     if (!Array.isArray(data)) {
-      console.error('Data is not an array:', data)
       throw new Error('Data is not an array')
     }
     
     const transformedEvents = transformImportedEvents(data)
-    console.log('Transformation completed, returning', transformedEvents.length, 'events')
     return transformedEvents
   } catch (error) {
     console.error('Error in loadEventsFromFile:', error)
@@ -237,24 +229,17 @@ export const loadEventsFromFile = async (): Promise<Event[]> => {
 // New function to load AI events from external file
 export const loadAIEventsFromFile = async (): Promise<Event[]> => {
   try {
-    console.log('Starting to load AI events from external file...')
-    
     // For React Native/Expo, we need to use a different approach
     // We'll copy the file to the public directory first
     const response = await fetch('/ai-events.json')
-    console.log('AI events fetch response status:', response.status)
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
     const data = await response.json()
-    console.log('AI events raw data loaded:', data)
-    console.log('AI events data type:', typeof data)
-    console.log('AI events data length:', Array.isArray(data) ? data.length : 'Not an array')
     
     if (!Array.isArray(data)) {
-      console.error('AI events data is not an array:', data)
       throw new Error('AI events data is not an array')
     }
     
@@ -265,7 +250,6 @@ export const loadAIEventsFromFile = async (): Promise<Event[]> => {
     }))
     
     const transformedEvents = transformImportedEvents(aiEvents)
-    console.log('AI events transformation completed, returning', transformedEvents.length, 'events')
     return transformedEvents
   } catch (error) {
     console.error('Error in loadAIEventsFromFile:', error)
@@ -276,25 +260,19 @@ export const loadAIEventsFromFile = async (): Promise<Event[]> => {
 // Function to combine all event sources
 export const loadAllEvents = async (): Promise<Event[]> => {
   try {
-    console.log('Loading all event sources...')
-    
     // Load regular events
     const regularEvents = await loadEventsFromFile()
-    console.log('Loaded regular events:', regularEvents.length)
     
     // Load AI events
     let aiEvents: Event[] = []
     try {
       aiEvents = await loadAIEventsFromFile()
-      console.log('Loaded AI events:', aiEvents.length)
     } catch (error) {
-      console.warn('Could not load AI events:', error)
       // Continue without AI events if they're not available
     }
     
     // Combine all events
     const allEvents = [...regularEvents, ...aiEvents]
-    console.log('Total events loaded:', allEvents.length)
     
     return allEvents
   } catch (error) {

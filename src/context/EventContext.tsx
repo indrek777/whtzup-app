@@ -148,8 +148,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             
             // Process events with venue storage to auto-fix coordinates
             const processedEvents = processEventsWithVenueStorage(events)
-            setEvents(processedEvents)
-            console.log('Loaded', events.length, 'events from server')
+                    setEvents(processedEvents)
             return
           }
         }
@@ -158,14 +157,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         const storedEvents = await loadEventsFromStorage()
         if (storedEvents.length > 0) {
           const processedEvents = processEventsWithVenueStorage(storedEvents)
-          setEvents(processedEvents)
-          console.log('Loaded', processedEvents.length, 'events from storage')
+                  setEvents(processedEvents)
         } else {
           // Fallback to JSON file if no stored events
           const importedEvents = await loadAllEvents()
           const processedEvents = processEventsWithVenueStorage(importedEvents)
-          setEvents(processedEvents)
-          console.log('Loaded', processedEvents.length, 'events from imported data (including AI events)')
+                  setEvents(processedEvents)
         }
       } catch (error) {
         console.error('Error loading events:', error)

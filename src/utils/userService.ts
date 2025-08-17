@@ -70,25 +70,17 @@ class UserService {
   // Initialize user from storage
   private async loadUserFromStorage() {
     try {
-      console.log('Loading user from storage...')
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
       
-      console.log('User data from storage:', userData ? 'Found' : 'Not found')
-      console.log('Token data from storage:', tokenData ? 'Found' : 'Not found')
-      
       if (userData) {
         this.currentUser = JSON.parse(userData)
-        console.log('User loaded from storage:', this.currentUser?.email)
       }
       if (tokenData) {
         this.authToken = tokenData
-        console.log('Auth token loaded from storage')
       }
-      
-      console.log('Final user state:', this.currentUser ? 'Authenticated' : 'Not authenticated')
     } catch (error) {
-      console.log('Error loading user from storage:', error)
+      // Error loading user from storage
     }
   }
 
@@ -214,8 +206,6 @@ class UserService {
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser))
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
         
-        console.log('User created locally:', newUser.email)
-        console.log('User data saved to AsyncStorage')
         return true
       }
 
@@ -266,15 +256,12 @@ class UserService {
             }
             await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
             
-            console.log('User signed in locally:', email)
-            console.log('User data updated in AsyncStorage')
             return true
           }
         }
         
         // If no user data found or email doesn't match, create a new user
         // This handles the case where a user signs out and then tries to sign in again
-        console.log('No existing user found, creating new user for sign in:', email)
         
         // Create a new user for this email
         const newUser: User = {
@@ -315,8 +302,6 @@ class UserService {
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser))
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
         
-        console.log('New user created for sign in:', email)
-        console.log('User data saved to AsyncStorage')
         return true
       }
 
@@ -355,8 +340,6 @@ class UserService {
       
       await AsyncStorage.removeItem(STORAGE_KEYS.user)
       await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
-      
-      console.log('User signed out')
     } catch (error) {
       console.error('Error signing out:', error)
     }
@@ -446,10 +429,9 @@ class UserService {
       }
 
       this.currentUser.subscription = subscription
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      console.log(`User subscribed to ${plan} premium plan`)
-      return true
+              await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+        
+        return true
     } catch (error) {
       console.error('Error subscribing to premium:', error)
       return false
@@ -461,13 +443,8 @@ class UserService {
     try {
       await this.ensureInitialized()
       if (!this.currentUser) {
-        console.log('No current user found for subscription cancellation')
         return false
       }
-
-      console.log('Cancelling subscription for user:', this.currentUser.email)
-      console.log('Current subscription status:', this.currentUser.subscription.status)
-      console.log('Current auto-renew status:', this.currentUser.subscription.autoRenew)
 
       // Set auto-renew to false
       this.currentUser.subscription.autoRenew = false
@@ -477,17 +454,10 @@ class UserService {
         const endDate = new Date(this.currentUser.subscription.endDate)
         const now = new Date()
         
-        console.log('Subscription end date:', endDate)
-        console.log('Current date:', now)
-        console.log('Is expired:', endDate <= now)
-        
         if (endDate <= now) {
           // Subscription has already expired, downgrade to free immediately
           this.currentUser.subscription.status = 'expired'
           this.currentUser.subscription.features = ['basic_search', 'basic_filtering', 'local_ratings']
-          console.log('Subscription marked as expired')
-        } else {
-          console.log('Subscription still active, auto-renew disabled')
         }
         // If subscription hasn't expired yet, keep premium status but disable auto-renew
         // User will lose access when endDate is reached
@@ -495,9 +465,6 @@ class UserService {
       
       await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
       
-      console.log('User cancelled subscription successfully')
-      console.log('Final subscription status:', this.currentUser.subscription.status)
-      console.log('Final auto-renew status:', this.currentUser.subscription.autoRenew)
       return true
     } catch (error) {
       console.error('Error cancelling subscription:', error)
@@ -543,7 +510,6 @@ class UserService {
       
       await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
       
-      console.log('User reactivated subscription')
       return true
     } catch (error) {
       console.error('Error reactivating subscription:', error)
@@ -633,10 +599,9 @@ class UserService {
       }
 
       this.currentUser.subscription = subscription
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      console.log(`Test subscription created for ${plan} plan, expires in 1 minute`)
-      return true
+              await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+        
+        return true
     } catch (error) {
       console.error('Error creating test subscription:', error)
       return false
@@ -730,7 +695,6 @@ class UserService {
       }
       return null
     } catch (error) {
-      console.log('Error getting user by email:', error)
       return null
     }
   }

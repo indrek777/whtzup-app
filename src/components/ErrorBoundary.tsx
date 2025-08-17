@@ -21,7 +21,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.log('Error caught by boundary:', error, errorInfo)
+    // Error caught by boundary
   }
 
   render() {

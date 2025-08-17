@@ -19,8 +19,6 @@ export const createEventBackup = (events: Event[]): void => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(backupUrl)
-    
-    console.log(`Backup created with ${events.length} events`)
   } catch (error) {
     console.error('Error creating backup:', error)
   }

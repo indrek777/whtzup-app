@@ -22,8 +22,6 @@ export const saveEventsToFile = async (events: Event[]): Promise<void> => {
     
     // Also update the server's JSON file for all users
     await updateServerJSONFile(eventsForStorage)
-    
-    console.log(`Saved ${events.length} events to storage and updated server file for all users`)
   } catch (error) {
     console.error('Error saving events:', error)
     throw error
@@ -47,8 +45,6 @@ const updateServerJSONFile = async (events: any[]): Promise<void> => {
     if (!response.ok) {
       throw new Error(`Server update failed: ${response.status}`)
     }
-    
-    console.log('Server JSON file updated successfully')
   } catch (error) {
     console.error('Error updating server JSON file:', error)
     // Fallback: download the file for manual upload
@@ -70,8 +66,6 @@ const downloadUpdatedJSONFile = (events: any[]) => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    
-    console.log('Updated JSON file downloaded for manual sharing')
   } catch (error) {
     console.error('Error downloading JSON file:', error)
   }
@@ -81,7 +75,6 @@ const downloadUpdatedJSONFile = (events: any[]) => {
 export const clearStoredEvents = (): void => {
   try {
     localStorage.removeItem('event-events')
-    console.log('Cleared all stored events')
   } catch (error) {
     console.error('Error clearing stored events:', error)
   }

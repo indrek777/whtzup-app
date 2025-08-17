@@ -51,14 +51,10 @@ class RatingService {
       if (API_BASE_URL) {
         try {
           await this.saveToBackend(newRating)
-          console.log('Rating saved to backend successfully')
         } catch (backendError) {
-          console.log('Backend save failed, rating saved locally only:', backendError)
           // Store for later sync
           await this.queueForSync(newRating)
         }
-      } else {
-        console.log('Backend not configured - rating saved locally only')
       }
 
       return true
@@ -93,7 +89,7 @@ class RatingService {
             return data
           }
         } catch (backendError) {
-          console.log('Backend fetch failed, using cached data:', backendError)
+          // Backend fetch failed, using cached data
         }
       }
 
@@ -120,15 +116,12 @@ class RatingService {
   async syncRatings(): Promise<void> {
     // Skip sync if backend is not configured
     if (!API_BASE_URL) {
-      console.log('Backend not configured - skipping sync')
       return
     }
 
     try {
       const pendingRatings = await this.getPendingSync()
       if (pendingRatings.length === 0) return
-
-      console.log(`Syncing ${pendingRatings.length} ratings to backend...`)
 
       for (const rating of pendingRatings) {
         try {

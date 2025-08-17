@@ -116,7 +116,6 @@ export const autoFixVenueCoordinates = (name: string, currentCoordinates: [numbe
   
   const storedCoordinates = getVenueCoordinates(name)
   if (storedCoordinates) {
-    console.log(`Auto-fixed coordinates for venue "${name}":`, storedCoordinates)
     return storedCoordinates
   }
   

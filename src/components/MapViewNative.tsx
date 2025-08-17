@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native'
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Share } from 'react-native'
 import MapView, { Marker, Circle, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
+import * as Sharing from 'expo-sharing'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Event } from '../data/events'
 import { ratingService, EventRating, SharedRating } from '../utils/ratingService'
@@ -356,33 +357,10 @@ const MapViewNative: React.FC = () => {
   const clickedMarkerIdRef = useRef<string | null>(null)
   const isProcessingClickRef = useRef<boolean>(false)
   
-  // Debug logging for ref state
-  console.log('🔄 MapViewNative render - ref states:', {
-    isProcessingClick: isProcessingClickRef.current,
-    clickedMarkerId: clickedMarkerIdRef.current,
-    markerRefsCount: Object.keys(markerRefs.current).length
-  })
-  
   // Track component lifecycle and ref initialization
   useEffect(() => {
-    console.log('🔄 MapViewNative component mounted - initializing refs')
     isProcessingClickRef.current = false
     clickedMarkerIdRef.current = null
-    console.log('🔄 MapViewNative refs initialized:', {
-      isProcessingClick: isProcessingClickRef.current,
-      clickedMarkerId: clickedMarkerIdRef.current
-    })
-  }, [])
-  
-  // Function to manually reset refs for debugging
-  const resetRefs = useCallback(() => {
-    console.log('🔄 Manually resetting refs')
-    isProcessingClickRef.current = false
-    clickedMarkerIdRef.current = null
-    console.log('🔄 Refs reset:', {
-      isProcessingClick: isProcessingClickRef.current,
-      clickedMarkerId: clickedMarkerIdRef.current
-    })
   }, [])
   
   // Simple map state
@@ -499,9 +477,6 @@ const MapViewNative: React.FC = () => {
           maxDistance: 500 // 500km radius
         })
         
-        console.log('=== Initial events loaded ===')
-        console.log('Initial events count:', initialEvents.length)
-        
         setEvents(initialEvents)
         setFilteredEvents(initialEvents)
         setIsLoading(false)
@@ -573,7 +548,7 @@ const MapViewNative: React.FC = () => {
         canCreateEventToday
       })
     } catch (error) {
-      console.log('Error loading user features:', error)
+      // Error loading user features
     }
   }
 
@@ -592,7 +567,7 @@ const MapViewNative: React.FC = () => {
       // Try to sync any pending ratings
       await ratingService.syncRatings()
     } catch (error) {
-      console.log('Error loading ratings:', error)
+      // Error loading ratings
     }
   }
 
@@ -633,14 +608,13 @@ const MapViewNative: React.FC = () => {
           }))
         }
 
-        Alert.alert('Success', 'Your rating has been saved and shared with the community!')
-      } else {
-        Alert.alert('Error', 'Failed to save rating. Please try again.')
-      }
-    } catch (error) {
-      console.log('Error saving rating:', error)
+              Alert.alert('Success', 'Your rating has been saved and shared with the community!')
+    } else {
       Alert.alert('Error', 'Failed to save rating. Please try again.')
     }
+  } catch (error) {
+    Alert.alert('Error', 'Failed to save rating. Please try again.')
+  }
   }
 
   const getUserRating = (eventId: string): number => {
@@ -815,9 +789,6 @@ const MapViewNative: React.FC = () => {
 
     // Always filter out past events - never show events that have already happened
     const now = new Date()
-    console.log('=== Filtering past events ===')
-    console.log('Current time:', now.toISOString())
-    console.log('Events before past filter:', filtered.length)
     
     filtered = filtered.filter(event => {
       const eventDate = new Date(event.startsAt)
@@ -827,8 +798,6 @@ const MapViewNative: React.FC = () => {
         }
       return eventDate > now
     })
-    
-    console.log('Events after past filter:', filtered.length)
 
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
@@ -887,25 +856,11 @@ const MapViewNative: React.FC = () => {
     }
 
     // No artificial limits - show all filtered events
-    console.log('=== Final filtered events ===')
-    console.log('Total filtered events:', filtered.length)
-    console.log('Filtered events by source:', filtered.reduce((acc, event) => {
-      acc[event.source] = (acc[event.source] || 0) + 1
-      return acc
-    }, {} as Record<string, number>))
-    
     setFilteredEvents(filtered)
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
   useEffect(() => {
-    console.log('=== Applying search and filters ===')
-    console.log('Current events count:', events.length)
-    console.log('Events by source:', events.reduce((acc, event) => {
-      acc[event.source] = (acc[event.source] || 0) + 1
-      return acc
-    }, {} as Record<string, number>))
-    
     applySearchAndFilters()
   }, [searchFilters.query, searchFilters.category, searchFilters.source, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures, applySearchAndFilters])
 
@@ -934,42 +889,23 @@ const MapViewNative: React.FC = () => {
   // Create marker press handler for each event
   const createMarkerPressHandler = useCallback((event: Event) => {
     return () => {
-      const now = Date.now()
-      
-      console.log('🟢 createMarkerPressHandler called:', {
-        eventId: event.id,
-        now,
-        isProcessing: isProcessingClickRef.current
-      })
-      
       // Prevent multiple rapid clicks within 300ms
       if (isProcessingClickRef.current) {
-        console.log('🟢 createMarkerPressHandler BLOCKED by debounce')
         return
       }
       
-      console.log('🟢 createMarkerPressHandler PROCEEDING')
       isProcessingClickRef.current = true
       
       // Set the clicked marker
       clickedMarkerIdRef.current = event.id
       
       // Open the event details modal directly instead of showing callout
-      console.log('🟢 Opening event details modal directly for event:', event.id)
       openEventDetailsModal(event)
       
       // Reset the processing flag after a delay
-      console.log('🟢 Scheduling setTimeout to reset processing flag')
-      const timeoutId = setTimeout(() => {
-        console.log('🟢 setTimeout callback executing')
+      setTimeout(() => {
         isProcessingClickRef.current = false
-              console.log('🟢 createMarkerPressHandler processing flag reset - new state:', {
-        isProcessingClick: isProcessingClickRef.current
-      })
       }, 300)
-      
-      // Log the timeout ID for debugging
-      console.log('🟢 setTimeout scheduled with ID:', timeoutId)
     }
   }, [])
 
@@ -1142,14 +1078,8 @@ const MapViewNative: React.FC = () => {
   }
 
   const handleMapPress = useCallback(async (event: any) => {
-    console.log('🗺️ Map pressed - current state before handling:', {
-      clickedMarkerId: clickedMarkerIdRef.current,
-      isProcessingClick: isProcessingClickRef.current
-    })
-
     // Don't handle map press if we're currently processing a marker click
     if (isProcessingClickRef.current) {
-      console.log('🗺️ Map press ignored - currently processing marker click')
       return
     }
     
@@ -1212,7 +1142,6 @@ const MapViewNative: React.FC = () => {
           }))
         }
       } catch (error) {
-        console.error('Error getting location data:', error)
         // Fallback if reverse geocoding fails
         setNewEvent(prev => ({
           ...prev,
@@ -1226,11 +1155,6 @@ const MapViewNative: React.FC = () => {
       // Switch back to form mode after selecting location
       setIsMapMode(false)
     }
-    
-    console.log('🗺️ Map pressed - state after handling:', {
-      clickedMarkerId: clickedMarkerIdRef.current,
-      isProcessingClick: isProcessingClickRef.current
-    })
   }, [showCreateEventModal, isMapMode])
 
   const createEvent = async () => {
@@ -1327,7 +1251,6 @@ const MapViewNative: React.FC = () => {
         try {
           await loadUserCreatedEvents()
         } catch (reloadError) {
-          console.log('Error reloading events after creation:', reloadError)
           // Event was still created successfully, just couldn't reload
         }
         
@@ -1375,7 +1298,6 @@ const MapViewNative: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('Error creating event:', error)
       Alert.alert('Error', 'An unexpected error occurred while creating the event.')
     } finally {
       setIsCreatingEvent(false)
@@ -1413,7 +1335,7 @@ const MapViewNative: React.FC = () => {
       try {
         await eventService.syncEvents()
       } catch (syncError) {
-        console.log('Sync failed (this is normal if backend is not configured):', syncError)
+        // Sync failed (this is normal if backend is not configured)
       }
       
       // Update sync status
@@ -1421,11 +1343,10 @@ const MapViewNative: React.FC = () => {
         const status = await eventService.getSyncStatus()
         setSyncStatus(status)
       } catch (statusError) {
-        console.log('Error getting sync status:', statusError)
+        // Error getting sync status
       }
       
     } catch (error) {
-      console.error('Error loading user events:', error)
       // Keep current events if error
     }
   }
@@ -1555,7 +1476,6 @@ const MapViewNative: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('Error updating event:', error)
       Alert.alert('Error', 'An unexpected error occurred while updating the event.')
     } finally {
       setIsCreatingEvent(false)
@@ -1585,7 +1505,6 @@ const MapViewNative: React.FC = () => {
                 Alert.alert('Error', 'Failed to delete event. Please try again.')
               }
             } catch (error) {
-              console.error('Error deleting event:', error)
               Alert.alert('Error', 'An unexpected error occurred while deleting the event.')
             }
           }
@@ -1594,23 +1513,46 @@ const MapViewNative: React.FC = () => {
     )
   }
 
-  const shareEvent = (event: Event) => {
+    const shareEvent = async (event: Event) => {
     const { date, time } = parseDateTime(event.startsAt)
-    const shareText = `🎉 ${event.name}\n\n📅 ${date} at ${time}\n📍 ${event.venue}\n${event.address ? `📍 ${event.address}\n` : ''}📝 ${event.description}\n\nCheck it out on WhtzUp!`
-    
-    // For now, we'll use Alert to show the share text
-    // In a real app, you'd use the Share API or a third-party sharing library
-    Alert.alert(
-      'Share Event',
-      shareText,
-      [
-        { text: 'Copy Text', onPress: () => {
-          // In a real app, you'd copy to clipboard here
-          Alert.alert('Copied!', 'Event details copied to clipboard.')
-        }},
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    )
+    const shareText = `🎉 ${event.name}\n\n📅 ${date} at ${time}\n📍 ${event.venue}\n${event.address ? `📍 ${event.address}\n` : ''}📝 ${event.description}\n\nCheck it out on Event!`
+
+    try {
+      // Check if sharing is available on this device
+      const isAvailable = await Sharing.isAvailableAsync()
+
+      if (isAvailable) {
+        // Use native sharing with React Native's Share API
+        await Share.share({
+          message: shareText,
+          title: event.name
+        })
+      } else {
+        // Fallback to Alert if sharing is not available
+        Alert.alert(
+          'Share Event',
+          shareText,
+          [
+            { text: 'Copy Text', onPress: () => {
+              Alert.alert('Copied!', 'Event details copied to clipboard.')
+            }},
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        )
+      }
+    } catch (error) {
+      // Fallback to Alert if sharing fails
+      Alert.alert(
+        'Share Event',
+        shareText,
+        [
+          { text: 'Copy Text', onPress: () => {
+            Alert.alert('Copied!', 'Event details copied to clipboard.')
+          }},
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      )
+    }
   }
 
   // Date/Time picker states for temporary values
@@ -1834,15 +1776,7 @@ const MapViewNative: React.FC = () => {
         )}
       </TouchableOpacity>
       
-      {/* Debug Reset Button */}
-      <TouchableOpacity 
-        style={[styles.createEventButton, { backgroundColor: '#ff6b6b', top: 120 }]}
-        onPress={resetRefs}
-      >
-        <Text style={styles.createEventButtonText}>🔄</Text>
-      </TouchableOpacity>
-      
-      {/* Test button to create a user event programmatically */}
+
 
       
 
@@ -3090,15 +3024,26 @@ const MapViewNative: React.FC = () => {
                       </View>
                     </ScrollView>
                     <View style={styles.eventDetailsFooter}>
-                      <TouchableOpacity
-                        style={styles.eventDetailsRateButton}
-                        onPress={() => {
-                          setShowEventDetailsModal(false)
-                          openRatingModal(eventDetails.event)
-                        }}
-                      >
-                        <Text style={styles.eventDetailsRateButtonText}>Rate</Text>
-                      </TouchableOpacity>
+                      {/* Rate and Share buttons in a row */}
+                      <View style={styles.eventDetailsActionButtons}>
+                        <TouchableOpacity
+                          style={styles.eventDetailsRateButton}
+                          onPress={() => {
+                            setShowEventDetailsModal(false)
+                            openRatingModal(eventDetails.event)
+                          }}
+                        >
+                          <Text style={styles.eventDetailsRateButtonText}>Rate</Text>
+                        </TouchableOpacity>
+                        
+                        {/* Show share button for all events */}
+                        <TouchableOpacity
+                          style={styles.eventDetailsShareButton}
+                          onPress={() => shareEvent(eventDetails.event)}
+                        >
+                          <Text style={styles.eventDetailsShareButtonText}>Share</Text>
+                        </TouchableOpacity>
+                      </View>
                       
                       {/* Show edit and delete buttons only for user-created events */}
                       {eventDetails.event.source === 'user' && (
@@ -3108,12 +3053,6 @@ const MapViewNative: React.FC = () => {
                             onPress={() => startEditingEvent(eventDetails.event)}
                           >
                             <Text style={styles.eventDetailsEditButtonText}>Edit</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.eventDetailsShareButton}
-                            onPress={() => shareEvent(eventDetails.event)}
-                          >
-                            <Text style={styles.eventDetailsShareButtonText}>Share</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.eventDetailsDeleteButton}
@@ -4241,59 +4180,90 @@ const styles = StyleSheet.create({
   },
   eventDetailsRateButton: {
     backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
-    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
-    borderRadius: 8,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'ios' ? 20 : 24,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'ios' ? 44 : 48,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   eventDetailsRateButtonText: {
     color: 'white',
-    fontSize: Platform.OS === 'ios' ? 14 : 16,
-    fontWeight: '600',
+    fontSize: Platform.OS === 'ios' ? 15 : 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   eventDetailsActionButtons: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
+    gap: 12,
+    marginTop: 12,
+    justifyContent: 'center',
   },
   eventDetailsEditButton: {
-    flex: 1,
     backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
-    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
-    borderRadius: 8,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'ios' ? 20 : 24,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'ios' ? 44 : 48,
+    shadowColor: '#28a745',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   eventDetailsEditButtonText: {
     color: 'white',
-    fontSize: Platform.OS === 'ios' ? 14 : 16,
-    fontWeight: '600',
+    fontSize: Platform.OS === 'ios' ? 15 : 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
+  
   eventDetailsShareButton: {
-    flex: 1,
     backgroundColor: '#17a2b8',
-    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
-    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
-    borderRadius: 8,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'ios' ? 20 : 24,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'ios' ? 44 : 48,
+    shadowColor: '#17a2b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   eventDetailsShareButtonText: {
     color: 'white',
-    fontSize: Platform.OS === 'ios' ? 14 : 16,
-    fontWeight: '600',
+    fontSize: Platform.OS === 'ios' ? 15 : 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   eventDetailsDeleteButton: {
-    flex: 1,
     backgroundColor: '#dc3545',
-    paddingVertical: Platform.OS === 'ios' ? 10 : 12,
-    paddingHorizontal: Platform.OS === 'ios' ? 16 : 20,
-    borderRadius: 8,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'ios' ? 20 : 24,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'ios' ? 44 : 48,
+    shadowColor: '#dc3545',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   eventDetailsDeleteButtonText: {
     color: 'white',
-    fontSize: Platform.OS === 'ios' ? 14 : 16,
-    fontWeight: '600',
+    fontSize: Platform.OS === 'ios' ? 15 : 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   // Callout styles
   calloutContainer: {
