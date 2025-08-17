@@ -66,6 +66,57 @@ const getMarkerColor = (category: string): string => {
   }
 }
 
+// Marker icon function - returns emoji or symbol for event category
+const getMarkerIcon = (category: string): string => {
+  switch (category.toLowerCase()) {
+    case 'sports':
+      return '⚽'
+    case 'music':
+    case 'concert':
+    case 'festival':
+      return '🎵'
+    case 'theater':
+    case 'performance':
+      return '🎭'
+    case 'art':
+    case 'museum':
+    case 'exhibition':
+      return '🎨'
+    case 'comedy':
+    case 'stand-up':
+      return '😂'
+    case 'food & drink':
+      return '🍽️'
+    case 'business':
+      return '💼'
+    case 'technology':
+      return '💻'
+    case 'family & kids':
+      return '👨‍👩‍👧‍👦'
+    case 'health & wellness':
+      return '🧘'
+    case 'cultural':
+    case 'ball':
+      return '🎪'
+    case 'nightlife':
+      return '🌙'
+    case 'charity & community':
+      return '🤝'
+    case 'fashion & beauty':
+      return '👗'
+    case 'science & education':
+      return '🔬'
+    case 'nature & environment':
+      return '🌿'
+    case 'gaming & entertainment':
+      return '🎮'
+           case 'other':
+         return '⭐'
+       default:
+         return '⭐'
+  }
+}
+
 // Category determination function
 const determineCategory = (name: string, description: string): string => {
   const text = (name + ' ' + description).toLowerCase()
@@ -298,8 +349,9 @@ const CustomMarker = React.memo(({
   markerRef: (ref: any) => void
 }) => {
   const markerColor = event.source === 'user' ? 'purple' : getMarkerColor(category)
+  const markerIcon = event.source === 'user' ? '⭐' : getMarkerIcon(category)
   
-  // Create a simple colored circle as marker to avoid icon replacement issues
+  // Create a colored circle with category icon as marker
   return (
     <Marker
       ref={markerRef}
@@ -327,7 +379,7 @@ const CustomMarker = React.memo(({
           styles.markerText,
           { color: markerColor === 'yellow' || markerColor === 'lightgray' ? '#333' : 'white' }
         ]}>
-          {event.name.charAt(0).toUpperCase()}
+          {markerIcon}
         </Text>
       </View>
     </Marker>
@@ -4395,18 +4447,24 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   customMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
     borderColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   markerText: {
-    fontSize: 16,
+    fontSize: 20,
     color: 'white',
     fontWeight: 'bold',
+    textAlign: 'center',
   },
  })
 
