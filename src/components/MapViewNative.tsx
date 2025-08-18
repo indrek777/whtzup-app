@@ -39,7 +39,7 @@ const getMarkerColor = (category: string): string => {
     case 'business':
       return 'indigo'
     case 'technology':
-      return 'cyan'
+      return '#90EE90'
     case 'family & kids':
       return 'pink'
     case 'health & wellness':
@@ -90,7 +90,7 @@ const getMarkerIcon = (category: string): string => {
     case 'business':
       return '💼'
     case 'technology':
-      return '💻'
+      return '🤖'
     case 'family & kids':
       return '👨‍👩‍👧‍👦'
     case 'health & wellness':
@@ -2144,7 +2144,7 @@ const MapViewNative: React.FC = () => {
                      { key: 'Comedy', icon: '😂', label: 'Comedy' },
                      { key: 'Food & Drink', icon: '🍕', label: 'Food' },
                      { key: 'Business', icon: '💼', label: 'Business' },
-                     { key: 'Technology', icon: '💻', label: 'Tech' },
+                     { key: 'Technology', icon: '🤖', label: 'Tech' },
                      { key: 'Family & Kids', icon: '👨‍👩‍👧‍👦', label: 'Family' },
                      { key: 'Health & Wellness', icon: '🧘', label: 'Health' },
                      { key: 'Cultural', icon: '🏛️', label: 'Cultural' },
@@ -2798,7 +2798,7 @@ const MapViewNative: React.FC = () => {
                    { key: 'Comedy', icon: '😂', label: 'Comedy' },
                    { key: 'Food & Drink', icon: '🍕', label: 'Food' },
                    { key: 'Business', icon: '💼', label: 'Business' },
-                   { key: 'Technology', icon: '💻', label: 'Tech' },
+                   { key: 'Technology', icon: '🤖', label: 'Tech' },
                    { key: 'Family & Kids', icon: '👨‍👩‍👧‍👦', label: 'Family' },
                    { key: 'Health & Wellness', icon: '🧘', label: 'Health' },
                    { key: 'Cultural', icon: '🏛️', label: 'Cultural' },

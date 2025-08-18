@@ -1,7 +1,50 @@
 
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" fill="#007AFF"/>
-  <circle cx="512" cy="512" r="300" fill="white"/>
-  <circle cx="512" cy="512" r="200" fill="#007AFF"/>
-  <text x="512" y="540" text-anchor="middle" fill="white" font-size="120" font-weight="bold" font-family="Arial">E</text>
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#1E293B"/>
+  
+  <!-- Robot Head -->
+  <rect x="262" y="262" width="500" height="400" rx="50" fill="#3B82F6" stroke="#60A5FA" stroke-width="8"/>
+  
+  <!-- Robot Eyes -->
+  <circle cx="362" cy="362" r="40" fill="#FEF3C7"/>
+  <circle cx="662" cy="362" r="40" fill="#FEF3C7"/>
+  <circle cx="362" cy="362" r="20" fill="#1E293B"/>
+  <circle cx="662" cy="362" r="20" fill="#1E293B"/>
+  
+  <!-- Robot Antenna -->
+  <rect x="502" y="162" width="20" height="100" fill="#3B82F6"/>
+  <circle cx="512" cy="162" r="15" fill="#EF4444"/>
+  
+  <!-- Robot Mouth -->
+  <rect x="412" y="462" width="200" height="20" rx="10" fill="#FEF3C7"/>
+  <rect x="432" y="492" width="160" height="15" rx="7.5" fill="#FEF3C7"/>
+  
+  <!-- Robot Body -->
+  <rect x="312" y="662" width="400" height="200" rx="30" fill="#3B82F6" stroke="#60A5FA" stroke-width="6"/>
+  
+  <!-- Robot Arms -->
+  <rect x="162" y="462" width="80" height="200" rx="40" fill="#3B82F6" stroke="#60A5FA" stroke-width="4"/>
+  <rect x="782" y="462" width="80" height="200" rx="40" fill="#3B82F6" stroke="#60A5FA" stroke-width="4"/>
+  
+  <!-- Robot Hands -->
+  <circle cx="202" cy="682" r="25" fill="#FEF3C7"/>
+  <circle cx="822" cy="682" r="25" fill="#FEF3C7"/>
+  
+  <!-- Robot Legs -->
+  <rect x="362" y="862" width="80" height="120" rx="40" fill="#3B82F6" stroke="#60A5FA" stroke-width="4"/>
+  <rect x="582" y="862" width="80" height="120" rx="40" fill="#3B82F6" stroke="#60A5FA" stroke-width="4"/>
+  
+  <!-- Robot Feet -->
+  <rect x="342" y="962" width="120" height="40" rx="20" fill="#FEF3C7"/>
+  <rect x="562" y="962" width="120" height="40" rx="20" fill="#FEF3C7"/>
+  
+  <!-- Circuit Pattern on Body -->
+  <rect x="332" y="682" width="60" height="4" fill="#60A5FA"/>
+  <rect x="332" y="692" width="40" height="4" fill="#60A5FA"/>
+  <rect x="632" y="682" width="60" height="4" fill="#60A5FA"/>
+  <rect x="652" y="692" width="40" height="4" fill="#60A5FA"/>
+  
+  <!-- Glowing Effect -->
+  <circle cx="512" cy="512" r="450" fill="none" stroke="#60A5FA" stroke-width="2" opacity="0.3"/>
 </svg>
