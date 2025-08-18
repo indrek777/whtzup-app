@@ -3228,8 +3228,8 @@ const styles = StyleSheet.create({
 
      searchButton: {
      position: 'absolute',
-     top: 50,
-     left: 20,
+     bottom: 30,
+     right: 160,
      backgroundColor: 'white',
      width: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
      height: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
