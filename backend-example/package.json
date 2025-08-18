@@ -1,16 +1,16 @@
 {
-  "name": "event-ratings-backend",
+  "name": "event-sharing-backend",
   "version": "1.0.0",
-  "description": "Backend API for sharing event ratings between users",
-  "main": "server.js",
+  "description": "Backend API for sharing events between users",
+  "main": "events-server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node events-server.js",
+    "dev": "nodemon events-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "events",
-    "ratings",
+    "sharing",
     "api",
     "backend",
     "express"
