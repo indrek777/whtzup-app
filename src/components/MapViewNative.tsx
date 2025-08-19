@@ -129,7 +129,7 @@ const getMarkerIcon = (category: string): string => {
     case 'gaming & entertainment':
       return '🎮'
            case 'other':
-         return '📍'
+         return '⭐'
        default:
          return '📍'
   }
