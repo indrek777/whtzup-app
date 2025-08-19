@@ -3229,7 +3229,7 @@ const styles = StyleSheet.create({
      searchButton: {
      position: 'absolute',
      bottom: 30,
-     right: 160,
+     right: 90,
      backgroundColor: 'white',
      width: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
      height: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
@@ -3800,7 +3800,7 @@ const styles = StyleSheet.create({
   settingsButton: {
     position: 'absolute',
     bottom: 30,
-    right: 90,
+    right: 160,
     backgroundColor: '#f0f0f0',
     padding: 10,
     borderRadius: 20,

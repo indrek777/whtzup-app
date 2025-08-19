@@ -15,6 +15,7 @@
     "lint": "eslint . --ext js,jsx,ts,tsx"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.4",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/datetimepicker": "^8.4.1",
     "@react-navigation/bottom-tabs": "^6.5.8",
@@ -32,12 +33,14 @@
     "expo-status-bar": "~2.2.3",
     "lodash": "^4.17.21",
     "react": "19.0.0",
+    "react-dom": "^19.0.0",
     "react-native": "0.79.5",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-maps": "1.20.1",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.11.1"
+    "react-native-screens": "~4.11.1",
+    "react-native-web": "^0.20.0"
   },
   "devDependencies": {
     "@expo/cli": "^0.24.0",
