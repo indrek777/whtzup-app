@@ -5,16 +5,18 @@
   "description": "Event discovery app",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "ios": "expo start --ios",
-    "android": "expo start --android",
+    "start": "expo start --tunnel",
+    "start:offline": "expo start --offline",
+    "start:online": "expo start",
+    "ios": "expo start --ios --tunnel",
+    "android": "expo start --android --tunnel",
     "build:ios": "eas build --platform ios",
     "submit:ios": "eas submit --platform ios",
     "lint": "eslint . --ext js,jsx,ts,tsx"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.1.2",
-    "@react-native-community/datetimepicker": "^8.4.4",
+    "@react-native-community/datetimepicker": "^8.4.1",
     "@react-navigation/bottom-tabs": "^6.5.8",
     "@react-navigation/native": "^6.1.7",
     "@react-navigation/stack": "^6.3.17",
