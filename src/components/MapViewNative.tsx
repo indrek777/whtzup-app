@@ -39,7 +39,7 @@ const getMarkerColor = (category: string): string => {
     case 'business':
       return 'indigo'
     case 'technology':
-      return 'cyan'
+      return 'green'
     case 'family & kids':
       return 'pink'
     case 'health & wellness':
@@ -90,7 +90,7 @@ const getMarkerIcon = (category: string): string => {
     case 'business':
       return '💼'
     case 'technology':
-      return '💻'
+      return '🤖'
     case 'family & kids':
       return '👨‍👩‍👧‍👦'
     case 'health & wellness':
@@ -111,9 +111,9 @@ const getMarkerIcon = (category: string): string => {
     case 'gaming & entertainment':
       return '🎮'
            case 'other':
-         return '⭐'
+         return '📍'
        default:
-         return '⭐'
+         return '📍'
   }
 }
 
@@ -3228,8 +3228,8 @@ const styles = StyleSheet.create({
 
      searchButton: {
      position: 'absolute',
-     top: 50,
-     left: 20,
+     bottom: 30,
+     right: 160,
      backgroundColor: 'white',
      width: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
      height: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
