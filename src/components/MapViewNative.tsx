@@ -15,6 +15,24 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { GeocodingSearchResult, searchAddress, reverseGeocode } from '../utils/geocoding'
 import debounce from 'lodash/debounce'
 
+// Clustering interfaces
+interface EventCluster {
+  id: string
+  latitude: number
+  longitude: number
+  events: Event[]
+  center: { latitude: number; longitude: number }
+  count: number
+  categories: Set<string>
+  isExpanded: boolean
+}
+
+interface ClusterMarkerProps {
+  cluster: EventCluster
+  onPress: () => void
+  markerRef: (ref: any) => void
+}
+
 // Marker color function
 const getMarkerColor = (category: string): string => {
   switch (category.toLowerCase()) {
@@ -336,6 +354,164 @@ interface NewEvent {
   recurringOccurrences: number // Number of occurrences
 }
 
+// Clustering configuration
+const CLUSTER_RADIUS = 0.001 // About 100 meters in degrees
+const CLUSTER_MIN_SIZE = 2 // Minimum events to form a cluster
+
+// Clustering utility functions
+const createClusters = (events: Event[]): EventCluster[] => {
+  const clusters: EventCluster[] = []
+  const processedEvents = new Set<string>()
+
+  events.forEach(event => {
+    if (processedEvents.has(event.id)) return
+
+    // Find nearby events
+    const nearbyEvents = events.filter(otherEvent => {
+      if (processedEvents.has(otherEvent.id)) return false
+      
+      const distance = calculateDistance(
+        event.latitude, event.longitude,
+        otherEvent.latitude, otherEvent.longitude
+      )
+      return distance <= 0.1 // 100 meters in km
+    })
+
+    if (nearbyEvents.length >= CLUSTER_MIN_SIZE) {
+      // Calculate cluster center
+      const avgLat = nearbyEvents.reduce((sum, e) => sum + e.latitude, 0) / nearbyEvents.length
+      const avgLng = nearbyEvents.reduce((sum, e) => sum + e.longitude, 0) / nearbyEvents.length
+
+      // Get unique categories
+      const categories = new Set<string>()
+      nearbyEvents.forEach(e => {
+        const category = determineCategory(e.name, e.description)
+        categories.add(category)
+      })
+
+      const cluster: EventCluster = {
+        id: `cluster-${event.id}`,
+        latitude: avgLat,
+        longitude: avgLng,
+        events: nearbyEvents,
+        center: { latitude: avgLat, longitude: avgLng },
+        count: nearbyEvents.length,
+        categories,
+        isExpanded: false
+      }
+
+      clusters.push(cluster)
+      nearbyEvents.forEach(e => processedEvents.add(e.id))
+    } else if (nearbyEvents.length === 1) {
+      // Single event - create individual cluster
+      const category = determineCategory(event.name, event.description)
+      const cluster: EventCluster = {
+        id: `single-${event.id}`,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        events: [event],
+        center: { latitude: event.latitude, longitude: event.longitude },
+        count: 1,
+        categories: new Set([category]),
+        isExpanded: false
+      }
+      clusters.push(cluster)
+      processedEvents.add(event.id)
+    }
+  })
+
+  return clusters
+}
+
+// Cluster marker component
+const ClusterMarker = React.memo(({ 
+  cluster, 
+  onPress, 
+  markerRef 
+}: ClusterMarkerProps) => {
+  const getClusterColor = (): string => {
+    if (cluster.count === 1) {
+      const event = cluster.events[0]
+      const category = determineCategory(event.name, event.description)
+      return event.source === 'user' ? 'purple' : getMarkerColor(category)
+    }
+    
+    // Multi-event cluster - use gradient based on count
+    if (cluster.count >= 10) return '#ff4444' // Red for large clusters
+    if (cluster.count >= 5) return '#ff8800'  // Orange for medium clusters
+    return '#44aa44' // Green for small clusters
+  }
+
+  const getClusterSize = (): number => {
+    if (cluster.count === 1) return 40
+    if (cluster.count >= 10) return 60
+    if (cluster.count >= 5) return 50
+    return 45
+  }
+
+  const getClusterIcon = (): string => {
+    if (cluster.count === 1) {
+      const event = cluster.events[0]
+      const category = determineCategory(event.name, event.description)
+      return event.source === 'user' ? '⭐' : getMarkerIcon(category)
+    }
+    return '📍' // Pin for clusters
+  }
+
+  const clusterColor = getClusterColor()
+  const clusterSize = getClusterSize()
+  const clusterIcon = getClusterIcon()
+
+  return (
+          <Marker
+        ref={markerRef}
+        coordinate={cluster.center}
+        onPress={onPress}
+        tracksViewChanges={false}
+        anchor={{ x: 0.5, y: 0.5 }}
+        centerOffset={{ x: 0, y: 0 }}
+        flat={false}
+        opacity={1}
+        draggable={false}
+        zIndex={cluster.count === 1 ? 1 : 100}
+      >
+      <View style={[
+        styles.clusterMarker,
+        { 
+          width: clusterSize,
+          height: clusterSize,
+          backgroundColor: clusterColor,
+          borderColor: clusterColor === 'yellow' || clusterColor === 'lightgray' || clusterColor === 'gray' ? '#333' : 'white'
+        }
+      ]}>
+        {cluster.count === 1 ? (
+          <Text style={[
+            styles.clusterText,
+            { color: clusterColor === 'yellow' || clusterColor === 'lightgray' || clusterColor === 'gray' ? '#333' : 'white' }
+          ]}>
+            {clusterIcon}
+          </Text>
+        ) : (
+          <>
+            <Text style={[
+              styles.clusterText,
+              { color: 'white', fontSize: cluster.count >= 10 ? 16 : 14 }
+            ]}>
+              {cluster.count}
+            </Text>
+            <Text style={[
+              styles.clusterSubtext,
+              { color: 'white' }
+            ]}>
+              events
+            </Text>
+          </>
+        )}
+      </View>
+    </Marker>
+  )
+})
+
 // Custom marker component to prevent icon replacement issues
 const CustomMarker = React.memo(({ 
   event, 
@@ -409,11 +585,23 @@ const MapViewNative: React.FC = () => {
   const clickedMarkerIdRef = useRef<string | null>(null)
   const isProcessingClickRef = useRef<boolean>(false)
   
+  // Clustering state
+  const [clusters, setClusters] = useState<EventCluster[]>([])
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set())
+  const [showClusterInfo, setShowClusterInfo] = useState(false)
+  
+  // Multi-event modal state
+  const [showMultiEventModal, setShowMultiEventModal] = useState(false)
+  const [multiEventCluster, setMultiEventCluster] = useState<EventCluster | null>(null)
+  
   // Track component lifecycle and ref initialization
   useEffect(() => {
     isProcessingClickRef.current = false
     clickedMarkerIdRef.current = null
   }, [])
+  
+  // Map reference for programmatic control
+  const mapRef = useRef<MapView>(null)
   
   // Simple map state - initialize with Estonia, will be updated to user location
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -1051,26 +1239,132 @@ const MapViewNative: React.FC = () => {
 
 
 
+  // Create clusters from filtered events
+  const memoizedClusters = useMemo(() => {
+    return createClusters(filteredEvents)
+  }, [filteredEvents])
+
+  // Update clusters when filtered events change
+  useEffect(() => {
+    setClusters(memoizedClusters)
+  }, [memoizedClusters])
+
+  // Cluster press handler
+  const handleClusterPress = useCallback((cluster: EventCluster) => {
+    if (cluster.count === 1) {
+      // Single event - handle normally
+      const event = cluster.events[0]
+      createMarkerPressHandler(event)()
+    } else if (cluster.count >= 10) {
+      // Large cluster (10+ events) - show modal with all events
+      setMultiEventCluster(cluster)
+      setShowMultiEventModal(true)
+    } else {
+      // Small multi-event cluster - zoom to cluster area and expand
+      setExpandedClusters(prev => {
+        const newSet = new Set(prev)
+        if (newSet.has(cluster.id)) {
+          // If already expanded, collapse and zoom out
+          newSet.delete(cluster.id)
+          // Zoom out to show more area
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: cluster.center.latitude,
+              longitude: cluster.center.longitude,
+              latitudeDelta: 0.01, // Zoom out to about 1km view
+              longitudeDelta: 0.01,
+            }, 1000)
+          }
+        } else {
+          // Expand and zoom in to cluster
+          newSet.add(cluster.id)
+          // Calculate cluster bounds for optimal zoom
+          const latitudes = cluster.events.map(e => e.latitude)
+          const longitudes = cluster.events.map(e => e.longitude)
+          const minLat = Math.min(...latitudes)
+          const maxLat = Math.max(...latitudes)
+          const minLng = Math.min(...longitudes)
+          const maxLng = Math.max(...longitudes)
+          
+          // Add padding to ensure all events are visible
+          const latPadding = (maxLat - minLat) * 0.3
+          const lngPadding = (maxLng - minLng) * 0.3
+          
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: (minLat + maxLat) / 2,
+              longitude: (minLng + maxLng) / 2,
+              latitudeDelta: Math.max(maxLat - minLat + latPadding, 0.002), // Minimum zoom level
+              longitudeDelta: Math.max(maxLng - minLng + lngPadding, 0.002),
+            }, 1000)
+          }
+        }
+        return newSet
+      })
+    }
+  }, [createMarkerPressHandler])
+
   // Memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
-    return filteredEvents.map((event) => {
-      const category = determineCategory(event.name, event.description)
-      
-      return (
-        <CustomMarker
-          key={event.id}
-          event={event}
-          category={category}
-          onPress={createMarkerPressHandler(event)}
-          markerRef={(ref) => {
-            if (ref) {
-              markerRefs.current[event.id] = ref
-            }
-          }}
-        />
-      )
+    const markers: React.ReactElement[] = []
+    
+    clusters.forEach((cluster) => {
+      if (cluster.count === 1) {
+        // Single event - render as normal marker
+        const event = cluster.events[0]
+        const category = determineCategory(event.name, event.description)
+        
+        markers.push(
+          <CustomMarker
+            key={event.id}
+            event={event}
+            category={category}
+            onPress={createMarkerPressHandler(event)}
+            markerRef={(ref) => {
+              if (ref) {
+                markerRefs.current[event.id] = ref
+              }
+            }}
+          />
+        )
+      } else if (expandedClusters.has(cluster.id)) {
+        // Expanded cluster - render individual markers
+        cluster.events.forEach((event) => {
+          const category = determineCategory(event.name, event.description)
+          
+          markers.push(
+            <CustomMarker
+              key={event.id}
+              event={event}
+              category={category}
+              onPress={createMarkerPressHandler(event)}
+              markerRef={(ref) => {
+                if (ref) {
+                  markerRefs.current[event.id] = ref
+                }
+              }}
+            />
+          )
+        })
+      } else {
+        // Collapsed cluster - render cluster marker
+        markers.push(
+          <ClusterMarker
+            key={cluster.id}
+            cluster={cluster}
+            onPress={() => handleClusterPress(cluster)}
+            markerRef={(ref) => {
+              if (ref) {
+                markerRefs.current[cluster.id] = ref
+              }
+            }}
+          />
+        )
+      }
     })
-  }, [filteredEvents]) // Remove function dependencies since they're now stable
+    
+    return markers
+  }, [clusters, expandedClusters, createMarkerPressHandler, handleClusterPress])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -1886,6 +2180,7 @@ const MapViewNative: React.FC = () => {
 
       {/* Map */}
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={initialRegion}
         showsUserLocation={true}
@@ -1933,6 +2228,20 @@ const MapViewNative: React.FC = () => {
 
                         {/* Render memoized markers for better performance */}
         {memoizedMarkers}
+        
+        {/* Cluster info display */}
+        {clusters.length > 0 && (
+          <View style={styles.clusterInfoContainer}>
+            <Text style={styles.clusterInfoText}>
+              {clusters.filter(c => c.count > 1).length} clusters • {filteredEvents.length} total events
+            </Text>
+            {expandedClusters.size > 0 && (
+              <Text style={styles.clusterInfoSubtext}>
+                {expandedClusters.size} clusters expanded
+              </Text>
+            )}
+          </View>
+        )}
       </MapView>
 
       {/* Create Event Modal */}
@@ -3197,7 +3506,86 @@ const MapViewNative: React.FC = () => {
         </TouchableWithoutFeedback>
       </Modal>
 
-             {/* User Profile Modal */}
+      {/* Multi-Event Modal */}
+      <Modal
+        visible={showMultiEventModal}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowMultiEventModal(false)}
+        onShow={() => {}}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowMultiEventModal(false)}>
+          <View style={styles.eventDetailsOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.eventDetailsContainer}>
+                {multiEventCluster && (
+                  <>
+                    <View style={styles.eventDetailsHeader}>
+                      <Text style={styles.eventDetailsTitle}>
+                        {multiEventCluster.count} Events at This Location
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.eventDetailsCloseButton}
+                        onPress={() => setShowMultiEventModal(false)}
+                      >
+                        <Text style={styles.eventDetailsCloseButtonText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={styles.eventDetailsContent} showsVerticalScrollIndicator={false}>
+                      <Text style={styles.eventDetailsDescription}>
+                        All events happening at this location. Tap on any event to see details.
+                      </Text>
+                      {multiEventCluster.events.map((event, index) => {
+                        const category = determineCategory(event.name, event.description)
+                        const { date, time } = parseDateTime(event.startsAt)
+                        const averageRating = getAverageRating(event.id)
+                        const ratingCount = getRatingCount(event.id)
+                        
+                        return (
+                          <TouchableOpacity
+                            key={event.id}
+                            style={styles.multiEventItem}
+                            onPress={() => {
+                              setShowMultiEventModal(false)
+                              openEventDetailsModal(event)
+                            }}
+                          >
+                            <View style={styles.multiEventItemHeader}>
+                              <Text style={styles.multiEventItemTitle} numberOfLines={2}>
+                                {event.name}
+                              </Text>
+                              <View style={[
+                                styles.multiEventItemCategory,
+                                { backgroundColor: getMarkerColor(category) }
+                              ]}>
+                                <Text style={styles.multiEventItemCategoryText}>
+                                  {getMarkerIcon(category)}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.multiEventItemDetails}>
+                              <Text style={styles.multiEventItemInfo}>📅 {date} at {time}</Text>
+                              <Text style={styles.multiEventItemInfo}>📍 {event.venue}</Text>
+                              {ratingCount > 0 && (
+                                <Text style={styles.multiEventItemInfo}>
+                                  ⭐ {averageRating}/5 ({ratingCount} reviews)
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </ScrollView>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* User Profile Modal */}
        <UserProfile 
          visible={showUserProfile} 
          onClose={() => {
@@ -3859,20 +4247,55 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   clusterMarker: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 15,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    minWidth: 30,
+    borderRadius: 25,
+    borderWidth: 3,
+    borderColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   clusterText: {
     fontSize: 12,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  clusterSubtext: {
+    fontSize: 8,
+    color: 'white',
+    fontWeight: 'normal',
+    textAlign: 'center',
+  },
+  clusterInfoContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  clusterInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  clusterInfoSubtext: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2,
   },
 
   clusterToggle: {
@@ -4566,6 +4989,56 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  // Multi-event modal styles
+  multiEventItem: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  multiEventItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  multiEventItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginRight: 8,
+    lineHeight: 18,
+  },
+  multiEventItemCategory: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  multiEventItemCategoryText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  multiEventItemDetails: {
+    gap: 4,
+  },
+  multiEventItemInfo: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
   },
  })
 
