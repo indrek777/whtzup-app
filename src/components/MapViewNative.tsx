@@ -59,8 +59,8 @@ const getMarkerColor = (category: string): string => {
       return 'darkgreen'
     case 'gaming & entertainment':
       return 'brown'
-    case 'other':
-      return 'lightgray'
+                  case 'other':
+                return 'lightgray'
     default:
       return 'gray'
   }
@@ -372,12 +372,12 @@ const CustomMarker = React.memo(({
         styles.customMarker,
         { 
           backgroundColor: markerColor,
-          borderColor: markerColor === 'yellow' || markerColor === 'lightgray' ? '#333' : 'white'
+          borderColor: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white'
         }
       ]}>
         <Text style={[
           styles.markerText,
-          { color: markerColor === 'yellow' || markerColor === 'lightgray' ? '#333' : 'white' }
+          { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
         ]}>
           {markerIcon}
         </Text>
@@ -3229,11 +3229,7 @@ const styles = StyleSheet.create({
      searchButton: {
      position: 'absolute',
      bottom: 30,
-<<<<<<< HEAD
-     right: 160,
-=======
      right: 90,
->>>>>>> ef1b2680b8cbfd2ba6852e22d7f158348b435592
      backgroundColor: 'white',
      width: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
      height: Platform.OS === 'ios' ? (Platform.isPad ? 60 : 50) : 50,
