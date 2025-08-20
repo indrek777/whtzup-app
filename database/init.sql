@@ -1,5 +1,96 @@
 -- Initialize the database schema for WhtzUp Events
 
+-- Create users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    avatar VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    email_verified BOOLEAN DEFAULT FALSE,
+    verification_token VARCHAR(255),
+    reset_token VARCHAR(255),
+    reset_token_expires TIMESTAMP
+);
+
+-- Create user subscriptions table
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'free', -- 'free', 'premium', 'expired'
+    plan VARCHAR(50), -- 'monthly', 'yearly'
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    auto_renew BOOLEAN DEFAULT FALSE,
+    features JSONB DEFAULT '[]',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create user preferences table
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    notifications BOOLEAN DEFAULT TRUE,
+    email_updates BOOLEAN DEFAULT TRUE,
+    default_radius INTEGER DEFAULT 10,
+    favorite_categories JSONB DEFAULT '[]',
+    language VARCHAR(10) DEFAULT 'en',
+    theme VARCHAR(20) DEFAULT 'auto',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create user stats table
+CREATE TABLE IF NOT EXISTS user_stats (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    events_created INTEGER DEFAULT 0,
+    events_attended INTEGER DEFAULT 0,
+    ratings_given INTEGER DEFAULT 0,
+    reviews_written INTEGER DEFAULT 0,
+    total_events INTEGER DEFAULT 0,
+    favorite_venues JSONB DEFAULT '[]',
+    last_event_created_date DATE,
+    events_created_today INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create refresh tokens table for JWT refresh functionality
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(500) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_revoked BOOLEAN DEFAULT FALSE
+);
+
+-- Create indexes for users table
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login);
+
+-- Create indexes for user_subscriptions table
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_id ON user_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(status);
+
+-- Create indexes for user_preferences table
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id);
+
+-- Create indexes for user_stats table
+CREATE INDEX IF NOT EXISTS idx_user_stats_user_id ON user_stats(user_id);
+
+-- Create indexes for refresh_tokens table
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+
 -- Create events table
 CREATE TABLE IF NOT EXISTS events (
     id VARCHAR(255) PRIMARY KEY,
@@ -66,12 +157,38 @@ CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
-    NEW.version = OLD.version + 1;
+    IF TG_TABLE_NAME = 'events' THEN
+        NEW.version = OLD.version + 1;
+    END IF;
     RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- Create trigger to automatically update updated_at
+-- Create trigger to automatically update updated_at for users
+CREATE TRIGGER update_users_updated_at 
+    BEFORE UPDATE ON users 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to automatically update updated_at for user_subscriptions
+CREATE TRIGGER update_user_subscriptions_updated_at 
+    BEFORE UPDATE ON user_subscriptions 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to automatically update updated_at for user_preferences
+CREATE TRIGGER update_user_preferences_updated_at 
+    BEFORE UPDATE ON user_preferences 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to automatically update updated_at for user_stats
+CREATE TRIGGER update_user_stats_updated_at 
+    BEFORE UPDATE ON user_stats 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to automatically update updated_at for events
 CREATE TRIGGER update_events_updated_at 
     BEFORE UPDATE ON events 
     FOR EACH ROW 

@@ -42,8 +42,8 @@ export interface UserStats {
   eventsCreatedToday?: number
 }
 
-// Set to null to disable backend connection for now
-const API_BASE_URL = null // 'http://localhost:3003/api' // Replace with your actual backend URL
+// Backend API URL - update this to match your backend server
+const API_BASE_URL = 'http://olympio.ee:4000/api' // Update this to your actual backend URL
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',
@@ -61,6 +61,7 @@ const STORAGE_KEYS = {
 class UserService {
   private currentUser: User | null = null
   private authToken: string | null = null
+  private refreshToken: string | null = null
   private initializationPromise: Promise<void> | null = null
 
   constructor() {
@@ -72,12 +73,16 @@ class UserService {
     try {
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
+      const refreshTokenData = await AsyncStorage.getItem('refresh_token')
       
       if (userData) {
         this.currentUser = JSON.parse(userData)
       }
       if (tokenData) {
         this.authToken = tokenData
+      }
+      if (refreshTokenData) {
+        this.refreshToken = refreshTokenData
       }
     } catch (error) {
       // Error loading user from storage
@@ -210,7 +215,7 @@ class UserService {
         return true
       }
 
-      // Backend implementation would go here
+      // Backend implementation
       const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signup`, {
         method: 'POST',
         headers: {
@@ -221,13 +226,17 @@ class UserService {
 
       if (response.ok) {
         const data = await response.json()
-        this.currentUser = data.user
-        this.authToken = data.token
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user))
-        await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.token)
-        
-        return true
+        if (data.success) {
+          this.currentUser = data.data.user
+          this.authToken = data.data.accessToken
+          this.refreshToken = data.data.refreshToken
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data.user))
+          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
+          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
+          
+          return true
+        }
       }
       
       return false
@@ -306,7 +315,7 @@ class UserService {
         return true
       }
 
-      // Backend implementation would go here
+      // Backend implementation
       const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signin`, {
         method: 'POST',
         headers: {
@@ -317,13 +326,17 @@ class UserService {
 
       if (response.ok) {
         const data = await response.json()
-        this.currentUser = data.user
-        this.authToken = data.token
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user))
-        await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.token)
-        
-        return true
+        if (data.success) {
+          this.currentUser = data.data.user
+          this.authToken = data.data.accessToken
+          this.refreshToken = data.data.refreshToken
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data.user))
+          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
+          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
+          
+          return true
+        }
       }
       
       return false
@@ -336,14 +349,79 @@ class UserService {
   // Sign out user
   async signOut(): Promise<void> {
     try {
+      // Revoke refresh token on backend if available
+      if (API_BASE_URL && this.refreshToken) {
+        try {
+          await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refreshToken: this.refreshToken }),
+          })
+        } catch (error) {
+          console.error('Error revoking token on backend:', error)
+        }
+      }
+
       this.currentUser = null
       this.authToken = null
+      this.refreshToken = null
       
       await AsyncStorage.removeItem(STORAGE_KEYS.user)
       await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
+      await AsyncStorage.removeItem('refresh_token')
     } catch (error) {
       console.error('Error signing out:', error)
     }
+  }
+
+  // Refresh access token
+  async refreshAccessToken(): Promise<boolean> {
+    try {
+      if (!API_BASE_URL || !this.refreshToken) {
+        return false
+      }
+
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken: this.refreshToken }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          this.authToken = data.data.accessToken
+          this.refreshToken = data.data.refreshToken
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
+          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
+          
+          return true
+        }
+      }
+      
+      return false
+    } catch (error) {
+      console.error('Error refreshing token:', error)
+      return false
+    }
+  }
+
+  // Get authenticated headers for API requests
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`
+    }
+    
+    return headers
   }
 
   // Update user profile
@@ -700,6 +778,41 @@ class UserService {
       return null
     } catch (error) {
       return null
+    }
+  }
+
+  // Get full user profile from backend
+  async getFullUserProfile(): Promise<User | null> {
+    try {
+      if (!API_BASE_URL || !this.authToken) {
+        return this.currentUser
+      }
+
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/profile`, {
+        method: 'GET',
+        headers,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          this.currentUser = data.data
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data))
+          return data.data
+        }
+      } else if (response.status === 401) {
+        // Token might be expired, try to refresh
+        const refreshed = await this.refreshAccessToken()
+        if (refreshed) {
+          return this.getFullUserProfile() // Retry with new token
+        }
+      }
+      
+      return this.currentUser
+    } catch (error) {
+      console.error('Error getting full user profile:', error)
+      return this.currentUser
     }
   }
 }

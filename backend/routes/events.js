@@ -22,7 +22,7 @@ const eventValidation = [
 // GET /api/events - Get all events
 router.get('/', async (req, res) => {
   try {
-    const { category, venue, limit = 15000, offset = 0 } = req.query;
+    const { category, venue, limit = 15000, offset = 0, latitude, longitude, radius } = req.query;
     const deviceId = req.headers['x-device-id'];
     
     let query = 'SELECT * FROM events WHERE deleted_at IS NULL';
@@ -39,6 +39,22 @@ router.get('/', async (req, res) => {
       paramCount++;
       query += ` AND venue ILIKE $${paramCount}`;
       params.push(`%${venue}%`);
+    }
+
+    // Add radius-based filtering if coordinates and radius are provided
+    if (latitude && longitude && radius) {
+      paramCount++;
+      query += ` AND (
+        6371 * acos(
+          cos(radians($${paramCount})) * 
+          cos(radians(latitude)) * 
+          cos(radians(longitude) - radians($${paramCount + 1})) + 
+          sin(radians($${paramCount})) * 
+          sin(radians(latitude))
+        )
+      ) <= $${paramCount + 2}`;
+      params.push(parseFloat(latitude), parseFloat(longitude), parseFloat(radius));
+      paramCount += 2; // Increment by 2 since we used 3 parameters
     }
 
     query += ' ORDER BY starts_at DESC';

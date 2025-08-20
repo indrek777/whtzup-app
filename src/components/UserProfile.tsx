@@ -63,7 +63,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   }, [visible])
 
   const loadUserData = async () => {
-    const user = await userService.getCurrentUser()
+    const user = await userService.getFullUserProfile()
     const authenticated = await userService.isAuthenticated()
     
     setCurrentUser(user)

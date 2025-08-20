@@ -696,6 +696,7 @@ const MapViewNative: React.FC = () => {
 
   // Current loading radius state
   const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(500)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
 
   // Ensure free users can't have radius greater than 500km (allow reasonable default)
   useEffect(() => {
@@ -728,10 +729,16 @@ const MapViewNative: React.FC = () => {
           // First, try to load cached events immediately for offline use
           let allEvents = await syncService.getCachedEventsImmediate()
           
+          // Get dynamic radius based on user authentication status
+          const radius = await getEventLoadingRadius()
+          
           // If no cached events, try to fetch from server
           if (allEvents.length === 0) {
             try {
-              allEvents = await syncService.fetchEvents()
+              allEvents = await syncService.fetchEvents(
+                { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
+                radius
+              )
             } catch (error) {
               console.log('No cached events and server unavailable, starting with empty list')
               allEvents = []
@@ -739,13 +746,13 @@ const MapViewNative: React.FC = () => {
           } else {
             console.log(`Loaded ${allEvents.length} cached events`)
             // Try to fetch fresh data from server in background
-            syncService.fetchEvents().catch(error => {
+            syncService.fetchEvents(
+              { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
+              radius
+            ).catch(error => {
               console.log('Background sync failed, using cached data')
             })
           }
-          
-          // Filter events within 500km of Estonia center for performance
-          const radius = 500 // 500km radius
           const initialEvents = allEvents.filter(event => {
             const distance = calculateDistance(
               59.436962, // Estonia center latitude
@@ -764,7 +771,7 @@ const MapViewNative: React.FC = () => {
             ...prev,
             userLocation: { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
             distanceFilter: true, // Enable distance filter by default
-            distanceRadius: 500 // Set to 500km radius for better coverage
+            distanceRadius: radius // Use dynamic radius based on user status
           }))
           
           console.log(`🎯 Events state should now have ${initialEvents.length} events (no location permission)`)
@@ -780,20 +787,24 @@ const MapViewNative: React.FC = () => {
         setUserLocation(userLoc)
         setLocation(location)
         
-        // Update search filters with user location and enable distance filter by default
-                    setSearchFilters(prev => ({
-              ...prev,
-              userLocation: userLoc,
-              distanceFilter: true, // Enable distance filter by default
-              distanceRadius: 500 // Set to 500km radius for better coverage
-            }))
+        // Get dynamic radius based on user authentication status
+        const radius = await getEventLoadingRadius()
         
-        // Center map on user location with 500km view
+        // Update search filters with user location and enable distance filter by default
+        setSearchFilters(prev => ({
+          ...prev,
+          userLocation: userLoc,
+          distanceFilter: true, // Enable distance filter by default
+          distanceRadius: radius // Use dynamic radius based on user status
+        }))
+        
+        // Center map on user location with dynamic view based on radius
+        const deltaMultiplier = radius <= 10 ? 0.1 : radius <= 50 ? 0.5 : 4.0 // Adjust view based on radius
         setMapRegion({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 4.0, // Approximately 500km view
-          longitudeDelta: 4.0, // Approximately 500km view
+          latitudeDelta: deltaMultiplier, // Dynamic view based on radius
+          longitudeDelta: deltaMultiplier, // Dynamic view based on radius
         })
 
         // No need to filter by radius initially
@@ -804,7 +815,7 @@ const MapViewNative: React.FC = () => {
         // If no cached events, try to fetch from server
         if (allEvents.length === 0) {
           try {
-            allEvents = await syncService.fetchEvents()
+            allEvents = await syncService.fetchEvents(userLoc, radius)
           } catch (error) {
             console.log('No cached events and server unavailable, starting with empty list')
             allEvents = []
@@ -812,13 +823,12 @@ const MapViewNative: React.FC = () => {
         } else {
           console.log(`Loaded ${allEvents.length} cached events`)
           // Try to fetch fresh data from server in background
-          syncService.fetchEvents().catch(error => {
+          syncService.fetchEvents(userLoc, radius).catch(error => {
             console.log('Background sync failed, using cached data')
           })
         }
         
-        // Filter events within 500km of user location for performance
-        const radius = 500 // 500km radius
+        // Filter events within dynamic radius of user location based on authentication status
         const initialEvents = allEvents.filter(event => {
           const distance = calculateDistance(
             userLoc.latitude,
@@ -918,13 +928,13 @@ const MapViewNative: React.FC = () => {
     return () => clearInterval(interval)
   }, [])
 
-  // Don't reload events when premium status changes - keep all events visible
-  // useEffect(() => {
-  //   if (userFeatures.hasPremium !== undefined) {
-  //     // Reload events with new radius when premium status is determined
-  //     reloadEventsWithNewRadius()
-  //   }
-  // }, [userFeatures.hasPremium])
+  // Monitor authentication status changes and update banner
+  useEffect(() => {
+    if (isAuthenticated !== undefined) {
+      console.log(`🔐 Authentication status changed: ${isAuthenticated ? 'Authenticated' : 'Not authenticated'}`)
+      console.log(`🎯 Current loading radius: ${currentLoadingRadius}km`)
+    }
+  }, [isAuthenticated, currentLoadingRadius])
 
   // Keyboard event listeners for review input
   useEffect(() => {
@@ -944,17 +954,31 @@ const MapViewNative: React.FC = () => {
 
   // No longer need to reload events when filters change since we load everything at startup
 
-  // Get event loading radius based on user's premium status
+  // Get event loading radius based on user's authentication and premium status
   const getEventLoadingRadius = async (): Promise<number> => {
     try {
+      const isAuthenticated = await userService.isAuthenticated()
       const hasPremium = await userService.hasPremiumSubscription()
-      const radius = hasPremium ? 500 : 500 // 500km for both premium and free users
+      
+      let radius: number
+      
+      if (!isAuthenticated) {
+        // Non-authenticated users can only see events within 10km
+        radius = 10
+      } else if (hasPremium) {
+        // Premium users can see events within 500km
+        radius = 500
+      } else {
+        // Free authenticated users can see events within 50km
+        radius = 50
+      }
+      
       setCurrentLoadingRadius(radius)
       return radius
     } catch (error) {
-      // Fallback to 500km radius if there's an error
-      setCurrentLoadingRadius(500)
-      return 500
+      // Fallback to 10km radius if there's an error (most restrictive)
+      setCurrentLoadingRadius(10)
+      return 10
     }
   }
 
@@ -964,20 +988,11 @@ const MapViewNative: React.FC = () => {
       if (!userLocation) return
 
       const radius = await getEventLoadingRadius()
-      const allEvents = await syncService.fetchEvents()
-      const newEvents = allEvents.filter(event => {
-        const distance = calculateDistance(
-          userLocation.latitude,
-          userLocation.longitude,
-          event.latitude,
-          event.longitude
-        )
-        return distance <= radius
-      })
+      const allEvents = await syncService.fetchEvents(userLocation, radius)
       
-      console.log(`🎯 Reloading events with radius filter: ${newEvents.length} events`)
-      setEvents(newEvents)
-      setFilteredEvents(newEvents)
+      console.log(`🎯 Reloading events with radius filter: ${allEvents.length} events`)
+      setEvents(allEvents)
+      setFilteredEvents(allEvents)
     } catch (error) {
       console.error('Error reloading events:', error)
     }
@@ -988,16 +1003,28 @@ const MapViewNative: React.FC = () => {
       const hasAdvancedSearch = await userService.hasFeature('advanced_search')
       const hasPremium = await userService.hasPremiumSubscription()
       const canCreateEventToday = await userService.canCreateEventToday()
+      const authenticated = await userService.isAuthenticated()
       
       setUserFeatures({
         hasAdvancedSearch,
         hasPremium,
         canCreateEventToday
       })
+      
+      console.log(`🔐 Authentication status: ${authenticated ? 'Authenticated' : 'Not authenticated'}`)
+      console.log(`⭐ Premium status: ${hasPremium ? 'Premium' : 'Free'}`)
+      
+      setIsAuthenticated(authenticated)
 
-      // Don't update loading radius - keep all events visible
-      // const radius = hasPremium ? 500 : 20
-      // setCurrentLoadingRadius(radius)
+      // Update loading radius based on authentication status
+      if (authenticated) {
+        const radius = hasPremium ? 500 : 50
+        setCurrentLoadingRadius(radius)
+        console.log(`🎯 Set radius to ${radius}km for authenticated user`)
+      } else {
+        setCurrentLoadingRadius(10)
+        console.log(`🎯 Set radius to 10km for non-authenticated user`)
+      }
     } catch (error) {
       // Error loading user features
     }
@@ -2294,6 +2321,24 @@ const MapViewNative: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* Authentication Status Banner */}
+      {currentLoadingRadius === 10 && !isAuthenticated && (
+        <View style={styles.authBanner}>
+          <Text style={styles.authBannerText}>
+            🔒 Limited to 10km radius. Sign in to see more events!
+          </Text>
+          <TouchableOpacity 
+            style={styles.authBannerButton}
+            onPress={() => {
+              console.log('🔐 User tapped Sign In button')
+              setShowUserProfile(true)
+            }}
+          >
+            <Text style={styles.authBannerButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       {/* Search Button */}
       <TouchableOpacity 
         style={styles.searchButton}
@@ -3763,9 +3808,13 @@ const MapViewNative: React.FC = () => {
       {/* User Profile Modal */}
        <UserProfile 
          visible={showUserProfile} 
-         onClose={() => {
+         onClose={async () => {
            setShowUserProfile(false)
-           loadUserFeatures() // Reload user features after profile changes
+           await loadUserFeatures() // Reload user features after profile changes
+           // Reload events with new radius if user location is available
+           if (userLocation) {
+             reloadEventsWithNewRadius()
+           }
          }} 
        />
 
@@ -3823,6 +3872,42 @@ const MapViewNative: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  authBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 1001,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  authBannerText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 10,
+  },
+  authBannerButton: {
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  authBannerButtonText: {
+    color: '#FF6B6B',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   loadingContainer: {
     flex: 1,

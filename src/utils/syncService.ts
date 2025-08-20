@@ -330,13 +330,25 @@ class SyncService {
     }
   }
 
-  public async fetchEvents(): Promise<Event[]> {
+  public async fetchEvents(userLocation?: { latitude: number; longitude: number }, radius?: number): Promise<Event[]> {
     console.log('🔄 Fetching events from:', `${API_BASE_URL}/api/events`);
     console.log('📱 Device ID:', this.deviceId);
     console.log('🌐 Online status:', this.isOnline);
     
     try {
-      const response = await this.makeApiCall('/events');
+      let url = '/events';
+      const params = new URLSearchParams();
+      
+      // Add radius-based filtering if user location and radius are provided
+      if (userLocation && radius) {
+        params.append('latitude', userLocation.latitude.toString());
+        params.append('longitude', userLocation.longitude.toString());
+        params.append('radius', radius.toString());
+        url += `?${params.toString()}`;
+        console.log(`🎯 Fetching events within ${radius}km of user location`);
+      }
+      
+      const response = await this.makeApiCall(url);
       console.log('✅ API Response:', response.success ? 'SUCCESS' : 'FAILED');
       if (response.success) {
         console.log(`📊 Received ${response.data?.length || 0} events from server`);
