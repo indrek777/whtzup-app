@@ -5,11 +5,11 @@
   "description": "Event discovery app",
   "main": "index.js",
   "scripts": {
-    "start": "expo start --tunnel",
+    "start": "expo start --lan",
     "start:offline": "expo start --offline",
     "start:online": "expo start",
-    "ios": "expo start --ios --tunnel",
-    "android": "expo start --android --tunnel",
+    "ios": "expo start --ios --lan",
+    "android": "expo start --android --lan",
     "build:ios": "eas build --platform ios",
     "submit:ios": "eas submit --platform ios",
     "lint": "eslint . --ext js,jsx,ts,tsx"

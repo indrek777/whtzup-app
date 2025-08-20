@@ -15,6 +15,7 @@ import {
 import { Event } from '../data/events'
 import { saveEventsToFile, updateEventForAllUsers, deleteEventForAllUsers } from '../utils/eventStorage'
 import { searchAddress, reverseGeocode } from '../utils/geocoding'
+import { syncService } from '../utils/syncService'
 
 interface EventEditorProps {
   visible: boolean
@@ -420,20 +421,20 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
     try {
       setIsLoading(true)
-      // Save for all users
-      await updateEventForAllUsers(editingEvent.id, updatedEvent, events)
+      // Save to backend via sync service
+      const savedEvent = await syncService.updateEvent(updatedEvent)
       // Update local state
-      onUpdateEvent(editingEvent.id, updatedEvent)
-      onEventUpdated?.(updatedEvent)
+      onUpdateEvent(editingEvent.id, savedEvent)
+      onEventUpdated?.(savedEvent)
       
       if (showSingleEventEditor) {
         // If we're in single event editor mode from bulk view, close it and return to bulk view
         closeSingleEventEditor()
-        Alert.alert('Success', 'Event updated successfully! Changes are saved locally.')
+        Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
       } else {
         // If we're in standalone single event editor mode, close the main modal
         onClose()
-        Alert.alert('Success', 'Event updated successfully! Changes are saved locally.')
+        Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
       }
     } catch (error) {
       console.error('Error saving event:', error)
@@ -467,10 +468,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
         updatedAt: new Date().toISOString()
       }))
 
-      // Update each event for all users
+      // Update each event via sync service
       for (const event of updatedEvents) {
-        await updateEventForAllUsers(event.id, event, events)
-        onUpdateEvent(event.id, event)
+        const savedEvent = await syncService.updateEvent(event)
+        onUpdateEvent(event.id, savedEvent)
       }
 
       onClose()
@@ -498,19 +499,19 @@ const EventEditor: React.FC<EventEditorProps> = ({
           onPress: async () => {
             try {
               setIsLoading(true)
-              // Delete for all users
-              await deleteEventForAllUsers(editingEvent.id, events)
+              // Delete via sync service
+              await syncService.deleteEvent(editingEvent.id)
               // Update local state
               onDeleteEvent(editingEvent.id)
               
               if (showSingleEventEditor) {
                 // If we're in single event editor mode from bulk view, close it and return to bulk view
                 closeSingleEventEditor()
-                Alert.alert('Success', 'Event deleted successfully! Changes are saved locally.')
+                Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
               } else {
                 // If we're in standalone single event editor mode, close the main modal
                 onClose()
-                Alert.alert('Success', 'Event deleted successfully! Changes are saved locally.')
+                Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
               }
             } catch (error) {
               console.error('Error deleting event:', error)

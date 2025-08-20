@@ -22,7 +22,7 @@ const eventValidation = [
 // GET /api/events - Get all events
 router.get('/', async (req, res) => {
   try {
-    const { category, venue, limit = 100, offset = 0 } = req.query;
+    const { category, venue, limit = 15000, offset = 0 } = req.query;
     const deviceId = req.headers['x-device-id'];
     
     let query = 'SELECT * FROM events WHERE deleted_at IS NULL';

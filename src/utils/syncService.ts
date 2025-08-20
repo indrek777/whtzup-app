@@ -27,7 +27,7 @@ interface Conflict {
 }
 
 // Configuration
-const API_BASE_URL = __DEV__ ? 'http://localhost:3000' : 'https://your-production-domain.com';
+const API_BASE_URL = __DEV__ ? 'http://olympio.ee:4000' : 'https://olympio.ee';
 const SYNC_INTERVAL = 30000; // 30 seconds
 const MAX_RETRY_COUNT = 3;
 
@@ -43,6 +43,7 @@ class SyncService {
     this.initializeDeviceId();
     this.setupNetworkListener();
     this.setupSocketConnection();
+    this.loadPendingOperations();
   }
 
   // Initialize device ID
@@ -163,19 +164,27 @@ class SyncService {
       ...options.headers
     };
 
+    console.log('🌐 Making API call to:', url);
+    console.log('📋 Headers:', headers);
+
     try {
       const response = await fetch(url, {
         ...options,
         headers
       });
 
+      console.log('📡 Response status:', response.status, response.statusText);
+
       if (!response.ok) {
+        console.log('❌ HTTP Error:', response.status, response.statusText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log('📄 Response data received');
+      return data;
     } catch (error) {
-      console.error('API call failed:', error);
+      console.error('❌ API call failed:', error);
       throw error;
     }
   }
@@ -289,17 +298,27 @@ class SyncService {
   }
 
   public async fetchEvents(): Promise<Event[]> {
+    console.log('🔄 Fetching events from:', `${API_BASE_URL}/api/events`);
+    console.log('📱 Device ID:', this.deviceId);
+    console.log('🌐 Online status:', this.isOnline);
+    
     try {
       const response = await this.makeApiCall('/events');
+      console.log('✅ API Response:', response.success ? 'SUCCESS' : 'FAILED');
       if (response.success) {
+        console.log(`📊 Received ${response.data?.length || 0} events from server`);
+        // Cache the events for offline use
+        await this.setCachedEvents(response.data);
         return response.data;
       } else {
+        console.log('❌ API Error:', response.error);
         throw new Error(response.error);
       }
     } catch (error) {
-      console.error('Error fetching events:', error);
+      console.error('❌ Error fetching events:', error);
       // Return cached events if available
       const cachedEvents = await this.getCachedEvents();
+      console.log(`📦 Returning ${cachedEvents.length} cached events for offline use`);
       return cachedEvents;
     }
   }
@@ -453,6 +472,14 @@ class SyncService {
       pendingOperations: this.pendingOperations.length,
       errors: []
     };
+  }
+
+  // Get cached events immediately (for offline use)
+  public async getCachedEventsImmediate(): Promise<Event[]> {
+    console.log('📦 Getting cached events immediately...');
+    const cachedEvents = await this.getCachedEvents();
+    console.log(`📦 Found ${cachedEvents.length} cached events`);
+    return cachedEvents;
   }
 
   public async getSyncStatusAsync(): Promise<SyncStatus> {

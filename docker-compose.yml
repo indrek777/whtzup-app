@@ -40,6 +40,7 @@ services:
       DATABASE_URL: postgresql://whtzup_user:whtzup_password@postgres:5432/whtzup_events
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      DISABLE_RATE_LIMIT: "true"
     ports:
       - "4000:4000"
     volumes:

@@ -9,6 +9,7 @@ import { ratingService, EventRating, SharedRating } from '../utils/ratingService
 import { eventService } from '../utils/eventService'
 import { userService } from '../utils/userService'
 import { loadEventsPartially, getTotalEventsCount } from '../utils/eventLoader'
+import { syncService } from '../utils/syncService'
 
 const UserProfile = require('./UserProfile')
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -708,6 +709,7 @@ const MapViewNative: React.FC = () => {
   const [showDateToPicker, setShowDateToPicker] = useState(false)
   const [showEventTimePicker, setShowEventTimePicker] = useState(false)
   const [showEndDatePicker, setShowEndDatePicker] = useState(false)
+  const [backendSyncStatus, setBackendSyncStatus] = useState({ isOnline: false, lastSyncAt: null as string | null, pendingOperations: 0 })
 
   // Simple event limiting - no clustering needed
 
@@ -722,16 +724,32 @@ const MapViewNative: React.FC = () => {
         if (status !== 'granted') {
           setErrorMsg('Permission to access location was denied')
           // Load events without location filtering and center on Estonia
-          const radius = await getEventLoadingRadius()
-          const initialEvents = await loadEventsPartially({
-            userLocation: {
-              latitude: 59.436962,
-              longitude: 24.753574
-            },
-            maxDistance: radius
-          })
+          
+          // First, try to load cached events immediately for offline use
+          let allEvents = await syncService.getCachedEventsImmediate()
+          
+          // If no cached events, try to fetch from server
+          if (allEvents.length === 0) {
+            try {
+              allEvents = await syncService.fetchEvents()
+            } catch (error) {
+              console.log('No cached events and server unavailable, starting with empty list')
+              allEvents = []
+            }
+          } else {
+            console.log(`Loaded ${allEvents.length} cached events`)
+            // Try to fetch fresh data from server in background
+            syncService.fetchEvents().catch(error => {
+              console.log('Background sync failed, using cached data')
+            })
+          }
+          
+          // Show all events initially, regardless of distance
+          const initialEvents = allEvents
+          console.log(`🎯 Setting ${initialEvents.length} events to display on map (no location permission)`)
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
+          console.log(`🎯 Events state should now have ${initialEvents.length} events (no location permission)`)
           setIsLoading(false)
           return
         }
@@ -750,44 +768,94 @@ const MapViewNative: React.FC = () => {
           userLocation: userLoc
         }))
         
-        // Center map on user location with 20km view
+        // Center map on Estonia to show all events
         setMapRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.2, // Approximately 20km view
-          longitudeDelta: 0.2, // Approximately 20km view
+          latitude: 58.3776252, // Estonia center
+          longitude: 26.7290063, // Estonia center
+          latitudeDelta: 2.5, // Show most of Estonia
+          longitudeDelta: 3.0, // Show most of Estonia
         })
 
-        const radius = await getEventLoadingRadius()
-        const initialEvents = await loadEventsPartially({
-          userLocation: userLoc,
-          maxDistance: radius
-        })
+        // No need to filter by radius initially
         
+        // First, try to load cached events immediately for offline use
+        let allEvents = await syncService.getCachedEventsImmediate()
+        
+        // If no cached events, try to fetch from server
+        if (allEvents.length === 0) {
+          try {
+            allEvents = await syncService.fetchEvents()
+          } catch (error) {
+            console.log('No cached events and server unavailable, starting with empty list')
+            allEvents = []
+          }
+        } else {
+          console.log(`Loaded ${allEvents.length} cached events`)
+          // Try to fetch fresh data from server in background
+          syncService.fetchEvents().catch(error => {
+            console.log('Background sync failed, using cached data')
+          })
+        }
+        
+        // Show all events initially, regardless of distance
+        const initialEvents = allEvents
+        
+        console.log(`🎯 Setting ${initialEvents.length} events to display on map`)
         setEvents(initialEvents)
         setFilteredEvents(initialEvents)
+        console.log(`🎯 Events state should now have ${initialEvents.length} events`)
         setIsLoading(false)
         
         // Load user-created events separately to merge with existing events
         loadUserCreatedEvents(initialEvents)
       } catch (error) {
-        // Fallback to sample events if error
-        const sampleEvents = [
-          {
-            id: '1',
-            name: 'Jazz Night',
-            description: 'Live jazz music at the local cafe',
-            latitude: 59.436962,
-            longitude: 24.753574,
-            startsAt: '2024-01-15 20:00',
-            url: '',
-            venue: 'Cafe Central',
-            address: 'Downtown',
-            source: 'sample'
+        console.error('Error loading events:', error)
+        // Try to load cached events as fallback
+        try {
+          const cachedEvents = await syncService.getCachedEventsImmediate()
+          if (cachedEvents.length > 0) {
+            console.log(`Using ${cachedEvents.length} cached events as fallback`)
+            setEvents(cachedEvents)
+            setFilteredEvents(cachedEvents)
+          } else {
+            // Fallback to sample events if no cached events
+            const sampleEvents = [
+              {
+                id: '1',
+                name: 'Jazz Night',
+                description: 'Live jazz music at the local cafe',
+                latitude: 59.436962,
+                longitude: 24.753574,
+                startsAt: '2024-01-15 20:00',
+                url: '',
+                venue: 'Cafe Central',
+                address: 'Downtown',
+                source: 'sample'
+              }
+            ]
+            setEvents(sampleEvents)
+            setFilteredEvents(sampleEvents)
           }
-        ]
-        setEvents(sampleEvents)
-        setFilteredEvents(sampleEvents)
+        } catch (cacheError) {
+          console.error('Error loading cached events:', cacheError)
+          // Final fallback to sample events
+          const sampleEvents = [
+            {
+              id: '1',
+              name: 'Jazz Night',
+              description: 'Live jazz music at the local cafe',
+              latitude: 59.436962,
+              longitude: 24.753574,
+              startsAt: '2024-01-15 20:00',
+              url: '',
+              venue: 'Cafe Central',
+              address: 'Downtown',
+              source: 'sample'
+            }
+          ]
+          setEvents(sampleEvents)
+          setFilteredEvents(sampleEvents)
+        }
         setIsLoading(false)
       }
     }
@@ -805,13 +873,29 @@ const MapViewNative: React.FC = () => {
     loadUserFeatures()
   }, [])
 
-  // Reload events when premium status changes
+  // Monitor sync service status
   useEffect(() => {
-    if (userFeatures.hasPremium !== undefined) {
-      // Reload events with new radius when premium status is determined
-      reloadEventsWithNewRadius()
+    const updateSyncStatus = () => {
+      const status = syncService.getSyncStatus()
+      setBackendSyncStatus(status)
     }
-  }, [userFeatures.hasPremium])
+
+    // Get initial status
+    updateSyncStatus()
+
+    // Update status every 30 seconds
+    const interval = setInterval(updateSyncStatus, 30000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Don't reload events when premium status changes - keep all events visible
+  // useEffect(() => {
+  //   if (userFeatures.hasPremium !== undefined) {
+  //     // Reload events with new radius when premium status is determined
+  //     reloadEventsWithNewRadius()
+  //   }
+  // }, [userFeatures.hasPremium])
 
   // Keyboard event listeners for review input
   useEffect(() => {
@@ -851,15 +935,22 @@ const MapViewNative: React.FC = () => {
       if (!userLocation) return
 
       const radius = await getEventLoadingRadius()
-      const newEvents = await loadEventsPartially({
-        userLocation,
-        maxDistance: radius
+      const allEvents = await syncService.fetchEvents()
+      const newEvents = allEvents.filter(event => {
+        const distance = calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          event.latitude,
+          event.longitude
+        )
+        return distance <= radius
       })
       
+      console.log(`🎯 Reloading events with radius filter: ${newEvents.length} events`)
       setEvents(newEvents)
       setFilteredEvents(newEvents)
     } catch (error) {
-      // Error reloading events
+      console.error('Error reloading events:', error)
     }
   }
 
@@ -875,9 +966,9 @@ const MapViewNative: React.FC = () => {
         canCreateEventToday
       })
 
-      // Update loading radius based on premium status
-      const radius = hasPremium ? 500 : 20
-      setCurrentLoadingRadius(radius)
+      // Don't update loading radius - keep all events visible
+      // const radius = hasPremium ? 500 : 20
+      // setCurrentLoadingRadius(radius)
     } catch (error) {
       // Error loading user features
     }
@@ -1023,9 +1114,10 @@ const MapViewNative: React.FC = () => {
 
   // Optimized search and filter function - no limits, only country filter
   const applySearchAndFilters = useCallback(() => {
-    // Only process if we have events
+    console.log(`🎯 applySearchAndFilters called with ${events?.length || 0} events`)
+    // Only process if we have events - but don't clear existing filtered events
     if (!events || events.length === 0) {
-      setFilteredEvents([])
+      console.log('🎯 applySearchAndFilters: No events to filter, keeping existing filtered events')
       return
     }
 
@@ -1166,13 +1258,14 @@ const MapViewNative: React.FC = () => {
     }
 
     // No artificial limits - show all filtered events
+    console.log(`🎯 applySearchAndFilters: Setting ${filtered.length} filtered events`)
     setFilteredEvents(filtered)
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
   useEffect(() => {
     applySearchAndFilters()
-  }, [searchFilters.query, searchFilters.category, searchFilters.source, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures, applySearchAndFilters])
+  }, [searchFilters.query, searchFilters.category, searchFilters.source, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.distanceFilter, searchFilters.distanceRadius, searchFilters.userLocation, userFeatures])
 
   // Handle map region changes - just update the region, no need to reload events
   const handleRegionChange = useCallback((region: Region) => {
@@ -1260,7 +1353,10 @@ const MapViewNative: React.FC = () => {
 
   // Create clusters from filtered events
   const memoizedClusters = useMemo(() => {
-    return createClusters(filteredEvents)
+    console.log(`🎯 Creating clusters from ${filteredEvents.length} filtered events`)
+    const clusters = createClusters(filteredEvents)
+    console.log(`🎯 Created ${clusters.length} clusters`)
+    return clusters
   }, [filteredEvents])
 
   // Update clusters when filtered events change
@@ -1305,6 +1401,7 @@ const MapViewNative: React.FC = () => {
 
   // Memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
+    console.log(`🎯 Creating markers from ${memoizedClusters.length} clusters`)
     const markers: React.ReactElement[] = []
     
     memoizedClusters.forEach((cluster) => {
@@ -1371,6 +1468,7 @@ const MapViewNative: React.FC = () => {
       }
     })
     
+    console.log(`🎯 Created ${markers.length} markers`)
     return markers
   }, [memoizedClusters, createMarkerPressHandler, handleClusterPress])
 
@@ -1733,6 +1831,7 @@ const MapViewNative: React.FC = () => {
         index === self.findIndex(e => e.id === event.id)
       )
       
+      console.log(`🎯 loadUserCreatedEvents: Setting ${uniqueEvents.length} events (${validatedUserEvents.length} user events added)`)
       setEvents(uniqueEvents)
       setFilteredEvents(uniqueEvents)
       

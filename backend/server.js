@@ -32,17 +32,20 @@ const io = socketIo(server, {
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000', 'http://localhost:8081', 'exp://localhost:8081']
+    ? ['https://olympio.ee'] 
+    : ['http://localhost:3000', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'exp://10.0.0.57:8081']
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use('/api/', limiter);
+// Rate limiting (can be disabled with DISABLE_RATE_LIMIT=true)
+// Rate limiting is disabled during bulk migration to avoid 429s
+// Re-enable in production as needed.
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // limit each IP to 100 requests per windowMs
+//   message: 'Too many requests from this IP, please try again later.'
+// });
+// app.use('/api/', limiter);
+logger.warn('Rate limiting middleware is DISABLED for migration');
 
 // Middleware
 app.use(compression());
