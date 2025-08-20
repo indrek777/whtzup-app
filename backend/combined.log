@@ -13588,3 +13588,4 @@
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:19:22:58 +0000] \"GET /api/auth/profile HTTP/1.1\" 304 - \"-\" \"Expo/1017721 CFNetwork/3860.100.1 Darwin/25.0.0\"","service":"whtzup-api","timestamp":"2025-08-20T19:22:58.945Z"}
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:19:22:59 +0000] \"GET /api/events?latitude=59.522339982560155&longitude=24.82573810997277&radius=50 HTTP/1.1\" 200 - \"-\" \"Expo/1017721 CFNetwork/3860.100.1 Darwin/25.0.0\"","service":"whtzup-api","timestamp":"2025-08-20T19:22:59.014Z"}
 {"level":"info","message":"::1 - - [20/Aug/2025:19:23:10 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T19:23:10.856Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:19:23:42 +0000] \"GET /health HTTP/1.1\" 200 77 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T19:23:42.822Z"}
