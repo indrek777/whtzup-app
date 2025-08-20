@@ -664,8 +664,8 @@ const MapViewNative: React.FC = () => {
     dateFrom: new Date().toISOString().split('T')[0], // Today
     dateTo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from now
     showSearchModal: false,
-    distanceFilter: false,
-    distanceRadius: 10, // Default 10km radius
+    distanceFilter: true, // Enable distance filter by default
+    distanceRadius: 20, // Default 20km radius for free users
     userLocation: null
   })
 
@@ -758,6 +758,15 @@ const MapViewNative: React.FC = () => {
           console.log(`🎯 Setting ${initialEvents.length} events to display on map (filtered within ${radius}km of Estonia center)`)
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
+          
+          // Set search filters to use Estonia center with distance filter enabled
+          setSearchFilters(prev => ({
+            ...prev,
+            userLocation: { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
+            distanceFilter: true, // Enable distance filter by default
+            distanceRadius: 20 // Set to 20km radius for free users
+          }))
+          
           console.log(`🎯 Events state should now have ${initialEvents.length} events (no location permission)`)
           setIsLoading(false)
           return
@@ -771,11 +780,13 @@ const MapViewNative: React.FC = () => {
         setUserLocation(userLoc)
         setLocation(location)
         
-        // Update search filters with user location
-        setSearchFilters(prev => ({
-          ...prev,
-          userLocation: userLoc
-        }))
+        // Update search filters with user location and enable distance filter by default
+                    setSearchFilters(prev => ({
+              ...prev,
+              userLocation: userLoc,
+              distanceFilter: true, // Enable distance filter by default
+              distanceRadius: 20 // Set to 20km radius for free users
+            }))
         
         // Center map on user location with 500km view
         setMapRegion({
@@ -941,7 +952,7 @@ const MapViewNative: React.FC = () => {
       setCurrentLoadingRadius(radius)
       return radius
     } catch (error) {
-      // Fallback to free user radius if there's an error
+      // Fallback to 20km radius if there's an error
       setCurrentLoadingRadius(20)
       return 20
     }
@@ -1257,17 +1268,15 @@ const MapViewNative: React.FC = () => {
         })
       }
     } else {
-      // If no date filter is applied, show events from 1 year ago to 1 year ahead
+      // If no date filter is applied, show events for the next 7 days by default
       const today = new Date()
-      const oneYearAgo = new Date()
-      oneYearAgo.setFullYear(today.getFullYear() - 1)
-      const oneYearAhead = new Date()
-      oneYearAhead.setFullYear(today.getFullYear() + 1)
+      const nextWeek = new Date()
+      nextWeek.setDate(today.getDate() + 7)
       
       filtered = filtered.filter(event => {
         try {
           const eventDate = new Date(event.startsAt)
-          return eventDate >= oneYearAgo && eventDate <= oneYearAhead
+          return eventDate >= today && eventDate <= nextWeek
         } catch (error) {
           return false
         }
@@ -3202,36 +3211,36 @@ const MapViewNative: React.FC = () => {
                     )}
                   </View>
                   
-                  <View style={styles.radiusSelector}>
-                    {[5, 10, 25, 50, 100].map((radius) => {
-                      const isPremiumOnly = radius > 20 && !userFeatures.hasPremium
-                      return (
-                        <TouchableOpacity
-                          key={radius}
-                          style={[
-                            styles.radiusButton,
-                            searchFilters.distanceRadius === radius && styles.radiusButtonActive,
-                            isPremiumOnly && styles.radiusButtonDisabled
-                          ]}
-                          onPress={() => {
-                            if (!isPremiumOnly) {
-                              setSearchFilters(prev => ({ ...prev, distanceRadius: radius }))
-                            }
-                          }}
-                          disabled={isPremiumOnly}
-                        >
-                          <Text style={[
-                            styles.radiusButtonText,
-                            searchFilters.distanceRadius === radius && styles.radiusButtonTextActive,
-                            isPremiumOnly && styles.radiusButtonTextDisabled
-                          ]}>
-                            {radius}km
-                            {isPremiumOnly && ' 🔒'}
-                          </Text>
-                        </TouchableOpacity>
-                      )
-                    })}
-                  </View>
+                            <View style={styles.radiusSelector}>
+            {[5, 10, 25, 50, 100].map((radius) => {
+              const isPremiumOnly = radius > 20 && !userFeatures.hasPremium
+              return (
+                <TouchableOpacity
+                  key={radius}
+                  style={[
+                    styles.radiusButton,
+                    searchFilters.distanceRadius === radius && styles.radiusButtonActive,
+                    isPremiumOnly && styles.radiusButtonDisabled
+                  ]}
+                  onPress={() => {
+                    if (!isPremiumOnly) {
+                      setSearchFilters(prev => ({ ...prev, distanceRadius: radius }))
+                    }
+                  }}
+                  disabled={isPremiumOnly}
+                >
+                  <Text style={[
+                    styles.radiusButtonText,
+                    searchFilters.distanceRadius === radius && styles.radiusButtonTextActive,
+                    isPremiumOnly && styles.radiusButtonTextDisabled
+                  ]}>
+                    {radius}km
+                    {isPremiumOnly && ' 🔒'}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
                   
                   {!searchFilters.userLocation && (
                     <Text style={styles.locationWarning}>

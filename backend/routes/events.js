@@ -109,12 +109,34 @@ router.post('/', eventValidation, async (req, res) => {
     }
 
     const deviceId = req.headers['x-device-id'];
-    const eventId = uuidv4();
     const {
       name, description, category, venue, address, 
       latitude, longitude, startsAt, createdBy
     } = req.body;
 
+    // Check if event with same name and venue already exists
+    const existingQuery = `
+      SELECT * FROM events 
+      WHERE name = $1 AND venue = $2 AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    const existingResult = await pool.query(existingQuery, [name, venue]);
+    
+    if (existingResult.rows.length > 0) {
+      // Event already exists, return the existing event
+      const existingEvent = existingResult.rows[0];
+      console.log(`Event already exists: ${name} at ${venue}, returning existing event`);
+      
+      return res.status(200).json({
+        success: true,
+        data: existingEvent,
+        message: 'Event already exists',
+        deviceId,
+        isDuplicate: true
+      });
+    }
+
+    const eventId = uuidv4();
     const query = `
       INSERT INTO events (id, name, description, category, venue, address, 
                          latitude, longitude, starts_at, created_by)
@@ -130,12 +152,17 @@ router.post('/', eventValidation, async (req, res) => {
     const result = await pool.query(query, values);
     const newEvent = result.rows[0];
 
-          // Broadcast to all connected clients
+    // Log the creation
+    console.log(`Event created: ${newEvent.name} at ${newEvent.venue}`);
+
+    // Broadcast to all connected clients
+    if (req.io) {
       req.io.emit('event-created', {
         eventId: newEvent.id,
         eventData: newEvent,
         timestamp: new Date().toISOString()
       });
+    }
 
     res.status(201).json({
       success: true,
@@ -145,6 +172,17 @@ router.post('/', eventValidation, async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating event:', error);
+    
+    // Handle unique constraint violation
+    if (error.code === '23505' && error.constraint === 'idx_events_name_venue_unique') {
+      return res.status(409).json({
+        success: false,
+        error: 'Event already exists',
+        details: 'An event with this name and venue already exists',
+        deviceId
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create event',

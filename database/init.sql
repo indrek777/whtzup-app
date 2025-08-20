@@ -27,6 +27,9 @@ CREATE INDEX IF NOT EXISTS idx_events_starts_at ON events(starts_at);
 CREATE INDEX IF NOT EXISTS idx_events_updated_at ON events(updated_at);
 CREATE INDEX IF NOT EXISTS idx_events_deleted_at ON events(deleted_at);
 
+-- Create unique constraint to prevent duplicates based on name and venue
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_name_venue_unique ON events(name, venue) WHERE deleted_at IS NULL;
+
 -- Create sync_log table for tracking changes
 CREATE TABLE IF NOT EXISTS sync_log (
     id SERIAL PRIMARY KEY,

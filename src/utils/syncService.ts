@@ -199,6 +199,17 @@ class SyncService {
         });
 
         if (response.success) {
+          // Handle duplicate event response
+          if (response.isDuplicate) {
+            console.log('Event already exists, returning existing event');
+            const existingEvent = {
+              ...response.data,
+              latitude: Number(response.data.latitude) || 0,
+              longitude: Number(response.data.longitude) || 0
+            };
+            return existingEvent;
+          }
+
           this.socket?.emit('event-created', {
             eventId: response.data.id,
             eventData: response.data,
