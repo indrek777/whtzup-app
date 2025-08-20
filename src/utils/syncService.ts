@@ -254,8 +254,8 @@ class SyncService {
             // Ensure required fields are present and properly typed
             id: response.data.id || event.id,
             name: response.data.name || event.name,
-            latitude: Number(response.data.latitude) || Number(event.latitude) || 0,
-            longitude: Number(response.data.longitude) || Number(event.longitude) || 0,
+            latitude: response.data.latitude !== null && response.data.latitude !== undefined ? Number(response.data.latitude) : (event.latitude !== null && event.latitude !== undefined ? Number(event.latitude) : 0),
+            longitude: response.data.longitude !== null && response.data.longitude !== undefined ? Number(response.data.longitude) : (event.longitude !== null && event.longitude !== undefined ? Number(event.longitude) : 0),
             venue: response.data.venue || event.venue || '',
             address: response.data.address || event.address || '',
             startsAt: response.data.startsAt || event.startsAt,

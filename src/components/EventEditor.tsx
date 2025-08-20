@@ -257,7 +257,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setOrganizer(event.createdBy || 'Event Organizer')
     setAttendees('0') // Default value since this field doesn't exist in the Event type
     setMaxAttendees('')
-    setCoordinates([event.latitude || 0, event.longitude || 0])
+            setCoordinates([event.latitude, event.longitude])
   }
 
   // Populate bulk edit form
