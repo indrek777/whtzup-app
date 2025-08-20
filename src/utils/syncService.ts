@@ -340,11 +340,16 @@ class SyncService {
       console.log('✅ API Response:', response.success ? 'SUCCESS' : 'FAILED');
       if (response.success) {
         console.log(`📊 Received ${response.data?.length || 0} events from server`);
-        // Ensure all events have properly typed coordinates
+        // Ensure all events have properly typed coordinates and field mapping
         const typedEvents = response.data.map((event: any) => ({
           ...event,
           latitude: Number(event.latitude) || 0,
-          longitude: Number(event.longitude) || 0
+          longitude: Number(event.longitude) || 0,
+          startsAt: event.startsAt || event.starts_at || '', // Map database field to interface field
+          venue: event.venue || '',
+          address: event.address || '',
+          category: event.category || 'other',
+          createdBy: event.createdBy || event.created_by || 'Event Organizer'
         }));
         // Cache the events for offline use
         await this.setCachedEvents(typedEvents);
@@ -422,11 +427,16 @@ class SyncService {
     try {
       const cached = await AsyncStorage.getItem('cachedEvents');
       const events = cached ? JSON.parse(cached) : [];
-      // Ensure all cached events have properly typed coordinates
+      // Ensure all cached events have properly typed coordinates and field mapping
       return events.map((event: any) => ({
         ...event,
         latitude: Number(event.latitude) || 0,
-        longitude: Number(event.longitude) || 0
+        longitude: Number(event.longitude) || 0,
+        startsAt: event.startsAt || event.starts_at || '', // Map database field to interface field
+        venue: event.venue || '',
+        address: event.address || '',
+        category: event.category || 'other',
+        createdBy: event.createdBy || event.created_by || 'Event Organizer'
       }));
     } catch (error) {
       console.error('Error getting cached events:', error);
@@ -446,11 +456,16 @@ class SyncService {
   private async handleRemoteEventCreated(data: any): Promise<void> {
     try {
       const events = await this.getCachedEvents();
-      // Ensure the created event has properly typed coordinates
+      // Ensure the created event has properly typed coordinates and field mapping
       const createdEvent = {
         ...data.eventData,
         latitude: Number(data.eventData.latitude) || 0,
-        longitude: Number(data.eventData.longitude) || 0
+        longitude: Number(data.eventData.longitude) || 0,
+        startsAt: data.eventData.startsAt || data.eventData.starts_at || '', // Map database field to interface field
+        venue: data.eventData.venue || '',
+        address: data.eventData.address || '',
+        category: data.eventData.category || 'other',
+        createdBy: data.eventData.createdBy || data.eventData.created_by || 'Event Organizer'
       };
       events.push(createdEvent);
       await this.setCachedEvents(events);
@@ -465,11 +480,16 @@ class SyncService {
       const events = await this.getCachedEvents();
       const index = events.findIndex(e => e.id === data.eventId);
       if (index !== -1) {
-        // Ensure the updated event has properly typed coordinates
+        // Ensure the updated event has properly typed coordinates and field mapping
         const updatedEvent = {
           ...data.eventData,
           latitude: Number(data.eventData.latitude) || 0,
-          longitude: Number(data.eventData.longitude) || 0
+          longitude: Number(data.eventData.longitude) || 0,
+          startsAt: data.eventData.startsAt || data.eventData.starts_at || '', // Map database field to interface field
+          venue: data.eventData.venue || '',
+          address: data.eventData.address || '',
+          category: data.eventData.category || 'other',
+          createdBy: data.eventData.createdBy || data.eventData.created_by || 'Event Organizer'
         };
         events[index] = updatedEvent;
         await this.setCachedEvents(events);

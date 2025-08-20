@@ -661,11 +661,11 @@ const MapViewNative: React.FC = () => {
     query: '',
     category: 'All',
     source: 'All',
-    dateFrom: new Date().toISOString().split('T')[0], // Today
-    dateTo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week from now
+    dateFrom: '', // No date filter by default
+    dateTo: '', // No date filter by default
     showSearchModal: false,
-    distanceFilter: true, // Enable distance filter by default
-    distanceRadius: 20, // Default 20km radius for free users
+    distanceFilter: false, // Disable distance filter by default
+    distanceRadius: 500, // Default 500km radius for better coverage
     userLocation: null
   })
 
@@ -695,12 +695,12 @@ const MapViewNative: React.FC = () => {
   })
 
   // Current loading radius state
-  const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(20)
+  const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(500)
 
-  // Ensure free users can't have radius greater than 20km
+  // Ensure free users can't have radius greater than 500km (allow reasonable default)
   useEffect(() => {
-    if (!userFeatures.hasPremium && searchFilters.distanceRadius > 20) {
-      setSearchFilters(prev => ({ ...prev, distanceRadius: 20 }))
+    if (!userFeatures.hasPremium && searchFilters.distanceRadius > 500) {
+      setSearchFilters(prev => ({ ...prev, distanceRadius: 500 }))
     }
   }, [userFeatures.hasPremium, searchFilters.distanceRadius])
 
@@ -764,7 +764,7 @@ const MapViewNative: React.FC = () => {
             ...prev,
             userLocation: { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
             distanceFilter: true, // Enable distance filter by default
-            distanceRadius: 20 // Set to 20km radius for free users
+            distanceRadius: 500 // Set to 500km radius for better coverage
           }))
           
           console.log(`🎯 Events state should now have ${initialEvents.length} events (no location permission)`)
@@ -785,7 +785,7 @@ const MapViewNative: React.FC = () => {
               ...prev,
               userLocation: userLoc,
               distanceFilter: true, // Enable distance filter by default
-              distanceRadius: 20 // Set to 20km radius for free users
+              distanceRadius: 500 // Set to 500km radius for better coverage
             }))
         
         // Center map on user location with 500km view
@@ -948,13 +948,13 @@ const MapViewNative: React.FC = () => {
   const getEventLoadingRadius = async (): Promise<number> => {
     try {
       const hasPremium = await userService.hasPremiumSubscription()
-      const radius = hasPremium ? 500 : 20 // 500km for premium, 20km for free users
+      const radius = hasPremium ? 500 : 500 // 500km for both premium and free users
       setCurrentLoadingRadius(radius)
       return radius
     } catch (error) {
-      // Fallback to 20km radius if there's an error
-      setCurrentLoadingRadius(20)
-      return 20
+      // Fallback to 500km radius if there's an error
+      setCurrentLoadingRadius(500)
+      return 500
     }
   }
 
@@ -1144,6 +1144,8 @@ const MapViewNative: React.FC = () => {
   // Optimized search and filter function - no limits, only country filter
   const applySearchAndFilters = useCallback(() => {
     console.log(`🎯 applySearchAndFilters called with ${events?.length || 0} events`)
+    console.log(`🎯 Current search filters:`, searchFilters)
+    
     // Only process if we have events - but don't clear existing filtered events
     if (!events || events.length === 0) {
       console.log('🎯 applySearchAndFilters: No events to filter, keeping existing filtered events')
@@ -1151,6 +1153,7 @@ const MapViewNative: React.FC = () => {
     }
 
     let filtered = events
+    console.log(`🎯 Starting with ${filtered.length} events`)
 
     // Smart text search with venue/address prioritization
     if (searchFilters.query.trim()) {
@@ -1196,6 +1199,8 @@ const MapViewNative: React.FC = () => {
         const scoreB = (b as any).relevanceScore || 0
         return scoreB - scoreA
       })
+      
+      console.log(`🎯 After text search: ${filtered.length} events`)
     }
 
     // Category filter
@@ -1204,6 +1209,7 @@ const MapViewNative: React.FC = () => {
         const category = event.category || determineCategory(event.name, event.description)
         return category === searchFilters.category
       })
+      console.log(`🎯 After category filter: ${filtered.length} events`)
     }
 
     // Source filter
@@ -1237,6 +1243,8 @@ const MapViewNative: React.FC = () => {
         return false
       }
     })
+    
+    console.log(`🎯 After past events filter: ${filtered.length} events`)
 
     // Date range filter (premium feature)
     if (searchFilters.dateFrom || searchFilters.dateTo) {
@@ -1267,20 +1275,22 @@ const MapViewNative: React.FC = () => {
           return true
         })
       }
+      console.log(`🎯 After date range filter: ${filtered.length} events`)
     } else {
-      // If no date filter is applied, show events for the next 7 days by default
+      // If no date filter is applied, show events for the next 2 years by default (much more lenient)
       const today = new Date()
-      const nextWeek = new Date()
-      nextWeek.setDate(today.getDate() + 7)
+      const twoYearsFromNow = new Date()
+      twoYearsFromNow.setFullYear(today.getFullYear() + 2)
       
       filtered = filtered.filter(event => {
         try {
           const eventDate = new Date(event.startsAt)
-          return eventDate >= today && eventDate <= nextWeek
+          return eventDate >= today && eventDate <= twoYearsFromNow
         } catch (error) {
           return false
         }
       })
+      console.log(`🎯 After default date filter: ${filtered.length} events`)
     }
 
     // Distance filter
@@ -1294,11 +1304,19 @@ const MapViewNative: React.FC = () => {
         )
         return distance <= searchFilters.distanceRadius
       })
+      console.log(`🎯 After distance filter: ${filtered.length} events`)
     }
 
     // No artificial limits - show all filtered events
     console.log(`🎯 applySearchAndFilters: Setting ${filtered.length} filtered events`)
-    setFilteredEvents(filtered)
+    
+    // Fallback: if no events match filters, show some events to prevent empty map
+    if (filtered.length === 0 && events.length > 0) {
+      console.log(`🎯 No events match filters, showing first 50 events as fallback`)
+      setFilteredEvents(events.slice(0, 50))
+    } else {
+      setFilteredEvents(filtered)
+    }
   }, [events, searchFilters, userFeatures])
 
   // Apply filters when search criteria change
