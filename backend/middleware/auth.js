@@ -176,8 +176,73 @@ const requirePremium = async (req, res, next) => {
   }
 };
 
+// Middleware to check if user can edit/delete an event
+const canEditEvent = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+    
+    const { id } = req.params;
+    
+    // Get the event to check ownership
+    const eventResult = await pool.query(`
+      SELECT created_by FROM events WHERE id = $1 AND deleted_at IS NULL
+    `, [id]);
+    
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+    
+    const event = eventResult.rows[0];
+    
+    // Check if user is the creator of the event
+    if (event.created_by === req.user.id) {
+      return next(); // User can edit their own events
+    }
+    
+    // Check if user has premium subscription (premium users can edit any event)
+    const subscriptionResult = await pool.query(`
+      SELECT status, end_date
+      FROM user_subscriptions
+      WHERE user_id = $1
+    `, [req.user.id]);
+    
+    if (subscriptionResult.rows.length > 0) {
+      const subscription = subscriptionResult.rows[0];
+      
+      if (subscription.status === 'premium') {
+        // Check if subscription is not expired
+        if (!subscription.end_date || new Date() <= new Date(subscription.end_date)) {
+          return next(); // Premium user can edit any event
+        }
+      }
+    }
+    
+    // Free user trying to edit someone else's event
+    return res.status(403).json({
+      success: false,
+      error: 'You can only edit events you created. Upgrade to premium to edit any event.'
+    });
+    
+  } catch (error) {
+    logger.error('Event edit permission check error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify edit permissions'
+    });
+  }
+};
+
 module.exports = {
   authenticateToken,
   optionalAuth,
-  requirePremium
+  requirePremium,
+  canEditEvent
 };

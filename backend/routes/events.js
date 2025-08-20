@@ -6,6 +6,9 @@ const router = express.Router();
 // Get database connection from config
 const { pool } = require('../config/database');
 
+// Import authentication middleware
+const { authenticateToken, canEditEvent } = require('../middleware/auth');
+
 // Validation schemas
 const eventValidation = [
   body('name').trim().isLength({ min: 1, max: 500 }).withMessage('Name is required and must be less than 500 characters'),
@@ -208,7 +211,7 @@ router.post('/', eventValidation, async (req, res) => {
 });
 
 // PUT /api/events/:id - Update event
-router.put('/:id', eventValidation, async (req, res) => {
+router.put('/:id', authenticateToken, canEditEvent, eventValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -280,7 +283,7 @@ router.put('/:id', eventValidation, async (req, res) => {
 });
 
 // DELETE /api/events/:id - Soft delete event
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, canEditEvent, async (req, res) => {
   try {
     const { id } = req.params;
     const deviceId = req.headers['x-device-id'];

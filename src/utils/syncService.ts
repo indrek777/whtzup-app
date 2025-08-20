@@ -158,9 +158,21 @@ class SyncService {
   // API calls with offline support
   private async makeApiCall(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${API_BASE_URL}/api${endpoint}`;
+    
+    // Get authentication headers if available
+    let authHeaders = {};
+    try {
+      const { userService } = await import('./userService');
+      authHeaders = await userService.getAuthHeaders();
+    } catch (error) {
+      // If userService is not available, continue without auth headers
+      console.log('🔓 No authentication available for API call');
+    }
+    
     const headers = {
       'Content-Type': 'application/json',
       'X-Device-ID': this.deviceId || '',
+      ...authHeaders,
       ...options.headers
     };
 
@@ -177,7 +189,30 @@ class SyncService {
 
       if (!response.ok) {
         console.log('❌ HTTP Error:', response.status, response.statusText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        
+        // Try to get error details from response
+        let errorMessage = response.statusText;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (jsonError) {
+          // If we can't parse JSON, use the status text
+        }
+        
+        // Provide user-friendly error messages
+        if (response.status === 401) {
+          errorMessage = 'Please sign in to perform this action.';
+        } else if (response.status === 403) {
+          errorMessage = errorMessage || 'You do not have permission to perform this action.';
+        } else if (response.status === 404) {
+          errorMessage = 'The requested item was not found.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -185,6 +220,7 @@ class SyncService {
       return data;
     } catch (error) {
       console.error('❌ API call failed:', error);
+      // Re-throw with original message if it's already user-friendly
       throw error;
     }
   }

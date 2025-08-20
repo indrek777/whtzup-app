@@ -338,7 +338,7 @@ class EventService {
   }
   
   // Update an existing event
-  async updateEvent(eventId: string, updatedData: Partial<Event>): Promise<boolean> {
+  async updateEvent(eventId: string, updatedData: Partial<Event>): Promise<{ success: boolean; error?: string }> {
     try {
       // Get all local events
       const localEvents = await this.getLocalEvents()
@@ -347,7 +347,7 @@ class EventService {
       const eventIndex = localEvents.findIndex(event => event.id === eventId)
       if (eventIndex === -1) {
         console.error('Event not found for update:', eventId)
-        return false
+        return { success: false, error: 'Event not found' }
       }
       
       const originalEvent = localEvents[eventIndex]
@@ -395,33 +395,50 @@ class EventService {
       // Try to sync with backend (if configured)
       if (API_BASE_URL) {
         try {
+          // Get authentication headers
+          const { userService } = await import('./userService')
+          const headers = await userService.getAuthHeaders()
+          
           const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify(updatedData)
           })
           
           if (!response.ok) {
-            // Queue for later sync if backend update fails
-            await this.queueForSync(updatedEvent)
+            const errorData = await response.json().catch(() => ({}))
+            
+            // Handle specific error cases
+            if (response.status === 401) {
+              throw new Error('Authentication required. Please sign in to edit events.')
+            } else if (response.status === 403) {
+              throw new Error(errorData.error || 'You do not have permission to edit this event. Upgrade to premium to edit any event.')
+            } else if (response.status === 404) {
+              throw new Error('Event not found.')
+            } else {
+              // Queue for later sync if backend update fails
+              await this.queueForSync(updatedEvent)
+            }
           }
         } catch (backendError) {
+          if (backendError instanceof Error) {
+            throw backendError // Re-throw specific error messages
+          }
           // Queue for later sync if backend is unavailable
           await this.queueForSync(updatedEvent)
         }
       }
       
-      return true
+      return { success: true }
     } catch (error) {
       console.error('Error updating event:', error)
-      return false
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update event'
+      return { success: false, error: errorMessage }
     }
   }
   
   // Delete an event
-  async deleteEvent(eventId: string): Promise<boolean> {
+  async deleteEvent(eventId: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Get all local events
       const localEvents = await this.getLocalEvents()
@@ -430,7 +447,7 @@ class EventService {
       const eventToDelete = localEvents.find(event => event.id === eventId)
       if (!eventToDelete) {
         console.error('Event not found for deletion:', eventId)
-        return false
+        return { success: false, error: 'Event not found' }
       }
       
       // If this is a recurring event, delete all related instances
@@ -455,25 +472,42 @@ class EventService {
       // Try to delete from backend (if configured)
       if (API_BASE_URL) {
         try {
+          // Get authentication headers
+          const { userService } = await import('./userService')
+          const headers = await userService.getAuthHeaders()
+          
           const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
             method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            }
+            headers
           })
           
           if (!response.ok) {
-            console.warn('Backend deletion failed, but event removed locally')
+            const errorData = await response.json().catch(() => ({}))
+            
+            // Handle specific error cases
+            if (response.status === 401) {
+              throw new Error('Authentication required. Please sign in to delete events.')
+            } else if (response.status === 403) {
+              throw new Error(errorData.error || 'You do not have permission to delete this event. Upgrade to premium to delete any event.')
+            } else if (response.status === 404) {
+              throw new Error('Event not found.')
+            } else {
+              console.warn('Backend deletion failed, but event removed locally')
+            }
           }
         } catch (backendError) {
+          if (backendError instanceof Error) {
+            throw backendError // Re-throw specific error messages
+          }
           console.warn('Backend unavailable, but event removed locally')
         }
       }
       
-      return true
+      return { success: true }
     } catch (error) {
       console.error('Error deleting event:', error)
-      return false
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete event'
+      return { success: false, error: errorMessage }
     }
   }
   

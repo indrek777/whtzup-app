@@ -126,6 +126,27 @@ class UserService {
     return false
   }
 
+  // Check if user can edit a specific event
+  async canEditEvent(event: { createdBy?: string; source?: string }): Promise<boolean> {
+    await this.ensureInitialized()
+    
+    // If not authenticated, cannot edit any events
+    if (!this.currentUser) return false
+    
+    // If user has premium subscription, they can edit any event
+    if (await this.hasPremiumSubscription()) return true
+    
+    // For free users, they can only edit events they created
+    // Check if the event was created by the current user
+    if (event.createdBy === this.currentUser.id) return true
+    
+    // Legacy check: if event has source 'user' but no createdBy, allow edit
+    // This is for backward compatibility with old events
+    if (event.source === 'user' && !event.createdBy) return true
+    
+    return false
+  }
+
   // Check if subscription is cancelled (auto-renew disabled)
   async isSubscriptionCancelled(): Promise<boolean> {
     await this.ensureInitialized()

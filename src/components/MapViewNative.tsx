@@ -595,6 +595,7 @@ const MapViewNative: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null)
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
   const [eventDetails, setEventDetails] = useState<{event: Event, distanceInfo: string, ratingInfo: string, userRatingInfo: string, syncInfo: string, date: string, time: string, category: string} | null>(null)
+  const [canEditCurrentEvent, setCanEditCurrentEvent] = useState(false)
   
   // State for marker behavior
   const markerRefs = useRef<{ [key: string]: any }>({})
@@ -1397,7 +1398,7 @@ const MapViewNative: React.FC = () => {
   }, [])
 
   // Helper function to open event details modal
-  const openEventDetailsModal = useCallback((event: Event) => {
+  const openEventDetailsModal = useCallback(async (event: Event) => {
     const { date, time } = parseDateTime(event.startsAt)
     const category = event.category || determineCategory(event.name, event.description)
     const averageRating = getAverageRating(event.id)
@@ -1418,6 +1419,10 @@ const MapViewNative: React.FC = () => {
     const ratingInfo = `⭐ Community Rating: ${averageRating}/5 (${ratingCount} reviews)`
     const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
     const syncInfo = '📱 Local rating only (backend not configured)'
+    
+    // Check if user can edit this event
+    const canEdit = await userService.canEditEvent(event)
+    setCanEditCurrentEvent(canEdit)
     
     setEventDetails({
       event,
@@ -1975,7 +1980,20 @@ const MapViewNative: React.FC = () => {
   };
 
   // Event management functions
-  const startEditingEvent = (event: Event) => {
+  const startEditingEvent = async (event: Event) => {
+    // Safety check: Verify user is authenticated and has permission
+    const isAuthenticated = await userService.isAuthenticated()
+    if (!isAuthenticated) {
+      Alert.alert('Sign In Required', 'Please sign in to edit events.')
+      return
+    }
+    
+    const canEdit = await userService.canEditEvent(event)
+    if (!canEdit) {
+      Alert.alert('Permission Denied', 'You do not have permission to edit this event. You can only edit events you created, or upgrade to premium for full access.')
+      return
+    }
+    
     setEditingEventId(event.id)
     setNewEvent({
       name: event.name || '',
@@ -2007,70 +2025,82 @@ const MapViewNative: React.FC = () => {
 
     setIsCreatingEvent(true)
 
-    try {
-      const updatedData = {
-        name: newEvent.name.trim(),
-        description: newEvent.description.trim(),
-        venue: newEvent.venue.trim(),
-        address: newEvent.address.trim(),
-        startsAt: newEvent.startsAt,
-        latitude: selectedLocation.latitude,
-        longitude: selectedLocation.longitude,
-        category: newEvent.category,
-        isRecurring: newEvent.isRecurring,
-        recurringPattern: newEvent.recurringPattern,
-        recurringDays: newEvent.recurringDays,
-        recurringInterval: newEvent.recurringInterval,
-        recurringEndDate: newEvent.recurringEndDate,
-        recurringOccurrences: newEvent.recurringOccurrences
-      }
-
-      const success = await eventService.updateEvent(editingEventId, updatedData)
-      
-      if (success) {
-        Alert.alert(
-          'Success!', 
-          'Event updated successfully! 🎉',
-          [{ text: 'OK', onPress: () => {
-            setShowCreateEventModal(false)
-            setIsEditingEvent(false)
-            setEditingEventId(null)
-          }}]
-        )
-
-        // Reload events to reflect changes
-        await loadUserCreatedEvents()
-        
-        // Reset form
-        setNewEvent({
-          name: '',
-          description: '',
-          venue: '',
-          address: '',
-          startsAt: '',
-          category: 'Other',
-          latitude: 0,
-          longitude: 0,
-          isRecurring: false,
-          recurringPattern: 'daily',
-          recurringDays: [0],
-          recurringInterval: 1,
-          recurringEndDate: '',
-          recurringOccurrences: 1
-        })
-        setSelectedLocation(null)
-      } else {
-        Alert.alert('Error', 'Failed to update event. Please try again.')
-      }
-
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred while updating the event.')
-    } finally {
-      setIsCreatingEvent(false)
+    const updatedData = {
+      name: newEvent.name.trim(),
+      description: newEvent.description.trim(),
+      venue: newEvent.venue.trim(),
+      address: newEvent.address.trim(),
+      startsAt: newEvent.startsAt,
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      category: newEvent.category,
+      isRecurring: newEvent.isRecurring,
+      recurringPattern: newEvent.recurringPattern,
+      recurringDays: newEvent.recurringDays,
+      recurringInterval: newEvent.recurringInterval,
+      recurringEndDate: newEvent.recurringEndDate,
+      recurringOccurrences: newEvent.recurringOccurrences
     }
+
+    const result = await eventService.updateEvent(editingEventId, updatedData)
+    
+    if (result.success) {
+      Alert.alert(
+        'Success!', 
+        'Event updated successfully! 🎉',
+        [{ text: 'OK', onPress: () => {
+          setShowCreateEventModal(false)
+          setIsEditingEvent(false)
+          setEditingEventId(null)
+        }}]
+      )
+
+      // Reload events to reflect changes
+      await loadUserCreatedEvents()
+      
+      // Reset form
+      setNewEvent({
+        name: '',
+        description: '',
+        venue: '',
+        address: '',
+        startsAt: '',
+        category: 'Other',
+        latitude: 0,
+        longitude: 0,
+        isRecurring: false,
+        recurringPattern: 'daily',
+        recurringDays: [0],
+        recurringInterval: 1,
+        recurringEndDate: '',
+        recurringOccurrences: 1
+      })
+      setSelectedLocation(null)
+    } else {
+      Alert.alert('Error', result.error || 'Failed to update event. Please try again.')
+    }
+
+    setIsCreatingEvent(false)
   }
 
   const deleteEvent = async (eventId: string) => {
+    // Safety check: Verify user is authenticated and has permission
+    const isAuthenticated = await userService.isAuthenticated()
+    if (!isAuthenticated) {
+      Alert.alert('Sign In Required', 'Please sign in to delete events.')
+      return
+    }
+    
+    // Find the event to check permissions
+    const event = events.find(e => e.id === eventId) || filteredEvents.find(e => e.id === eventId)
+    if (event) {
+      const canEdit = await userService.canEditEvent(event)
+      if (!canEdit) {
+        Alert.alert('Permission Denied', 'You do not have permission to delete this event. You can only delete events you created, or upgrade to premium for full access.')
+        return
+      }
+    }
+    
     Alert.alert(
       'Delete Event',
       'Are you sure you want to delete this event? This action cannot be undone.',
@@ -2080,20 +2110,16 @@ const MapViewNative: React.FC = () => {
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
-            try {
-              const success = await eventService.deleteEvent(eventId)
+            const result = await eventService.deleteEvent(eventId)
+            
+            if (result.success) {
+              Alert.alert('Success', 'Event deleted successfully!')
+              setShowEventDetailsModal(false)
               
-              if (success) {
-                Alert.alert('Success', 'Event deleted successfully!')
-                setShowEventDetailsModal(false)
-                
-                // Reload events to reflect changes
-                await loadUserCreatedEvents()
-              } else {
-                Alert.alert('Error', 'Failed to delete event. Please try again.')
-              }
-            } catch (error) {
-              Alert.alert('Error', 'An unexpected error occurred while deleting the event.')
+              // Reload events to reflect changes
+              await loadUserCreatedEvents()
+            } else {
+              Alert.alert('Error', result.error || 'Failed to delete event. Please try again.')
             }
           }
         }
@@ -2448,20 +2474,6 @@ const MapViewNative: React.FC = () => {
 
                         {/* Render memoized markers for better performance */}
         {memoizedMarkers}
-        
-        {/* Cluster info display */}
-        {memoizedClusters.length > 0 && (
-          <View style={styles.clusterInfoContainer}>
-            <Text style={styles.clusterInfoText}>
-              {memoizedClusters.filter(c => c.count > 1).length} clusters • {filteredEvents.length} total events
-            </Text>
-            {expandedClusters.size > 0 && (
-              <Text style={styles.clusterInfoSubtext}>
-                {expandedClusters.size} clusters expanded
-              </Text>
-            )}
-          </View>
-        )}
       </MapView>
 
       {/* Create Event Modal */}
@@ -3700,12 +3712,12 @@ const MapViewNative: React.FC = () => {
                         </TouchableOpacity>
                       </View>
                       
-                      {/* Show edit and delete buttons only for user-created events */}
-                      {eventDetails.event.source === 'user' && (
+                      {/* Show edit and delete buttons only if user has permission */}
+                      {canEditCurrentEvent && (
                         <View style={styles.eventDetailsActionButtons}>
                           <TouchableOpacity
                             style={styles.eventDetailsEditButton}
-                            onPress={() => startEditingEvent(eventDetails.event)}
+                            onPress={async () => await startEditingEvent(eventDetails.event)}
                           >
                             <Text style={styles.eventDetailsEditButtonText}>Edit</Text>
                           </TouchableOpacity>
@@ -4615,34 +4627,7 @@ const styles = StyleSheet.create({
     fontWeight: 'normal',
     textAlign: 'center',
   },
-  clusterInfoContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  clusterInfoText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  clusterInfoSubtext: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 2,
-  },
+
 
   clusterToggle: {
     position: 'absolute',
