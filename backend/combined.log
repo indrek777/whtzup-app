@@ -13208,3 +13208,4 @@
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:16:42:09 +0000] \"POST /api/events HTTP/1.1\" 200 601 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:42:09.637Z"}
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:16:42:09 +0000] \"GET /api/events?limit=1 HTTP/1.1\" 200 651 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:42:09.648Z"}
 {"level":"info","message":"::1 - - [20/Aug/2025:16:42:24 +0000] \"GET /health HTTP/1.1\" 200 76 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:42:24.896Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:42:56 +0000] \"GET /health HTTP/1.1\" 200 76 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:42:56.602Z"}
