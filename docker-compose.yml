@@ -1,0 +1,61 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: whtzup-postgres
+    environment:
+      POSTGRES_DB: whtzup_events
+      POSTGRES_USER: whtzup_user
+      POSTGRES_PASSWORD: whtzup_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - whtzup-network
+    restart: unless-stopped
+
+  # Redis for caching and real-time features
+  redis:
+    image: redis:7-alpine
+    container_name: whtzup-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - whtzup-network
+    restart: unless-stopped
+
+  # Node.js API Server
+  api-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: whtzup-api
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://whtzup_user:whtzup_password@postgres:5432/whtzup_events
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - whtzup-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  whtzup-network:
+    driver: bridge
