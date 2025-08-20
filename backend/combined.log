@@ -12242,3 +12242,10 @@
 {"level":"info","message":"::1 - - [20/Aug/2025:16:09:53 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:09:53.443Z"}
 {"level":"info","message":"::1 - - [20/Aug/2025:16:10:25 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:10:25.014Z"}
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:16:10:28 +0000] \"PUT /api/events/09fa1065-47fe-40fc-9ade-c085b97f4c4b HTTP/1.1\" 200 559 \"-\" \"Expo/1017721 CFNetwork/3860.100.1 Darwin/25.0.0\"","service":"whtzup-api","timestamp":"2025-08-20T16:10:28.391Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:10:56 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:10:56.585Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:11:28 +0000] \"GET /health HTTP/1.1\" 200 76 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:11:28.157Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:11:59 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:11:59.746Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:12:31 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:12:31.359Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:13:02 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:13:02.925Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:13:34 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:13:34.515Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:16:14:06 +0000] \"GET /health HTTP/1.1\" 200 77 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T16:14:06.114Z"}
