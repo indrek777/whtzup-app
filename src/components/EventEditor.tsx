@@ -813,68 +813,77 @@ const EventEditor: React.FC<EventEditorProps> = ({
           {isBulkEditMode ? (
             // Bulk Edit Mode
             <>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                                 <View style={styles.modeToggle}>
-                   <Text style={styles.modeLabel}>Bulk Edit Mode</Text>
-                   <Switch
-                     value={isBulkEditMode}
-                     onValueChange={setIsBulkEditMode}
-                   />
-                 </View>
-                 
-                 <View style={styles.groupingToggle}>
-                   <Text style={styles.groupingLabel}>
-                     {groupByCoordinates ? 'Group by Coordinates' : 'Group by Venue'}
-                   </Text>
-                   <Switch
-                     value={groupByCoordinates}
-                     onValueChange={(value) => {
-                       setGroupByCoordinates(value)
-                       if (value) {
-                         groupEventsByCoordinates()
-                       } else {
-                         groupEventsByVenue()
-                       }
-                     }}
-                   />
-                 </View>
+              {!selectedBulkGroup ? (
+                // Show groups list when no group is selected
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.modeToggle}>
+                    <Text style={styles.modeLabel}>Bulk Edit Mode</Text>
+                    <Switch
+                      value={isBulkEditMode}
+                      onValueChange={setIsBulkEditMode}
+                    />
+                  </View>
+                  
+                  <View style={styles.groupingToggle}>
+                    <Text style={styles.groupingLabel}>
+                      {groupByCoordinates ? 'Group by Coordinates' : 'Group by Venue'}
+                    </Text>
+                    <Switch
+                      value={groupByCoordinates}
+                      onValueChange={(value) => {
+                        setGroupByCoordinates(value)
+                        if (value) {
+                          groupEventsByCoordinates()
+                        } else {
+                          groupEventsByVenue()
+                        }
+                      }}
+                    />
+                  </View>
 
-                                 {bulkEditGroups.length === 0 ? (
-                   <View style={styles.emptyState}>
-                     <Text style={styles.emptyStateText}>
-                       No events with duplicate venues found
-                     </Text>
-                   </View>
-                 ) : (
-                   <View>
-                     <Text style={styles.sectionTitle}>
-                       {groupByCoordinates ? 'Events by Coordinates' : 'Events by Venue'}
-                     </Text>
-                     {bulkEditGroups.map((group, index) => (
-                       <TouchableOpacity
-                         key={index}
-                         style={[
-                           styles.venueGroup,
-                           selectedBulkGroup?.venue === group.venue && styles.selectedVenueGroup
-                         ]}
-                         onPress={() => populateBulkForm(group)}
-                       >
-                         <Text style={styles.venueName}>{group.venue}</Text>
-                         <Text style={styles.eventCount}>
-                           {group.events.length} events
-                         </Text>
-                       </TouchableOpacity>
-                     ))}
-                   </View>
-                 )}
-              </ScrollView>
-
-                                                                             {/* Event List for Bulk Edit */}
-                 {selectedBulkGroup && (
-                   <View style={styles.bulkEventListContainer}>
-                     <Text style={styles.sectionTitle}>
-                       Events in "{selectedBulkGroup.venue}" ({selectedBulkGroup.events.length} events)
-                     </Text>
+                  {bulkEditGroups.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>
+                        No events with duplicate venues found
+                      </Text>
+                    </View>
+                  ) : (
+                    <View>
+                      <Text style={styles.sectionTitle}>
+                        {groupByCoordinates ? 'Events by Coordinates' : 'Events by Venue'}
+                      </Text>
+                      {bulkEditGroups.map((group, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.venueGroup,
+                            selectedBulkGroup?.venue === group.venue && styles.selectedVenueGroup
+                          ]}
+                          onPress={() => populateBulkForm(group)}
+                        >
+                          <Text style={styles.venueName}>{group.venue}</Text>
+                          <Text style={styles.eventCount}>
+                            {group.events.length} events
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
+              ) : (
+                // Show event list when a group is selected
+                <View style={styles.bulkEventListContainer}>
+                  <View style={styles.eventListHeader}>
+                    <TouchableOpacity 
+                      style={styles.backButton}
+                      onPress={() => setSelectedBulkGroup(null)}
+                    >
+                      <Text style={styles.backButtonText}>← Back to Groups</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.sectionTitle}>
+                      Events in "{selectedBulkGroup.venue}" ({selectedBulkGroup.events.length} events)
+                    </Text>
+                  </View>
                     
                     {/* Data Quality Warning */}
                     {(() => {
@@ -946,26 +955,23 @@ const EventEditor: React.FC<EventEditorProps> = ({
                             events: selectedBulkGroup.events.length
                           })
                           
-                                                     // Show button if all events have the same coordinates (including default coordinates)
-                           if (uniqueCoordinates.size === 1) {
-                             console.log('Rendering individual coordinate button for', selectedBulkGroup.events.length, 'events')
-                             return (
-                               <TouchableOpacity
-                                 style={styles.individualCoordinateButton}
-                                                                   onPress={() => {
-                                    console.log('Button pressed! Opening coordinate assignment editor for', selectedBulkGroup.events.length, 'events')
-                                    console.log('Current showCoordinateAssignmentEditor state:', showCoordinateAssignmentEditor)
-                                    openCoordinateAssignmentEditor(selectedBulkGroup.events)
-                                    console.log('After calling openCoordinateAssignmentEditor, showCoordinateAssignmentEditor should be true')
-                                  }}
-                               >
-                                <Text style={styles.individualCoordinateButtonText}>
-                                  🎯 Assign Individual Coordinates ({selectedBulkGroup.events.length} events)
-                                </Text>
-                              </TouchableOpacity>
-                            )
-                          }
-                          return null
+                          // Show button for any group of events (not just when they all have same coordinates)
+                          console.log('Rendering individual coordinate button for', selectedBulkGroup.events.length, 'events')
+                          return (
+                            <TouchableOpacity
+                              style={styles.individualCoordinateButton}
+                              onPress={() => {
+                                console.log('Button pressed! Opening coordinate assignment editor for', selectedBulkGroup.events.length, 'events')
+                                console.log('Current showCoordinateAssignmentEditor state:', showCoordinateAssignmentEditor)
+                                openCoordinateAssignmentEditor(selectedBulkGroup.events)
+                                console.log('After calling openCoordinateAssignmentEditor, showCoordinateAssignmentEditor should be true')
+                              }}
+                            >
+                              <Text style={styles.individualCoordinateButtonText}>
+                                🎯 Assign Individual Coordinates ({selectedBulkGroup.events.length} events)
+                              </Text>
+                            </TouchableOpacity>
+                          )
                         })()}
                      </View>
                     
@@ -1070,6 +1076,39 @@ const EventEditor: React.FC<EventEditorProps> = ({
                 </Text>
                 <Text style={styles.locationIcon}>📍</Text>
               </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Coordinates</Text>
+              <Text style={styles.helpText}>
+                Current: {coordinates[0].toFixed(6)}, {coordinates[1].toFixed(6)}
+              </Text>
+              <View style={styles.coordinateRow}>
+                <View style={styles.coordinateInput}>
+                  <Text style={styles.coordinateLabel}>Latitude:</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={coordinates[0].toString()}
+                    onChangeText={(text) => {
+                      const lat = parseFloat(text) || 0
+                      setCoordinates([lat, coordinates[1]])
+                    }}
+                    placeholder="Latitude"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.coordinateInput}>
+                  <Text style={styles.coordinateLabel}>Longitude:</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={coordinates[1].toString()}
+                    onChangeText={(text) => {
+                      const lng = parseFloat(text) || 0
+                      setCoordinates([coordinates[0], lng])
+                    }}
+                    placeholder="Longitude"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
               <Text style={styles.fieldLabel}>Date</Text>
               <TextInput
@@ -1259,18 +1298,51 @@ const EventEditor: React.FC<EventEditorProps> = ({
                   placeholder="Venue name"
                 />
 
-                <Text style={styles.fieldLabel}>Address</Text>
-                <TouchableOpacity
-                  style={styles.locationInput}
-                  onPress={() => setIsEditingLocation(true)}
-                >
-                  <Text style={styles.locationText}>
-                    {address || 'Tap to set location'}
-                  </Text>
-                  <Text style={styles.locationIcon}>📍</Text>
-                </TouchableOpacity>
+                                 <Text style={styles.fieldLabel}>Address</Text>
+                 <TouchableOpacity
+                   style={styles.locationInput}
+                   onPress={() => setIsEditingLocation(true)}
+                 >
+                   <Text style={styles.locationText}>
+                     {address || 'Tap to set location'}
+                   </Text>
+                   <Text style={styles.locationIcon}>📍</Text>
+                 </TouchableOpacity>
 
-                <Text style={styles.fieldLabel}>Date</Text>
+                 <Text style={styles.fieldLabel}>Coordinates</Text>
+                 <Text style={styles.helpText}>
+                   Current: {coordinates[0].toFixed(6)}, {coordinates[1].toFixed(6)}
+                 </Text>
+                 <View style={styles.coordinateRow}>
+                   <View style={styles.coordinateInput}>
+                     <Text style={styles.coordinateLabel}>Latitude:</Text>
+                     <TextInput
+                       style={styles.input}
+                       value={coordinates[0].toString()}
+                       onChangeText={(text) => {
+                         const lat = parseFloat(text) || 0
+                         setCoordinates([lat, coordinates[1]])
+                       }}
+                       placeholder="Latitude"
+                       keyboardType="numeric"
+                     />
+                   </View>
+                   <View style={styles.coordinateInput}>
+                     <Text style={styles.coordinateLabel}>Longitude:</Text>
+                     <TextInput
+                       style={styles.input}
+                       value={coordinates[1].toString()}
+                       onChangeText={(text) => {
+                         const lng = parseFloat(text) || 0
+                         setCoordinates([coordinates[0], lng])
+                       }}
+                       placeholder="Longitude"
+                       keyboardType="numeric"
+                     />
+                   </View>
+                 </View>
+
+                 <Text style={styles.fieldLabel}>Date</Text>
                 <TextInput
                   style={styles.input}
                   value={date}
@@ -1375,6 +1447,40 @@ const EventEditor: React.FC<EventEditorProps> = ({
            <Text style={styles.currentEventDate}>
              Date: {getCurrentEvent()?.startsAt}
            </Text>
+         </View>
+
+         {/* Events List Preview */}
+         <View style={styles.eventsPreviewContainer}>
+           <Text style={styles.eventsPreviewTitle}>
+             Events to Edit ({eventsToAssignCoordinates.length} total):
+           </Text>
+           <ScrollView style={styles.eventsPreviewList} horizontal showsHorizontalScrollIndicator={false}>
+             {eventsToAssignCoordinates.map((event, index) => (
+               <TouchableOpacity
+                 key={event.id} 
+                 style={[
+                   styles.eventPreviewItem,
+                   index === currentEventIndex && styles.currentEventPreviewItem
+                 ]}
+                 onPress={() => {
+                   setCurrentEventIndex(index)
+                   populateForm(event)
+                 }}
+               >
+                 <Text style={styles.eventPreviewNumber}>{index + 1}</Text>
+                 <Text style={styles.eventPreviewName} numberOfLines={1}>
+                   {event.name}
+                 </Text>
+                 <Text style={styles.eventPreviewCoordinates}>
+                   {event.latitude === 0 && event.longitude === 0 ? (
+                     '⚠️ (0,0)'
+                   ) : (
+                     `${event.latitude.toFixed(4)}, ${event.longitude.toFixed(4)}`
+                   )}
+                 </Text>
+               </TouchableOpacity>
+             ))}
+           </ScrollView>
          </View>
 
          {/* Coordinate Assignment Form */}
@@ -2097,6 +2203,70 @@ const styles = StyleSheet.create({
   navButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  eventsPreviewContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  eventsPreviewTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  eventsPreviewList: {
+    flexDirection: 'row',
+  },
+  eventPreviewItem: {
+    backgroundColor: '#fff',
+    padding: 12,
+    marginRight: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  currentEventPreviewItem: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  eventPreviewNumber: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  eventPreviewName: {
+    fontSize: 12,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  eventPreviewCoordinates: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+    fontFamily: 'monospace',
+  },
+  eventListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  backButtonText: {
+    fontSize: 14,
+    color: '#333',
     fontWeight: '600',
   },
 })
