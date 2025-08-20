@@ -13439,3 +13439,7 @@
 {"level":"info","message":"::1 - - [20/Aug/2025:18:30:54 +0000] \"GET /health HTTP/1.1\" 200 77 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:30:54.226Z"}
 {"level":"info","message":"::1 - - [20/Aug/2025:18:31:26 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:31:26.064Z"}
 {"level":"info","message":"::ffff:172.19.0.1 - - [20/Aug/2025:18:31:29 +0000] \"GET /api/events HTTP/1.1\" 200 - \"-\" \"Expo/1017721 CFNetwork/3860.100.1 Darwin/25.0.0\"","service":"whtzup-api","timestamp":"2025-08-20T18:31:29.575Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:18:31:57 +0000] \"GET /health HTTP/1.1\" 200 77 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:31:57.898Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:18:32:29 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:32:29.713Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:18:33:01 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:33:01.570Z"}
+{"level":"info","message":"::1 - - [20/Aug/2025:18:33:33 +0000] \"GET /health HTTP/1.1\" 200 78 \"-\" \"-\"","service":"whtzup-api","timestamp":"2025-08-20T18:33:33.409Z"}
