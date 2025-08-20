@@ -204,7 +204,13 @@ class SyncService {
             eventData: response.data,
             deviceId: this.deviceId
           });
-          return response.data;
+          // Ensure the returned event has properly typed coordinates
+          const createdEvent = {
+            ...response.data,
+            latitude: Number(response.data.latitude) || 0,
+            longitude: Number(response.data.longitude) || 0
+          };
+          return createdEvent;
         } else {
           throw new Error(response.error);
         }
@@ -241,7 +247,23 @@ class SyncService {
             eventData: response.data,
             deviceId: this.deviceId
           });
-          return response.data;
+          // Ensure the returned event has all required fields
+          const updatedEvent = {
+            ...event, // Keep original fields as fallback
+            ...response.data, // Override with server data
+            // Ensure required fields are present and properly typed
+            id: response.data.id || event.id,
+            name: response.data.name || event.name,
+            latitude: Number(response.data.latitude) || Number(event.latitude) || 0,
+            longitude: Number(response.data.longitude) || Number(event.longitude) || 0,
+            venue: response.data.venue || event.venue || '',
+            address: response.data.address || event.address || '',
+            startsAt: response.data.startsAt || event.startsAt,
+            category: response.data.category || event.category || 'other',
+            createdBy: response.data.createdBy || event.createdBy || 'Event Organizer',
+            updatedAt: response.data.updatedAt || new Date().toISOString()
+          };
+          return updatedEvent;
         } else {
           throw new Error(response.error);
         }
@@ -307,9 +329,15 @@ class SyncService {
       console.log('✅ API Response:', response.success ? 'SUCCESS' : 'FAILED');
       if (response.success) {
         console.log(`📊 Received ${response.data?.length || 0} events from server`);
+        // Ensure all events have properly typed coordinates
+        const typedEvents = response.data.map((event: any) => ({
+          ...event,
+          latitude: Number(event.latitude) || 0,
+          longitude: Number(event.longitude) || 0
+        }));
         // Cache the events for offline use
-        await this.setCachedEvents(response.data);
-        return response.data;
+        await this.setCachedEvents(typedEvents);
+        return typedEvents;
       } else {
         console.log('❌ API Error:', response.error);
         throw new Error(response.error);
@@ -382,7 +410,13 @@ class SyncService {
   private async getCachedEvents(): Promise<Event[]> {
     try {
       const cached = await AsyncStorage.getItem('cachedEvents');
-      return cached ? JSON.parse(cached) : [];
+      const events = cached ? JSON.parse(cached) : [];
+      // Ensure all cached events have properly typed coordinates
+      return events.map((event: any) => ({
+        ...event,
+        latitude: Number(event.latitude) || 0,
+        longitude: Number(event.longitude) || 0
+      }));
     } catch (error) {
       console.error('Error getting cached events:', error);
       return [];
@@ -401,9 +435,15 @@ class SyncService {
   private async handleRemoteEventCreated(data: any): Promise<void> {
     try {
       const events = await this.getCachedEvents();
-      events.push(data.eventData);
+      // Ensure the created event has properly typed coordinates
+      const createdEvent = {
+        ...data.eventData,
+        latitude: Number(data.eventData.latitude) || 0,
+        longitude: Number(data.eventData.longitude) || 0
+      };
+      events.push(createdEvent);
       await this.setCachedEvents(events);
-      this.notifyListeners('eventCreated', data.eventData);
+      this.notifyListeners('eventCreated', createdEvent);
     } catch (error) {
       console.error('Error handling remote event created:', error);
     }
@@ -414,9 +454,15 @@ class SyncService {
       const events = await this.getCachedEvents();
       const index = events.findIndex(e => e.id === data.eventId);
       if (index !== -1) {
-        events[index] = data.eventData;
+        // Ensure the updated event has properly typed coordinates
+        const updatedEvent = {
+          ...data.eventData,
+          latitude: Number(data.eventData.latitude) || 0,
+          longitude: Number(data.eventData.longitude) || 0
+        };
+        events[index] = updatedEvent;
         await this.setCachedEvents(events);
-        this.notifyListeners('eventUpdated', data.eventData);
+        this.notifyListeners('eventUpdated', updatedEvent);
       }
     } catch (error) {
       console.error('Error handling remote event updated:', error);

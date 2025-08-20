@@ -72,6 +72,14 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [coordinates, setCoordinates] = useState<[number, number]>([0, 0])
   
+  // Helper function to ensure coordinates are always valid numbers
+  const safeCoordinates = (coords: [number, number]): [number, number] => {
+    return [
+      typeof coords[0] === 'number' && !isNaN(coords[0]) ? coords[0] : 0,
+      typeof coords[1] === 'number' && !isNaN(coords[1]) ? coords[1] : 0
+    ]
+  }
+  
   // Bulk edit fields
   const [bulkTitle, setBulkTitle] = useState('')
   const [bulkCategory, setBulkCategory] = useState<string>('other')
@@ -202,11 +210,21 @@ const EventEditor: React.FC<EventEditorProps> = ({
             coordinates: [0, 0]
           }
         } else {
-          const [lat, lng] = coordinateKey.split(',').map(Number)
-          return {
-            venue: `📍 ${events.length} events at ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-            events: sortedEvents,
-            coordinates: [lat, lng]
+          // Safely handle coordinateKey which might be undefined
+          if (coordinateKey && coordinateKey.includes(',')) {
+            const [lat, lng] = coordinateKey.split(',').map(Number)
+            return {
+              venue: `📍 ${events.length} events at ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+              events: sortedEvents,
+              coordinates: [lat, lng]
+            }
+          } else {
+            // Fallback for invalid coordinate format
+            return {
+              venue: `⚠️ ${events.length} events with invalid coordinates`,
+              events: sortedEvents,
+              coordinates: [0, 0]
+            }
           }
         }
       })
@@ -227,12 +245,19 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setCategory(event.category || 'other')
     setVenue(event.venue)
     setAddress(event.address)
-    setDate(event.startsAt.split(' ')[0] || '')
-    setTime(event.startsAt.split(' ')[1] || '12:00')
+    // Safely handle startsAt which might be undefined
+    if (event.startsAt) {
+      const parts = event.startsAt.split(' ')
+      setDate(parts[0] || '')
+      setTime(parts[1] || '12:00')
+    } else {
+      setDate('')
+      setTime('12:00')
+    }
     setOrganizer(event.createdBy || 'Event Organizer')
     setAttendees('0') // Default value since this field doesn't exist in the Event type
     setMaxAttendees('')
-    setCoordinates([event.latitude, event.longitude])
+    setCoordinates([event.latitude || 0, event.longitude || 0])
   }
 
   // Populate bulk edit form
@@ -323,8 +348,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
     const updatedEvent: Event = {
       ...currentEvent,
-      latitude: coordinates[0],
-      longitude: coordinates[1],
+      latitude: safeCoordinates(coordinates)[0],
+      longitude: safeCoordinates(coordinates)[1],
       address: address,
       venue: venue,
       updatedAt: new Date().toISOString()
@@ -379,12 +404,12 @@ const EventEditor: React.FC<EventEditorProps> = ({
         // Update bulk edit coordinates
         setBulkCoordinates(coords)
         setBulkAddress(result.display_name)
-        setBulkVenue(result.name || result.display_name.split(',')[0])
+        setBulkVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
       } else {
         // Update single event coordinates
         setCoordinates(coords)
         setAddress(result.display_name)
-        setVenue(result.name || result.display_name.split(',')[0])
+        setVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
       }
       
       setIsEditingLocation(false)
@@ -412,9 +437,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
       category,
       venue: venue.trim(),
       address: address.trim(),
-      latitude: coordinates[0],
-      longitude: coordinates[1],
-      startsAt: `${date} ${time}`,
+      latitude: safeCoordinates(coordinates)[0],
+      longitude: safeCoordinates(coordinates)[1],
+      startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
       createdBy: organizer.trim(),
       updatedAt: new Date().toISOString()
     }
@@ -463,8 +488,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
         category: bulkCategory,
         venue: bulkVenue || event.venue,
         address: bulkAddress || event.address,
-        latitude: bulkCoordinates[0],
-        longitude: bulkCoordinates[1],
+        latitude: bulkCoordinates[0] || 0,
+        longitude: bulkCoordinates[1] || 0,
         updatedAt: new Date().toISOString()
       }))
 
@@ -681,7 +706,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     
     Alert.alert(
       'Set New Base Coordinate',
-      `Move all ${selectedEvents.length} selected events to the new coordinate: ${bulkCoordinates[0].toFixed(6)}, ${bulkCoordinates[1].toFixed(6)}`,
+      `Move all ${selectedEvents.length} selected events to the new coordinate: ${bulkCoordinates[0]?.toFixed(6) || '0.000000'}, ${bulkCoordinates[1]?.toFixed(6) || '0.000000'}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -691,8 +716,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
               setIsLoading(true)
               const updatedEvents = selectedEvents.map(event => ({
                 ...event,
-                latitude: bulkCoordinates[0],
-                longitude: bulkCoordinates[1],
+                latitude: bulkCoordinates[0] || 0,
+                longitude: bulkCoordinates[1] || 0,
                 updatedAt: new Date().toISOString()
               }))
 
@@ -992,7 +1017,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                               {item.latitude === 0 && item.longitude === 0 ? (
                                 '⚠️ NO coordinates (0,0)'
                               ) : (
-                                `📍 ${item.latitude.toFixed(6)}, ${item.longitude.toFixed(6)}`
+                                `📍 ${item.latitude?.toFixed(6) || '0.000000'}, ${item.longitude?.toFixed(6) || '0.000000'}`
                               )}
                             </Text>
                             {groupByCoordinates && (
@@ -1080,17 +1105,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
               <Text style={styles.fieldLabel}>Coordinates</Text>
               <Text style={styles.helpText}>
-                Current: {coordinates[0].toFixed(6)}, {coordinates[1].toFixed(6)}
+                Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
               </Text>
               <View style={styles.coordinateRow}>
                 <View style={styles.coordinateInput}>
                   <Text style={styles.coordinateLabel}>Latitude:</Text>
                   <TextInput
                     style={styles.input}
-                    value={coordinates[0].toString()}
+                    value={safeCoordinates(coordinates)[0].toString()}
                     onChangeText={(text) => {
                       const lat = parseFloat(text) || 0
-                      setCoordinates([lat, coordinates[1]])
+                      setCoordinates([lat, safeCoordinates(coordinates)[1]])
                     }}
                     placeholder="Latitude"
                     keyboardType="numeric"
@@ -1100,10 +1125,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
                   <Text style={styles.coordinateLabel}>Longitude:</Text>
                   <TextInput
                     style={styles.input}
-                    value={coordinates[1].toString()}
+                    value={safeCoordinates(coordinates)[1].toString()}
                     onChangeText={(text) => {
                       const lng = parseFloat(text) || 0
-                      setCoordinates([coordinates[0], lng])
+                      setCoordinates([safeCoordinates(coordinates)[0], lng])
                     }}
                     placeholder="Longitude"
                     keyboardType="numeric"
@@ -1223,7 +1248,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                    onPress={() => selectLocation(item)}
                  >
                    <Text style={styles.searchResultTitle}>
-                     {item.name || item.display_name.split(',')[0]}
+                     {item.name || (item.display_name ? item.display_name.split(',')[0] : 'Unknown Location')}
                    </Text>
                    <Text style={styles.searchResultAddress}>
                      {item.display_name}
@@ -1312,17 +1337,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
                  <Text style={styles.fieldLabel}>Coordinates</Text>
                  <Text style={styles.helpText}>
-                   Current: {coordinates[0].toFixed(6)}, {coordinates[1].toFixed(6)}
+                   Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
                  </Text>
                  <View style={styles.coordinateRow}>
                    <View style={styles.coordinateInput}>
                      <Text style={styles.coordinateLabel}>Latitude:</Text>
                      <TextInput
                        style={styles.input}
-                       value={coordinates[0].toString()}
+                       value={safeCoordinates(coordinates)[0].toString()}
                        onChangeText={(text) => {
                          const lat = parseFloat(text) || 0
-                         setCoordinates([lat, coordinates[1]])
+                         setCoordinates([lat, safeCoordinates(coordinates)[1]])
                        }}
                        placeholder="Latitude"
                        keyboardType="numeric"
@@ -1332,10 +1357,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
                      <Text style={styles.coordinateLabel}>Longitude:</Text>
                      <TextInput
                        style={styles.input}
-                       value={coordinates[1].toString()}
+                       value={safeCoordinates(coordinates)[1].toString()}
                        onChangeText={(text) => {
                          const lng = parseFloat(text) || 0
-                         setCoordinates([coordinates[0], lng])
+                         setCoordinates([safeCoordinates(coordinates)[0], lng])
                        }}
                        placeholder="Longitude"
                        keyboardType="numeric"
@@ -1476,7 +1501,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                    {event.latitude === 0 && event.longitude === 0 ? (
                      '⚠️ (0,0)'
                    ) : (
-                     `${event.latitude.toFixed(4)}, ${event.longitude.toFixed(4)}`
+                     `${event.latitude?.toFixed(4) || '0.0000'}, ${event.longitude?.toFixed(4) || '0.0000'}`
                    )}
                  </Text>
                </TouchableOpacity>
@@ -1507,17 +1532,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
            <Text style={styles.fieldLabel}>Coordinates</Text>
            <Text style={styles.helpText}>
-             Current: {coordinates[0].toFixed(6)}, {coordinates[1].toFixed(6)}
+             Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
            </Text>
            <View style={styles.coordinateRow}>
              <View style={styles.coordinateInput}>
                <Text style={styles.coordinateLabel}>Latitude:</Text>
                <TextInput
                  style={styles.input}
-                 value={coordinates[0].toString()}
+                 value={safeCoordinates(coordinates)[0].toString()}
                  onChangeText={(text) => {
                    const lat = parseFloat(text) || 0
-                   setCoordinates([lat, coordinates[1]])
+                   setCoordinates([lat, safeCoordinates(coordinates)[1]])
                  }}
                  placeholder="Latitude"
                  keyboardType="numeric"
@@ -1527,10 +1552,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
                <Text style={styles.coordinateLabel}>Longitude:</Text>
                <TextInput
                  style={styles.input}
-                 value={coordinates[1].toString()}
+                 value={safeCoordinates(coordinates)[1].toString()}
                  onChangeText={(text) => {
                    const lng = parseFloat(text) || 0
-                   setCoordinates([coordinates[0], lng])
+                   setCoordinates([safeCoordinates(coordinates)[0], lng])
                  }}
                  placeholder="Longitude"
                  keyboardType="numeric"

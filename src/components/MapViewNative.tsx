@@ -744,9 +744,18 @@ const MapViewNative: React.FC = () => {
             })
           }
           
-          // Show all events initially, regardless of distance
-          const initialEvents = allEvents
-          console.log(`🎯 Setting ${initialEvents.length} events to display on map (no location permission)`)
+          // Filter events within 500km of Estonia center for performance
+          const radius = 500 // 500km radius
+          const initialEvents = allEvents.filter(event => {
+            const distance = calculateDistance(
+              59.436962, // Estonia center latitude
+              24.753574, // Estonia center longitude
+              event.latitude,
+              event.longitude
+            )
+            return distance <= radius
+          })
+          console.log(`🎯 Setting ${initialEvents.length} events to display on map (filtered within ${radius}km of Estonia center)`)
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
           console.log(`🎯 Events state should now have ${initialEvents.length} events (no location permission)`)
@@ -768,12 +777,12 @@ const MapViewNative: React.FC = () => {
           userLocation: userLoc
         }))
         
-        // Center map on Estonia to show all events
+        // Center map on user location with 500km view
         setMapRegion({
-          latitude: 58.3776252, // Estonia center
-          longitude: 26.7290063, // Estonia center
-          latitudeDelta: 2.5, // Show most of Estonia
-          longitudeDelta: 3.0, // Show most of Estonia
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 4.0, // Approximately 500km view
+          longitudeDelta: 4.0, // Approximately 500km view
         })
 
         // No need to filter by radius initially
@@ -797,10 +806,19 @@ const MapViewNative: React.FC = () => {
           })
         }
         
-        // Show all events initially, regardless of distance
-        const initialEvents = allEvents
+        // Filter events within 500km of user location for performance
+        const radius = 500 // 500km radius
+        const initialEvents = allEvents.filter(event => {
+          const distance = calculateDistance(
+            userLoc.latitude,
+            userLoc.longitude,
+            event.latitude,
+            event.longitude
+          )
+          return distance <= radius
+        })
         
-        console.log(`🎯 Setting ${initialEvents.length} events to display on map`)
+        console.log(`🎯 Setting ${initialEvents.length} events to display on map (filtered within ${radius}km of user location)`)
         setEvents(initialEvents)
         setFilteredEvents(initialEvents)
         console.log(`🎯 Events state should now have ${initialEvents.length} events`)
@@ -1189,16 +1207,24 @@ const MapViewNative: React.FC = () => {
       })
     }
 
-    // Always filter out past events - never show events that have already happened
+    // Filter out past events - but be more lenient for demo data
     const now = new Date()
     
     filtered = filtered.filter(event => {
-      const eventDate = new Date(event.startsAt)
-      const isPast = eventDate <= now
-              if (isPast) {
-          return false
-        }
-      return eventDate > now
+      // Skip events without valid start date
+      if (!event.startsAt) return false
+      
+      try {
+        const eventDate = new Date(event.startsAt)
+        // For demo purposes, show events up to 1 year in the past
+        const oneYearAgo = new Date()
+        oneYearAgo.setFullYear(now.getFullYear() - 1)
+        
+        return eventDate >= oneYearAgo
+      } catch (error) {
+        console.log(`🎯 Invalid date for event ${event.name}: ${event.startsAt}`)
+        return false
+      }
     })
 
     // Date range filter (premium feature)
@@ -1231,17 +1257,21 @@ const MapViewNative: React.FC = () => {
         })
       }
     } else {
-      // If no date filter is applied, still limit free users to 1 week ahead
-      if (!userFeatures.hasAdvancedSearch) {
-        const today = new Date()
-        const nextWeek = new Date()
-        nextWeek.setDate(today.getDate() + 7)
-        
-        filtered = filtered.filter(event => {
+      // If no date filter is applied, show events from 1 year ago to 1 year ahead
+      const today = new Date()
+      const oneYearAgo = new Date()
+      oneYearAgo.setFullYear(today.getFullYear() - 1)
+      const oneYearAhead = new Date()
+      oneYearAhead.setFullYear(today.getFullYear() + 1)
+      
+      filtered = filtered.filter(event => {
+        try {
           const eventDate = new Date(event.startsAt)
-          return eventDate >= today && eventDate <= nextWeek
-        })
-      }
+          return eventDate >= oneYearAgo && eventDate <= oneYearAhead
+        } catch (error) {
+          return false
+        }
+      })
     }
 
     // Distance filter
@@ -3732,16 +3762,25 @@ const MapViewNative: React.FC = () => {
         }}
         events={events}
         onUpdateEvent={(eventId, updatedEvent) => {
-          setEvents(prevEvents => 
-            prevEvents.map(event => 
+          console.log('🔄 Updating event in map state:', eventId);
+          console.log('📊 Updated event data:', updatedEvent);
+          console.log('📍 Event coordinates:', updatedEvent.latitude, updatedEvent.longitude);
+          
+          setEvents(prevEvents => {
+            const newEvents = prevEvents.map(event => 
               event.id === eventId ? updatedEvent : event
-            )
-          )
-          setFilteredEvents(prevEvents => 
-            prevEvents.map(event => 
+            );
+            console.log(`🎯 Events state updated: ${newEvents.length} events`);
+            return newEvents;
+          });
+          
+          setFilteredEvents(prevEvents => {
+            const newFilteredEvents = prevEvents.map(event => 
               event.id === eventId ? updatedEvent : event
-            )
-          )
+            );
+            console.log(`🎯 Filtered events state updated: ${newFilteredEvents.length} events`);
+            return newFilteredEvents;
+          });
         }}
         onDeleteEvent={(eventId) => {
           setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId))
