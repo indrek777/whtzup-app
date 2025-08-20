@@ -1,4 +1,5 @@
-import { Event } from '../context/EventContext'
+import { Event } from '../data/events'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 // Function to save events to the JSON file
 export const saveEventsToFile = async (events: Event[]): Promise<void> => {
@@ -6,24 +7,42 @@ export const saveEventsToFile = async (events: Event[]): Promise<void> => {
     // Convert events to the format expected by the JSON file
     const eventsForStorage = events.map(event => ({
       id: event.id,
-      name: event.title,
+      name: event.name,
       description: event.description,
-      latitude: event.location.coordinates[0],
-      longitude: event.location.coordinates[1],
-      startsAt: `${event.date} ${event.time}`,
-      url: '',
-      venue: event.location.name,
-      address: event.location.address,
-      source: event.id.startsWith('imported-') ? 'csv' : 'app'
+      latitude: event.latitude,
+      longitude: event.longitude,
+      startsAt: event.startsAt,
+      url: event.url,
+      venue: event.venue,
+      address: event.address,
+      source: event.source,
+      country: event.country,
+      category: event.category,
+      createdAt: event.createdAt,
+      createdBy: event.createdBy,
+      updatedAt: event.updatedAt,
+      isRecurring: event.isRecurring,
+      recurringPattern: event.recurringPattern,
+      recurringDays: event.recurringDays,
+      recurringInterval: event.recurringInterval,
+      recurringEndDate: event.recurringEndDate,
+      recurringOccurrences: event.recurringOccurrences,
+      parentEventId: event.parentEventId
     }))
 
-    // Save to localStorage for current user
-    localStorage.setItem('event-events', JSON.stringify(eventsForStorage))
+    // Save to AsyncStorage for current user
+    await AsyncStorage.setItem('event-events', JSON.stringify(eventsForStorage))
+    console.log('Events saved to local storage successfully')
     
-    // Also update the server's JSON file for all users
-    await updateServerJSONFile(eventsForStorage)
+    // Try to update the server's JSON file for all users (optional)
+    try {
+      await updateServerJSONFile(eventsForStorage)
+    } catch (serverError) {
+      console.warn('Server update failed, but events are saved locally:', serverError)
+      // Don't throw the error - local save was successful
+    }
   } catch (error) {
-    console.error('Error saving events:', error)
+    console.error('Error saving events to local storage:', error)
     throw error
   }
 }
@@ -31,19 +50,28 @@ export const saveEventsToFile = async (events: Event[]): Promise<void> => {
 // Function to update the server's JSON file
 const updateServerJSONFile = async (events: any[]): Promise<void> => {
   try {
-    // Create a FormData object to send the updated JSON
-    const formData = new FormData()
-    const jsonBlob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' })
-    formData.append('events', jsonBlob, 'events-user.json')
-    
-    // Send the updated JSON to the server
-    const response = await fetch('/api/update-events', {
-      method: 'POST',
-      body: formData
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Server update failed: ${response.status}`)
+    // Check if we're in a web environment with a server
+    if (typeof window !== 'undefined' && window.location) {
+      // Send the updated JSON directly to the server
+      const response = await fetch('/api/update-events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(events)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(`Server update failed: ${response.status} - ${errorData.error || 'Unknown error'}`)
+      }
+      
+      const result = await response.json()
+      console.log('Events successfully updated on server for all users:', result.message)
+    } else {
+      // In React Native, just save locally and create backup
+      console.log('Running in React Native - saving events locally only')
+      downloadUpdatedJSONFile(events)
     }
   } catch (error) {
     console.error('Error updating server JSON file:', error)
@@ -56,25 +84,27 @@ const updateServerJSONFile = async (events: any[]): Promise<void> => {
 const downloadUpdatedJSONFile = (events: any[]) => {
   try {
     const jsonContent = JSON.stringify(events, null, 2)
-    const blob = new Blob([jsonContent], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
+    const fileName = `events-user-updated-${new Date().toISOString().split('T')[0]}.json`
     
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `events-user-updated-${new Date().toISOString().split('T')[0]}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    // In React Native, we'll just log the content for now
+    // In a real app, you'd use a file system library like react-native-fs
+    console.log('Events JSON content for manual save:', jsonContent)
+    console.log('Suggested filename:', fileName)
+    
+    // TODO: Implement proper file download using react-native-fs or similar
+    // For now, just save to AsyncStorage as a backup
+    AsyncStorage.setItem('events-backup-' + Date.now(), jsonContent)
+    
+    console.log('Events content logged and backed up to AsyncStorage')
   } catch (error) {
-    console.error('Error downloading JSON file:', error)
+    console.error('Error preparing JSON file:', error)
   }
 }
 
 // Function to clear all stored events
-export const clearStoredEvents = (): void => {
+export const clearStoredEvents = async (): Promise<void> => {
   try {
-    localStorage.removeItem('event-events')
+    await AsyncStorage.removeItem('event-events')
   } catch (error) {
     console.error('Error clearing stored events:', error)
   }
@@ -86,15 +116,27 @@ export const downloadCurrentEventsAsJSON = (events: Event[]): void => {
     // Convert events to the format expected by the JSON file
     const eventsForSharing = events.map(event => ({
       id: event.id,
-      name: event.title,
+      name: event.name,
       description: event.description,
-      latitude: event.location.coordinates[0],
-      longitude: event.location.coordinates[1],
-      startsAt: `${event.date} ${event.time}`,
-      url: '',
-      venue: event.location.name,
-      address: event.location.address,
-      source: event.id.startsWith('imported-') ? 'csv' : 'app'
+      latitude: event.latitude,
+      longitude: event.longitude,
+      startsAt: event.startsAt,
+      url: event.url,
+      venue: event.venue,
+      address: event.address,
+      source: event.source,
+      country: event.country,
+      category: event.category,
+      createdAt: event.createdAt,
+      createdBy: event.createdBy,
+      updatedAt: event.updatedAt,
+      isRecurring: event.isRecurring,
+      recurringPattern: event.recurringPattern,
+      recurringDays: event.recurringDays,
+      recurringInterval: event.recurringInterval,
+      recurringEndDate: event.recurringEndDate,
+      recurringOccurrences: event.recurringOccurrences,
+      parentEventId: event.parentEventId
     }))
 
     downloadUpdatedJSONFile(eventsForSharing)
@@ -103,10 +145,10 @@ export const downloadCurrentEventsAsJSON = (events: Event[]): void => {
   }
 }
 
-// Function to load events from storage (localStorage fallback)
+// Function to load events from storage (AsyncStorage)
 export const loadEventsFromStorage = async (): Promise<Event[]> => {
   try {
-    const stored = localStorage.getItem('event-events')
+    const stored = await AsyncStorage.getItem('event-events')
     if (!stored) {
       return []
     }
@@ -119,19 +161,27 @@ export const loadEventsFromStorage = async (): Promise<Event[]> => {
     // Convert back to Event format
     const events: Event[] = data.map((item: any) => ({
       id: item.id,
-      title: item.name,
+      name: item.name,
       description: item.description,
-      category: determineCategory(item.name, item.description),
-      location: {
-        name: item.venue || item.address || 'Various locations',
-        address: item.address || item.venue || 'Location TBD',
-        coordinates: [Number(item.latitude), Number(item.longitude)] as [number, number]
-      },
-      date: parseDate(item.startsAt),
-      time: parseTime(item.startsAt),
-      organizer: item.source === 'csv' ? 'Local Organizer' : 'Event Organizer',
-      attendees: Math.floor(Math.random() * 200) + 10,
-      maxAttendees: undefined
+      latitude: Number(item.latitude),
+      longitude: Number(item.longitude),
+      startsAt: item.startsAt,
+      url: item.url || '',
+      venue: item.venue || '',
+      address: item.address || '',
+      source: item.source || 'app',
+      country: item.country,
+      category: item.category || 'other',
+      createdAt: item.createdAt,
+      createdBy: item.createdBy,
+      updatedAt: item.updatedAt,
+      isRecurring: item.isRecurring,
+      recurringPattern: item.recurringPattern,
+      recurringDays: item.recurringDays,
+      recurringInterval: item.recurringInterval,
+      recurringEndDate: item.recurringEndDate,
+      recurringOccurrences: item.recurringOccurrences,
+      parentEventId: item.parentEventId
     }))
 
     return events
@@ -141,62 +191,36 @@ export const loadEventsFromStorage = async (): Promise<Event[]> => {
   }
 }
 
-// Helper function to determine category
-const determineCategory = (name: string, description: string): Event['category'] => {
-  const text = (name + ' ' + description).toLowerCase()
-  
-  if (text.includes('kontsert') || text.includes('muusika') || text.includes('jazz') || text.includes('rock')) {
-    return 'music'
-  }
-  if (text.includes('söök') || text.includes('restoran') || text.includes('vein') || text.includes('toit')) {
-    return 'food'
-  }
-  if (text.includes('jalgpall') || text.includes('spordi') || text.includes('võistlus')) {
-    return 'sports'
-  }
-  if (text.includes('näitus') || text.includes('galerii') || text.includes('kunst') || text.includes('muuseum')) {
-    return 'art'
-  }
-  if (text.includes('konverents') || text.includes('seminar') || text.includes('workshop')) {
-    return 'business'
-  }
-  
-  return 'other'
-}
-
-// Helper function to parse date from startsAt
-const parseDate = (startsAt: string): string => {
+// Function to update a single event and save for all users
+export const updateEventForAllUsers = async (eventId: string, updatedEvent: Event, allEvents: Event[]): Promise<void> => {
   try {
-    if (startsAt.includes(' ')) {
-      const parts = startsAt.split(' ')
-      const datePart = parts.find(part => /^\d{4}-\d{2}-\d{2}$/.test(part))
-      if (datePart) return datePart
-    }
+    // Update the event in the local array
+    const updatedEvents = allEvents.map(event => 
+      event.id === eventId ? updatedEvent : event
+    )
     
-    if (/^\d{4}-\d{2}-\d{2}$/.test(startsAt)) {
-      return startsAt
-    }
+    // Save the updated events to storage and server
+    await saveEventsToFile(updatedEvents)
     
-    const dateMatch = startsAt.match(/(\d{4}-\d{2}-\d{2})/)
-    if (dateMatch) return dateMatch[1]
-    
-    return new Date().toISOString().split('T')[0]
-  } catch {
-    return new Date().toISOString().split('T')[0]
+    console.log(`Event ${eventId} updated and saved for all users`)
+  } catch (error) {
+    console.error('Error updating event for all users:', error)
+    throw error
   }
 }
 
-// Helper function to parse time from startsAt
-const parseTime = (startsAt: string): string => {
+// Function to delete an event and save for all users
+export const deleteEventForAllUsers = async (eventId: string, allEvents: Event[]): Promise<void> => {
   try {
-    if (startsAt.includes(' ')) {
-      const parts = startsAt.split(' ')
-      const timePart = parts.find(part => /^\d{2}:\d{2}$/.test(part))
-      if (timePart) return timePart
-    }
+    // Remove the event from the local array
+    const updatedEvents = allEvents.filter(event => event.id !== eventId)
     
-    return '12:00'
-  } catch {
-    return '12:00'
+    // Save the updated events to storage and server
+    await saveEventsToFile(updatedEvents)
+    
+    console.log(`Event ${eventId} deleted and saved for all users`)
+  } catch (error) {
+    console.error('Error deleting event for all users:', error)
+    throw error
   }
 }

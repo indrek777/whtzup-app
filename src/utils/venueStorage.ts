@@ -1,6 +1,8 @@
 // Venue storage utility for managing venue coordinates
 // This helps maintain consistency and reduces repeated geocoding
 
+import AsyncStorage from '@react-native-async-storage/async-storage'
+
 export interface VenueData {
   name: string
   address: string
@@ -12,10 +14,10 @@ export interface VenueData {
 const VENUE_STORAGE_KEY = 'event_venues'
 const DEFAULT_COORDINATES: [number, number] = [59.436962, 24.753574] // Tallinn
 
-// Load venues from localStorage
-export const loadVenues = (): Map<string, VenueData> => {
+// Load venues from AsyncStorage
+export const loadVenues = async (): Promise<Map<string, VenueData>> => {
   try {
-    const stored = localStorage.getItem(VENUE_STORAGE_KEY)
+    const stored = await AsyncStorage.getItem(VENUE_STORAGE_KEY)
     if (!stored) return new Map()
     
     const venuesArray = JSON.parse(stored)
@@ -32,11 +34,11 @@ export const loadVenues = (): Map<string, VenueData> => {
   }
 }
 
-// Save venues to localStorage
-export const saveVenues = (venues: Map<string, VenueData>): void => {
+// Save venues to AsyncStorage
+export const saveVenues = async (venues: Map<string, VenueData>): Promise<void> => {
   try {
     const venuesArray = Array.from(venues.entries())
-    localStorage.setItem(VENUE_STORAGE_KEY, JSON.stringify(venuesArray))
+    await AsyncStorage.setItem(VENUE_STORAGE_KEY, JSON.stringify(venuesArray))
   } catch (error) {
     console.error('Error saving venues:', error)
   }
@@ -58,10 +60,10 @@ export const isDefaultCoordinates = (coordinates: [number, number]): boolean => 
 }
 
 // Add or update a venue in storage
-export const addVenue = (name: string, address: string, coordinates: [number, number]): void => {
+export const addVenue = async (name: string, address: string, coordinates: [number, number]): Promise<void> => {
   if (!name.trim()) return
   
-  const venues = loadVenues()
+  const venues = await loadVenues()
   const key = getVenueKey(name)
   const now = Date.now()
   
@@ -87,14 +89,14 @@ export const addVenue = (name: string, address: string, coordinates: [number, nu
     })
   }
   
-  saveVenues(venues)
+  await saveVenues(venues)
 }
 
 // Find a venue by name
-export const findVenue = (name: string): VenueData | null => {
+export const findVenue = async (name: string): Promise<VenueData | null> => {
   if (!name.trim()) return null
   
-  const venues = loadVenues()
+  const venues = await loadVenues()
   const key = getVenueKey(name)
   return venues.get(key) || null
 }
@@ -123,27 +125,27 @@ export const autoFixVenueCoordinates = (name: string, currentCoordinates: [numbe
 }
 
 // Get all venues sorted by usage (most used first)
-export const getAllVenues = (): VenueData[] => {
-  const venues = loadVenues()
+export const getAllVenues = async (): Promise<VenueData[]> => {
+  const venues = await loadVenues()
   return Array.from(venues.values())
     .sort((a, b) => b.usageCount - a.usageCount)
 }
 
 // Get venues that need geocoding (have default coordinates)
-export const getVenuesNeedingGeocoding = (): VenueData[] => {
-  const venues = loadVenues()
+export const getVenuesNeedingGeocoding = async (): Promise<VenueData[]> => {
+  const venues = await loadVenues()
   return Array.from(venues.values())
     .filter(venue => isDefaultCoordinates(venue.coordinates))
     .sort((a, b) => b.usageCount - a.usageCount)
 }
 
 // Update venue coordinates (for geocoding results)
-export const updateVenueCoordinates = (name: string, coordinates: [number, number]): boolean => {
+export const updateVenueCoordinates = async (name: string, coordinates: [number, number]): Promise<boolean> => {
   if (!name.trim() || isDefaultCoordinates(coordinates)) {
     return false
   }
   
-  const venues = loadVenues()
+  const venues = await loadVenues()
   const key = getVenueKey(name)
   const venue = venues.get(key)
   
@@ -153,7 +155,7 @@ export const updateVenueCoordinates = (name: string, coordinates: [number, numbe
       coordinates,
       lastUsed: Date.now()
     })
-    saveVenues(venues)
+    await saveVenues(venues)
     return true
   }
   
@@ -161,8 +163,8 @@ export const updateVenueCoordinates = (name: string, coordinates: [number, numbe
 }
 
 // Clear old/unused venues (older than 30 days and used less than 2 times)
-export const cleanupOldVenues = (): number => {
-  const venues = loadVenues()
+export const cleanupOldVenues = async (): Promise<number> => {
+  const venues = await loadVenues()
   const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000)
   let removedCount = 0
   
@@ -174,15 +176,15 @@ export const cleanupOldVenues = (): number => {
   }
   
   if (removedCount > 0) {
-    saveVenues(venues)
+    await saveVenues(venues)
   }
   
   return removedCount
 }
 
 // Export venues as CSV for backup/sharing
-export const exportVenuesCSV = (): string => {
-  const venues = getAllVenues()
+export const exportVenuesCSV = async (): Promise<string> => {
+  const venues = await getAllVenues()
   
   const headers = ['name', 'address', 'lat', 'lon', 'usage_count', 'last_used']
   const csvContent = [
@@ -201,7 +203,7 @@ export const exportVenuesCSV = (): string => {
 }
 
 // Import venues from CSV
-export const importVenuesCSV = (csvText: string): { success: number, errors: string[] } => {
+export const importVenuesCSV = async (csvText: string): Promise<{ success: number, errors: string[] }> => {
   const lines = csvText.trim().split('\n')
   if (lines.length < 2) {
     return { success: 0, errors: ['CSV file is empty or has no data rows'] }
@@ -274,7 +276,7 @@ export const importVenuesCSV = (csvText: string): { success: number, errors: str
       }
       
       // Add venue
-      addVenue(
+      await addVenue(
         row.name,
         row.address || '',
         [lat, lon]
@@ -291,13 +293,13 @@ export const importVenuesCSV = (csvText: string): { success: number, errors: str
 }
 
 // Get venue statistics
-export const getVenueStats = (): {
+export const getVenueStats = async (): Promise<{
   totalVenues: number
   venuesWithCoordinates: number
   venuesNeedingGeocoding: number
   mostUsedVenue: VenueData | null
-} => {
-  const venues = getAllVenues()
+}> => {
+  const venues = await getAllVenues()
   const venuesWithCoordinates = venues.filter(v => !isDefaultCoordinates(v.coordinates)).length
   const venuesNeedingGeocoding = venues.filter(v => isDefaultCoordinates(v.coordinates)).length
   const mostUsedVenue = venues.length > 0 ? venues[0] : null

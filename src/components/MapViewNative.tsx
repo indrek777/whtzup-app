@@ -14,6 +14,7 @@ const UserProfile = require('./UserProfile')
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { GeocodingSearchResult, searchAddress, reverseGeocode } from '../utils/geocoding'
 import debounce from 'lodash/debounce'
+import EventEditor from './EventEditor'
 
 // Clustering interfaces
 interface EventCluster {
@@ -385,7 +386,7 @@ const createClusters = (events: Event[]): EventCluster[] => {
       // Get unique categories
       const categories = new Set<string>()
       nearbyEvents.forEach(e => {
-        const category = determineCategory(e.name, e.description)
+        const category = e.category || determineCategory(e.name, e.description)
         categories.add(category)
       })
 
@@ -404,7 +405,7 @@ const createClusters = (events: Event[]): EventCluster[] => {
       nearbyEvents.forEach(e => processedEvents.add(e.id))
     } else if (nearbyEvents.length === 1) {
       // Single event - create individual cluster
-      const category = determineCategory(event.name, event.description)
+      const category = event.category || determineCategory(event.name, event.description)
       const cluster: EventCluster = {
         id: `single-${event.id}`,
         latitude: event.latitude,
@@ -432,7 +433,7 @@ const ClusterMarker = React.memo(({
   const getClusterColor = (): string => {
     if (cluster.count === 1) {
       const event = cluster.events[0]
-      const category = determineCategory(event.name, event.description)
+      const category = event.category || determineCategory(event.name, event.description)
       return event.source === 'user' ? 'purple' : getMarkerColor(category)
     }
     
@@ -452,7 +453,7 @@ const ClusterMarker = React.memo(({
   const getClusterIcon = (): string => {
     if (cluster.count === 1) {
       const event = cluster.events[0]
-      const category = determineCategory(event.name, event.description)
+      const category = event.category || determineCategory(event.name, event.description)
       return event.source === 'user' ? '⭐' : getMarkerIcon(category)
     }
     return '📍' // Pin for clusters
@@ -517,12 +518,16 @@ const CustomMarker = React.memo(({
   event, 
   category, 
   onPress, 
-  markerRef
+  onLongPress,
+  markerRef,
+  clusterCount
 }: {
   event: Event
   category: string
   onPress: () => void
+  onLongPress?: () => void
   markerRef: (ref: any) => void
+  clusterCount?: number
 }) => {
   const markerColor = event.source === 'user' ? 'purple' : getMarkerColor(category)
   const markerIcon = event.source === 'user' ? '⭐' : getMarkerIcon(category)
@@ -544,20 +549,30 @@ const CustomMarker = React.memo(({
       draggable={false}
       zIndex={event.source === 'user' ? 1000 : 1}
     >
-      <View style={[
-        styles.customMarker,
-        { 
-          backgroundColor: markerColor,
-          borderColor: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white'
-        }
-      ]}>
-        <Text style={[
-          styles.markerText,
-          { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
+      <TouchableOpacity
+        onLongPress={onLongPress}
+        activeOpacity={0.8}
+      >
+        <View style={[
+          styles.customMarker,
+          { 
+            backgroundColor: markerColor,
+            borderColor: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white'
+          }
         ]}>
-          {markerIcon}
-        </Text>
-      </View>
+          <Text style={[
+            styles.markerText,
+            { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
+          ]}>
+            {markerIcon}
+          </Text>
+          {clusterCount && clusterCount > 1 && (
+            <View style={styles.clusterBadge}>
+              <Text style={styles.clusterBadgeText}>{clusterCount}</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
     </Marker>
   )
 })
@@ -586,7 +601,7 @@ const MapViewNative: React.FC = () => {
   const isProcessingClickRef = useRef<boolean>(false)
   
   // Clustering state
-  const [clusters, setClusters] = useState<EventCluster[]>([])
+  // const [clusters, setClusters] = useState<EventCluster[]>([]) // Removed - using memoizedClusters directly
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set())
   const [showClusterInfo, setShowClusterInfo] = useState(false)
   
@@ -636,6 +651,10 @@ const MapViewNative: React.FC = () => {
   // Event editing states
   const [isEditingEvent, setIsEditingEvent] = useState(false)
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  
+  // Event Editor state
+  const [showEventEditor, setShowEventEditor] = useState(false)
+  const [selectedEventForEditor, setSelectedEventForEditor] = useState<Event | null>(null)
   
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     query: '',
@@ -1061,7 +1080,7 @@ const MapViewNative: React.FC = () => {
     // Category filter
     if (searchFilters.category !== 'All') {
       filtered = filtered.filter(event => {
-        const category = determineCategory(event.name, event.description)
+        const category = event.category || determineCategory(event.name, event.description)
         return category === searchFilters.category
       })
     }
@@ -1203,7 +1222,7 @@ const MapViewNative: React.FC = () => {
   // Helper function to open event details modal
   const openEventDetailsModal = useCallback((event: Event) => {
     const { date, time } = parseDateTime(event.startsAt)
-    const category = determineCategory(event.name, event.description)
+    const category = event.category || determineCategory(event.name, event.description)
     const averageRating = getAverageRating(event.id)
     const ratingCount = getRatingCount(event.id)
     const userRating = getUserRating(event.id)
@@ -1245,9 +1264,9 @@ const MapViewNative: React.FC = () => {
   }, [filteredEvents])
 
   // Update clusters when filtered events change
-  useEffect(() => {
-    setClusters(memoizedClusters)
-  }, [memoizedClusters])
+  // useEffect(() => {
+  //   setClusters(memoizedClusters)
+  // }, [memoizedClusters]) // Removed - using memoizedClusters directly
 
   // Cluster press handler
   const handleClusterPress = useCallback((cluster: EventCluster) => {
@@ -1260,47 +1279,27 @@ const MapViewNative: React.FC = () => {
       setMultiEventCluster(cluster)
       setShowMultiEventModal(true)
     } else {
-      // Small multi-event cluster - zoom to cluster area and expand
-      setExpandedClusters(prev => {
-        const newSet = new Set(prev)
-        if (newSet.has(cluster.id)) {
-          // If already expanded, collapse and zoom out
-          newSet.delete(cluster.id)
-          // Zoom out to show more area
-          if (mapRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: cluster.center.latitude,
-              longitude: cluster.center.longitude,
-              latitudeDelta: 0.01, // Zoom out to about 1km view
-              longitudeDelta: 0.01,
-            }, 1000)
-          }
-        } else {
-          // Expand and zoom in to cluster
-          newSet.add(cluster.id)
-          // Calculate cluster bounds for optimal zoom
-          const latitudes = cluster.events.map(e => e.latitude)
-          const longitudes = cluster.events.map(e => e.longitude)
-          const minLat = Math.min(...latitudes)
-          const maxLat = Math.max(...latitudes)
-          const minLng = Math.min(...longitudes)
-          const maxLng = Math.max(...longitudes)
-          
-          // Add padding to ensure all events are visible
-          const latPadding = (maxLat - minLat) * 0.3
-          const lngPadding = (maxLng - minLng) * 0.3
-          
-          if (mapRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: (minLat + maxLat) / 2,
-              longitude: (minLng + maxLng) / 2,
-              latitudeDelta: Math.max(maxLat - minLat + latPadding, 0.002), // Minimum zoom level
-              longitudeDelta: Math.max(maxLng - minLng + lngPadding, 0.002),
-            }, 1000)
-          }
-        }
-        return newSet
-      })
+      // Small multi-event cluster (2-9 events) - zoom to cluster area
+      // Calculate cluster bounds for optimal zoom
+      const latitudes = cluster.events.map(e => e.latitude)
+      const longitudes = cluster.events.map(e => e.longitude)
+      const minLat = Math.min(...latitudes)
+      const maxLat = Math.max(...latitudes)
+      const minLng = Math.min(...longitudes)
+      const maxLng = Math.max(...longitudes)
+      
+      // Add padding to ensure all events are visible
+      const latPadding = (maxLat - minLat) * 0.3
+      const lngPadding = (maxLng - minLng) * 0.3
+      
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: (minLat + maxLat) / 2,
+          longitude: (minLng + maxLng) / 2,
+          latitudeDelta: Math.max(maxLat - minLat + latPadding, 0.002), // Minimum zoom level
+          longitudeDelta: Math.max(maxLng - minLng + lngPadding, 0.002),
+        }, 1000)
+      }
     }
   }, [createMarkerPressHandler])
 
@@ -1308,11 +1307,11 @@ const MapViewNative: React.FC = () => {
   const memoizedMarkers = useMemo(() => {
     const markers: React.ReactElement[] = []
     
-    clusters.forEach((cluster) => {
+    memoizedClusters.forEach((cluster) => {
       if (cluster.count === 1) {
         // Single event - render as normal marker
         const event = cluster.events[0]
-        const category = determineCategory(event.name, event.description)
+        const category = event.category || determineCategory(event.name, event.description)
         
         markers.push(
           <CustomMarker
@@ -1320,6 +1319,10 @@ const MapViewNative: React.FC = () => {
             event={event}
             category={category}
             onPress={createMarkerPressHandler(event)}
+            onLongPress={() => {
+              setSelectedEventForEditor(event)
+              setShowEventEditor(true)
+            }}
             markerRef={(ref) => {
               if (ref) {
                 markerRefs.current[event.id] = ref
@@ -1327,27 +1330,8 @@ const MapViewNative: React.FC = () => {
             }}
           />
         )
-      } else if (expandedClusters.has(cluster.id)) {
-        // Expanded cluster - render individual markers
-        cluster.events.forEach((event) => {
-          const category = determineCategory(event.name, event.description)
-          
-          markers.push(
-            <CustomMarker
-              key={event.id}
-              event={event}
-              category={category}
-              onPress={createMarkerPressHandler(event)}
-              markerRef={(ref) => {
-                if (ref) {
-                  markerRefs.current[event.id] = ref
-                }
-              }}
-            />
-          )
-        })
-      } else {
-        // Collapsed cluster - render cluster marker
+      } else if (cluster.count >= 10) {
+        // Large cluster (10+ events) - render cluster marker only
         markers.push(
           <ClusterMarker
             key={cluster.id}
@@ -1360,11 +1344,35 @@ const MapViewNative: React.FC = () => {
             }}
           />
         )
+      } else {
+        // Small multi-event cluster (2-9 events) - render individual markers for editor access
+        cluster.events.forEach((event) => {
+          const category = event.category || determineCategory(event.name, event.description)
+          
+          markers.push(
+            <CustomMarker
+              key={event.id}
+              event={event}
+              category={category}
+              onPress={createMarkerPressHandler(event)}
+              onLongPress={() => {
+                setSelectedEventForEditor(event)
+                setShowEventEditor(true)
+              }}
+              markerRef={(ref) => {
+                if (ref) {
+                  markerRefs.current[event.id] = ref
+                }
+              }}
+              clusterCount={cluster.count}
+            />
+          )
+        })
       }
     })
     
     return markers
-  }, [clusters, expandedClusters, createMarkerPressHandler, handleClusterPress])
+  }, [memoizedClusters, createMarkerPressHandler, handleClusterPress])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -1401,7 +1409,7 @@ const MapViewNative: React.FC = () => {
   const getCategoryCount = (category: string) => {
     if (category === 'All') return events.length
     return events.filter(event => {
-      const eventCategory = determineCategory(event.name, event.description)
+      const eventCategory = event.category || determineCategory(event.name, event.description)
       return eventCategory === category
     }).length
   }
@@ -2172,6 +2180,17 @@ const MapViewNative: React.FC = () => {
           </View>
         )}
       </TouchableOpacity>
+
+      {/* Event Editor Button */}
+      <TouchableOpacity 
+        style={styles.editorButton}
+        onPress={() => {
+          setSelectedEventForEditor(null) // Open in bulk edit mode
+          setShowEventEditor(true)
+        }}
+      >
+        <Text style={styles.editorButtonText}>✏️</Text>
+      </TouchableOpacity>
       
 
 
@@ -2230,10 +2249,10 @@ const MapViewNative: React.FC = () => {
         {memoizedMarkers}
         
         {/* Cluster info display */}
-        {clusters.length > 0 && (
+        {memoizedClusters.length > 0 && (
           <View style={styles.clusterInfoContainer}>
             <Text style={styles.clusterInfoText}>
-              {clusters.filter(c => c.count > 1).length} clusters • {filteredEvents.length} total events
+              {memoizedClusters.filter(c => c.count > 1).length} clusters • {filteredEvents.length} total events
             </Text>
             {expandedClusters.size > 0 && (
               <Text style={styles.clusterInfoSubtext}>
@@ -3340,7 +3359,7 @@ const MapViewNative: React.FC = () => {
                          setSearchFilters(prev => ({ ...prev, showSearchModal: false }))
                          // Open event details modal directly from search results
                          const { date, time } = parseDateTime(event.startsAt)
-                         const category = determineCategory(event.name, event.description)
+                         const category = event.category || determineCategory(event.name, event.description)
                          const averageRating = getAverageRating(event.id)
                          const ratingCount = getRatingCount(event.id)
                          const userRating = getUserRating(event.id)
@@ -3537,7 +3556,7 @@ const MapViewNative: React.FC = () => {
                         All events happening at this location. Tap on any event to see details.
                       </Text>
                       {multiEventCluster.events.map((event, index) => {
-                        const category = determineCategory(event.name, event.description)
+                        const category = event.category || determineCategory(event.name, event.description)
                         const { date, time } = parseDateTime(event.startsAt)
                         const averageRating = getAverageRating(event.id)
                         const ratingCount = getRatingCount(event.id)
@@ -3593,6 +3612,43 @@ const MapViewNative: React.FC = () => {
            loadUserFeatures() // Reload user features after profile changes
          }} 
        />
+
+      {/* Event Editor Modal */}
+      <EventEditor
+        visible={showEventEditor}
+        onClose={() => setShowEventEditor(false)}
+        selectedEvent={selectedEventForEditor}
+        onEventUpdated={(updatedEvent) => {
+          // Update the event in the local state
+          setEvents(prevEvents => 
+            prevEvents.map(event => 
+              event.id === updatedEvent.id ? updatedEvent : event
+            )
+          )
+          setFilteredEvents(prevEvents => 
+            prevEvents.map(event => 
+              event.id === updatedEvent.id ? updatedEvent : event
+            )
+          )
+        }}
+        events={events}
+        onUpdateEvent={(eventId, updatedEvent) => {
+          setEvents(prevEvents => 
+            prevEvents.map(event => 
+              event.id === eventId ? updatedEvent : event
+            )
+          )
+          setFilteredEvents(prevEvents => 
+            prevEvents.map(event => 
+              event.id === eventId ? updatedEvent : event
+            )
+          )
+        }}
+        onDeleteEvent={(eventId) => {
+          setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId))
+          setFilteredEvents(prevEvents => prevEvents.filter(event => event.id !== eventId))
+        }}
+      />
 
        
      </View>
@@ -3672,6 +3728,28 @@ const styles = StyleSheet.create({
   createEventButtonText: {
     color: 'white',
     fontSize: 24, // Larger font for the + sign
+    fontWeight: 'bold',
+  },
+  editorButton: {
+    position: 'absolute',
+    bottom: 100, // Position above the create event button
+    right: 20,
+    backgroundColor: '#FF9500',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  editorButtonText: {
+    color: 'white',
+    fontSize: 24,
     fontWeight: 'bold',
   },
   map: {
@@ -4262,6 +4340,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#007AFF',
+  },
+  clusterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#ff3b30',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  clusterBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
   },
   clusterSubtext: {
     fontSize: 8,

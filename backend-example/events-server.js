@@ -253,6 +253,78 @@ app.get('/api/events/stats', (req, res) => {
   }
 })
 
+// POST /api/update-events - Update events for all users (bulk update)
+app.post('/api/update-events', (req, res) => {
+  try {
+    // Handle FormData with events JSON file
+    if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+      // This would handle file upload, but for now we'll expect JSON in body
+      return res.status(400).json({
+        success: false,
+        error: 'File upload not implemented yet. Please send JSON data directly.'
+      })
+    }
+    
+    // Handle direct JSON data
+    const eventsData = req.body
+    
+    if (!Array.isArray(eventsData)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Expected array of events'
+      })
+    }
+    
+    // Clear existing events and replace with new data
+    events.clear()
+    
+    // Add all events from the update
+    eventsData.forEach(eventData => {
+      if (eventData.id) {
+        events.set(eventData.id, {
+          id: eventData.id,
+          name: eventData.name || '',
+          description: eventData.description || '',
+          venue: eventData.venue || '',
+          address: eventData.address || '',
+          startsAt: eventData.startsAt || new Date().toISOString().slice(0, 16).replace('T', ' '),
+          latitude: eventData.latitude || 0,
+          longitude: eventData.longitude || 0,
+          url: eventData.url || '',
+          source: eventData.source || 'app',
+          country: eventData.country,
+          category: eventData.category || 'other',
+          createdAt: eventData.createdAt || new Date().toISOString(),
+          createdBy: eventData.createdBy || 'anonymous',
+          updatedAt: eventData.updatedAt || new Date().toISOString(),
+          isRecurring: eventData.isRecurring,
+          recurringPattern: eventData.recurringPattern,
+          recurringDays: eventData.recurringDays,
+          recurringInterval: eventData.recurringInterval,
+          recurringEndDate: eventData.recurringEndDate,
+          recurringOccurrences: eventData.recurringOccurrences,
+          parentEventId: eventData.parentEventId
+        })
+      }
+    })
+    
+    console.log(`Bulk update completed: ${eventsData.length} events updated for all users`)
+    
+    res.json({
+      success: true,
+      message: `Successfully updated ${eventsData.length} events for all users`,
+      totalEvents: events.size
+    })
+    
+  } catch (error) {
+    console.error('Error updating events for all users:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update events for all users'
+    })
+  }
+})
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -272,6 +344,7 @@ app.listen(PORT, () => {
   console.log(`  GET  /api/events/:eventId - Get specific event`)
   console.log(`  PUT  /api/events/:eventId - Update event`)
   console.log(`  DELETE /api/events/:eventId - Delete event`)
+  console.log(`  POST /api/update-events - Update events for all users`)
   console.log(`  GET  /api/events/stats - Get event statistics`)
 })
 
