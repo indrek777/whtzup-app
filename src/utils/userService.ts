@@ -114,6 +114,29 @@ class UserService {
     await this.ensureInitialized()
     if (!this.currentUser) return false
     
+    try {
+      // Check backend for most up-to-date subscription status
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/status`, {
+        method: 'GET',
+        headers
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Update local subscription data
+          this.currentUser.subscription = result.data
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+          
+          return result.data.status === 'premium'
+        }
+      }
+    } catch (error) {
+      console.log('Failed to check subscription status from backend, using local data')
+    }
+    
+    // Fallback to local data if backend check fails
     const subscription = this.currentUser.subscription
     if (subscription.status !== 'premium') return false
     
@@ -501,38 +524,29 @@ class UserService {
       await this.ensureInitialized()
       if (!this.currentUser) return false
 
-      const now = new Date()
-      const endDate = new Date()
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/upgrade`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ plan, autoRenew: true })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Subscription upgrade failed:', errorData)
+        return false
+      }
+
+      const result = await response.json()
       
-      if (plan === 'monthly') {
-        endDate.setMonth(endDate.getMonth() + 1)
-      } else {
-        endDate.setFullYear(endDate.getFullYear() + 1)
-      }
-
-      const subscription: Subscription = {
-        status: 'premium',
-        plan,
-        startDate: now.toISOString(),
-        endDate: endDate.toISOString(),
-        autoRenew: true,
-        features: [
-          'unlimited_events',
-          'advanced_search',
-          'priority_support',
-          'analytics',
-          'custom_categories',
-          'export_data',
-          'no_ads',
-          'early_access',
-          'extended_event_radius'
-        ]
-      }
-
-      this.currentUser.subscription = subscription
-              await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-        
+      if (result.success) {
+        // Update local user data with new subscription
+        this.currentUser.subscription = result.data
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
         return true
+      }
+      
+      return false
     } catch (error) {
       console.error('Error subscribing to premium:', error)
       return false
@@ -819,8 +833,26 @@ class UserService {
         const data = await response.json()
         if (data.success) {
           this.currentUser = data.data
-          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data))
-          return data.data
+          
+          // Also refresh subscription status
+          try {
+            const subscriptionResponse = await fetch(`${API_BASE_URL}/subscription/status`, {
+              method: 'GET',
+              headers
+            })
+            
+            if (subscriptionResponse.ok) {
+              const subscriptionResult = await subscriptionResponse.json()
+              if (subscriptionResult.success) {
+                this.currentUser.subscription = subscriptionResult.data
+              }
+            }
+          } catch (subscriptionError) {
+            console.log('Failed to refresh subscription status:', subscriptionError)
+          }
+          
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+          return this.currentUser
         }
       } else if (response.status === 401) {
         // Token might be expired, try to refresh

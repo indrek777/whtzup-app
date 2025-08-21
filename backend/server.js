@@ -16,6 +16,7 @@ const eventsRouter = require('./routes/events');
 const syncRouter = require('./routes/sync');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const subscriptionRouter = require('./routes/subscription');
 const { errorHandler } = require('./middleware/errorHandler');
 const { validateDeviceId } = require('./middleware/deviceValidation');
 
@@ -65,6 +66,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/auth', authRouter);
+app.use('/api/subscription', subscriptionRouter);
 app.use('/api/events', validateDeviceId, (req, res, next) => {
   req.io = io;
   next();

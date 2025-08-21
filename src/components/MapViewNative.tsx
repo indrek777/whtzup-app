@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Share } from 'react-native'
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Share, AppState, Pressable } from 'react-native'
 import MapView, { Marker, Circle, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
 import * as Sharing from 'expo-sharing'
@@ -41,46 +41,15 @@ const getMarkerColor = (category: string): string => {
     case 'sports':
       return 'red'
     case 'music':
-    case 'concert':
-    case 'festival':
       return 'orange'
-    case 'theater':
-    case 'performance':
-      return 'blue'
     case 'art':
-    case 'museum':
-    case 'exhibition':
       return 'green'
-    case 'comedy':
-    case 'stand-up':
-      return 'purple'
-    case 'food & drink':
+    case 'food':
       return 'yellow'
     case 'business':
       return 'indigo'
-    case 'technology':
-      return 'green'
-    case 'family & kids':
-      return 'pink'
-    case 'health & wellness':
-      return 'lightblue'
-    case 'cultural':
-    case 'ball':
-      return 'magenta'
-    case 'nightlife':
-      return 'darkblue'
-    case 'charity & community':
-      return 'teal'
-    case 'fashion & beauty':
-      return 'hotpink'
-    case 'science & education':
-      return 'gray'
-    case 'nature & environment':
-      return 'darkgreen'
-    case 'gaming & entertainment':
-      return 'brown'
-                  case 'other':
-                return 'lightgray'
+    case 'other':
+      return 'lightgray'
     default:
       return 'gray'
   }
@@ -92,48 +61,17 @@ const getMarkerIcon = (category: string): string => {
     case 'sports':
       return '⚽'
     case 'music':
-    case 'concert':
-    case 'festival':
       return '🎵'
-    case 'theater':
-    case 'performance':
-      return '🎭'
     case 'art':
-    case 'museum':
-    case 'exhibition':
       return '🎨'
-    case 'comedy':
-    case 'stand-up':
-      return '😂'
-    case 'food & drink':
+    case 'food':
       return '🍽️'
     case 'business':
       return '💼'
-    case 'technology':
-      return '🤖'
-    case 'family & kids':
-      return '👨‍👩‍👧‍👦'
-    case 'health & wellness':
-      return '🧘'
-    case 'cultural':
-    case 'ball':
-      return '🎪'
-    case 'nightlife':
-      return '🌙'
-    case 'charity & community':
-      return '🤝'
-    case 'fashion & beauty':
-      return '👗'
-    case 'science & education':
-      return '🔬'
-    case 'nature & environment':
-      return '🌿'
-    case 'gaming & entertainment':
-      return '🎮'
-           case 'other':
-         return '⭐'
-       default:
-         return '📍'
+    case 'other':
+      return '⭐'
+    default:
+      return '📍'
   }
 }
 
@@ -143,152 +81,158 @@ const determineCategory = (name: string, description: string): string => {
   
   // Sports categories
   if (text.includes('football') || text.includes('soccer') || text.includes('match') || text.includes('game')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('basketball') || text.includes('volleyball') || text.includes('tennis')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('running') || text.includes('marathon') || text.includes('race')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('swimming') || text.includes('gym') || text.includes('fitness')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('yoga') || text.includes('pilates') || text.includes('workout')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('cycling') || text.includes('bike') || text.includes('cycling')) {
-    return 'Sports'
+    return 'sports'
   } else if (text.includes('hiking') || text.includes('climbing') || text.includes('outdoor')) {
-    return 'Sports'
+    return 'sports'
   }
   
   // Music categories
-  else if (text.includes('concert') || text.includes('music') || text.includes('festival') || text.includes('symphony')) {
-    return 'Music'
+  else if (text.includes('concert') || text.includes('music') || text.includes('symphony')) {
+    return 'music'
   } else if (text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical')) {
-    return 'Music'
+    return 'music'
   } else if (text.includes('opera') || text.includes('orchestra') || text.includes('band')) {
-    return 'Music'
+    return 'music'
+  } else if (text.includes('festival') && (text.includes('music') || text.includes('concert') || text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical'))) {
+    return 'music'
   }
   
-  // Theater & Performance
+  // Theater & Performance (map to art)
   else if (text.includes('theater') || text.includes('performance') || text.includes('ballet')) {
-    return 'Theater'
-  } else if (text.includes('dance') || text.includes('show') || text.includes('play')) {
-    return 'Theater'
+    return 'art'
+  } else if (text.includes('dance') || text.includes('play')) {
+    return 'art'
   } else if (text.includes('musical') || text.includes('drama') || text.includes('acting')) {
-    return 'Theater'
+    return 'art'
+  } else if (text.includes('show') && (text.includes('theater') || text.includes('performance') || text.includes('dance') || text.includes('play') || text.includes('musical') || text.includes('drama') || text.includes('acting'))) {
+    return 'art'
   }
   
   // Art & Culture
   else if (text.includes('museum') || text.includes('exhibition') || text.includes('näitus')) {
-    return 'Art'
+    return 'art'
   } else if (text.includes('gallery') || text.includes('painting') || text.includes('sculpture')) {
-    return 'Art'
+    return 'art'
   } else if (text.includes('photography') || text.includes('art') || text.includes('creative')) {
-    return 'Art'
+    return 'art'
   }
   
-  // Comedy & Entertainment
+  // Comedy & Entertainment (map to other)
   else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
-    return 'Comedy'
+    return 'other'
   } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
-    return 'Comedy'
+    return 'other'
   }
   
   // Food & Drink
   else if (text.includes('food') || text.includes('restaurant') || text.includes('dining')) {
-    return 'Food & Drink'
+    return 'food'
   } else if (text.includes('wine') || text.includes('beer') || text.includes('cocktail')) {
-    return 'Food & Drink'
+    return 'food'
   } else if (text.includes('cooking') || text.includes('chef') || text.includes('culinary')) {
-    return 'Food & Drink'
-  } else if (text.includes('tasting') || text.includes('festival') || text.includes('market')) {
-    return 'Food & Drink'
+    return 'food'
+  } else if (text.includes('tasting') || text.includes('market')) {
+    return 'food'
+  } else if (text.includes('festival') && (text.includes('food') || text.includes('restaurant') || text.includes('dining') || text.includes('wine') || text.includes('beer') || text.includes('cocktail') || text.includes('cooking') || text.includes('chef') || text.includes('culinary') || text.includes('tasting') || text.includes('market'))) {
+    return 'food'
   }
   
   // Business & Professional
   else if (text.includes('conference') || text.includes('seminar') || text.includes('workshop')) {
-    return 'Business'
+    return 'business'
   } else if (text.includes('meeting') || text.includes('networking') || text.includes('business')) {
-    return 'Business'
+    return 'business'
   } else if (text.includes('training') || text.includes('course') || text.includes('education')) {
-    return 'Business'
+    return 'business'
   }
   
-  // Technology
+  // Technology (map to business)
   else if (text.includes('tech') || text.includes('technology') || text.includes('digital')) {
-    return 'Technology'
+    return 'business'
   } else if (text.includes('startup') || text.includes('innovation') || text.includes('ai')) {
-    return 'Technology'
+    return 'business'
   } else if (text.includes('coding') || text.includes('programming') || text.includes('hackathon')) {
-    return 'Technology'
+    return 'business'
   }
   
-  // Family & Kids
+  // Family & Kids (map to other)
   else if (text.includes('kids') || text.includes('children') || text.includes('family')) {
-    return 'Family & Kids'
+    return 'other'
   } else if (text.includes('playground') || text.includes('toy') || text.includes('story')) {
-    return 'Family & Kids'
+    return 'other'
   }
   
-  // Health & Wellness
+  // Health & Wellness (map to other)
   else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
-    return 'Health & Wellness'
+    return 'other'
   } else if (text.includes('therapy') || text.includes('healing') || text.includes('mindfulness')) {
-    return 'Health & Wellness'
+    return 'other'
   }
   
-  // Cultural & Heritage
+  // Cultural & Heritage (map to art)
   else if (text.includes('cultural') || text.includes('heritage') || text.includes('traditional')) {
-    return 'Cultural'
+    return 'art'
   } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
-    return 'Cultural'
+    return 'art'
   } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
-    return 'Cultural'
+    return 'art'
   }
   
-  // Nightlife
+  // Nightlife (map to other)
   else if (text.includes('club') || text.includes('party') || text.includes('nightlife')) {
-    return 'Nightlife'
+    return 'other'
   } else if (text.includes('bar') || text.includes('pub') || text.includes('dance')) {
-    return 'Nightlife'
+    return 'other'
   }
   
-  // Charity & Community
+  // Charity & Community (map to other)
   else if (text.includes('charity') || text.includes('volunteer') || text.includes('community')) {
-    return 'Charity & Community'
+    return 'other'
   } else if (text.includes('fundraiser') || text.includes('donation') || text.includes('help')) {
-    return 'Charity & Community'
+    return 'other'
   }
   
-  // Fashion & Beauty
+  // Fashion & Beauty (map to other)
   else if (text.includes('fashion') || text.includes('beauty') || text.includes('style')) {
-    return 'Fashion & Beauty'
+    return 'other'
   } else if (text.includes('makeup') || text.includes('cosmetic') || text.includes('design')) {
-    return 'Fashion & Beauty'
+    return 'other'
   }
   
-  // Science & Education
+  // Science & Education (map to business)
   else if (text.includes('science') || text.includes('research') || text.includes('lecture')) {
-    return 'Science & Education'
+    return 'business'
   } else if (text.includes('university') || text.includes('academic') || text.includes('study')) {
-    return 'Science & Education'
+    return 'business'
   }
   
-  // Nature & Environment
+  // Nature & Environment (map to other)
   else if (text.includes('nature') || text.includes('environment') || text.includes('eco')) {
-    return 'Nature & Environment'
+    return 'other'
   } else if (text.includes('park') || text.includes('garden') || text.includes('outdoor')) {
-    return 'Nature & Environment'
+    return 'other'
   }
   
-  // Gaming & Entertainment
+  // Gaming & Entertainment (map to other)
   else if (text.includes('game') || text.includes('gaming') || text.includes('esports')) {
-    return 'Gaming & Entertainment'
+    return 'other'
   } else if (text.includes('board') || text.includes('card') || text.includes('tournament')) {
-    return 'Gaming & Entertainment'
+    return 'other'
   }
   
   // Other
   else {
-    return 'Other'
+    return 'other'
   }
 }
 
@@ -435,7 +379,7 @@ const ClusterMarker = React.memo(({
     if (cluster.count === 1) {
       const event = cluster.events[0]
       const category = event.category || determineCategory(event.name, event.description)
-      return event.source === 'user' ? 'purple' : getMarkerColor(category)
+      return getMarkerColor(category)
     }
     
     // Multi-event cluster - use gradient based on count
@@ -455,7 +399,7 @@ const ClusterMarker = React.memo(({
     if (cluster.count === 1) {
       const event = cluster.events[0]
       const category = event.category || determineCategory(event.name, event.description)
-      return event.source === 'user' ? '⭐' : getMarkerIcon(category)
+      return getMarkerIcon(category)
     }
     return '📍' // Pin for clusters
   }
@@ -519,19 +463,21 @@ const CustomMarker = React.memo(({
   event, 
   category, 
   onPress, 
-  onLongPress,
   markerRef,
   clusterCount
 }: {
   event: Event
   category: string
   onPress: () => void
-  onLongPress?: () => void
   markerRef: (ref: any) => void
   clusterCount?: number
 }) => {
-  const markerColor = event.source === 'user' ? 'purple' : getMarkerColor(category)
-  const markerIcon = event.source === 'user' ? '⭐' : getMarkerIcon(category)
+  // Use category-based colors and icons for all events
+  // Source field is only used for permissions, not visual styling
+  const markerColor = getMarkerColor(category)
+  const markerIcon = getMarkerIcon(category)
+  
+  // Removed console.log to reduce overhead
   
   // Create a colored circle with category icon as marker
   return (
@@ -543,39 +489,44 @@ const CustomMarker = React.memo(({
       }}
       onPress={onPress}
       tracksViewChanges={false}
-      anchor={{ x: 0.5, y: 0.5 }}
-      centerOffset={{ x: 0, y: 0 }}
+      anchor={{ x: 0.5, y: 1.0 }}
+      centerOffset={{ x: 0, y: -22 }}
       flat={false}
       opacity={1}
       draggable={false}
-      zIndex={event.source === 'user' ? 1000 : 1}
+      zIndex={1}
     >
-      <TouchableOpacity
-        onLongPress={onLongPress}
-        activeOpacity={0.8}
-      >
-        <View style={[
-          styles.customMarker,
-          { 
-            backgroundColor: markerColor,
-            borderColor: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white'
-          }
+      <View style={[
+        styles.customMarker,
+        { 
+          backgroundColor: markerColor,
+          borderColor: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white'
+        }
+      ]}>
+        <Text style={[
+          styles.markerText,
+          { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
         ]}>
-          <Text style={[
-            styles.markerText,
-            { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
-          ]}>
-            {markerIcon}
-          </Text>
-          {clusterCount && clusterCount > 1 && (
-            <View style={styles.clusterBadge}>
-              <Text style={styles.clusterBadgeText}>{clusterCount}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+          {markerIcon}
+        </Text>
+        {clusterCount && clusterCount > 1 && (
+          <View style={styles.clusterBadge}>
+            <Text style={styles.clusterBadgeText}>{clusterCount}</Text>
+          </View>
+        )}
+      </View>
     </Marker>
   )
+}, (prevProps, nextProps) => {
+  // Custom comparison function to ensure re-render when category changes
+  const shouldUpdate = 
+    prevProps.event.id !== nextProps.event.id ||
+    prevProps.event.updatedAt !== nextProps.event.updatedAt ||
+    prevProps.category !== nextProps.category ||
+    prevProps.clusterCount !== nextProps.clusterCount
+  
+  // Removed console.log to reduce overhead
+  return !shouldUpdate
 })
 
 const MapViewNative: React.FC = () => {
@@ -596,6 +547,8 @@ const MapViewNative: React.FC = () => {
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
   const [eventDetails, setEventDetails] = useState<{event: Event, distanceInfo: string, ratingInfo: string, userRatingInfo: string, syncInfo: string, date: string, time: string, category: string} | null>(null)
   const [canEditCurrentEvent, setCanEditCurrentEvent] = useState(false)
+  const [forceRefresh, setForceRefresh] = useState(0)
+  const [shouldCloseModal, setShouldCloseModal] = useState(false) // Force re-render when events change
   
   // State for marker behavior
   const markerRefs = useRef<{ [key: string]: any }>({})
@@ -746,13 +699,13 @@ const MapViewNative: React.FC = () => {
             }
           } else {
             console.log(`Loaded ${allEvents.length} cached events`)
-            // Try to fetch fresh data from server in background
-            syncService.fetchEvents(
-              { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
-              radius
-            ).catch(error => {
-              console.log('Background sync failed, using cached data')
-            })
+                      // Temporarily disabled background sync to test performance
+          // syncService.fetchEvents(
+          //   { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
+          //   radius
+          // ).catch(error => {
+          //   console.log('Background sync failed, using cached data')
+          // })
           }
           const initialEvents = allEvents.filter(event => {
             const distance = calculateDistance(
@@ -823,10 +776,10 @@ const MapViewNative: React.FC = () => {
           }
         } else {
           console.log(`Loaded ${allEvents.length} cached events`)
-          // Try to fetch fresh data from server in background
-          syncService.fetchEvents(userLoc, radius).catch(error => {
-            console.log('Background sync failed, using cached data')
-          })
+          // Temporarily disabled background sync to test performance
+          // syncService.fetchEvents(userLoc, radius).catch(error => {
+          //   console.log('Background sync failed, using cached data')
+          // })
         }
         
         // Filter events within dynamic radius of user location based on authentication status
@@ -846,8 +799,8 @@ const MapViewNative: React.FC = () => {
         console.log(`🎯 Events state should now have ${initialEvents.length} events`)
         setIsLoading(false)
         
-        // Load user-created events separately to merge with existing events
-        loadUserCreatedEvents(initialEvents)
+        // Temporarily disabled user events loading to test performance
+        // loadUserCreatedEvents(initialEvents)
       } catch (error) {
         console.error('Error loading events:', error)
         // Try to load cached events as fallback
@@ -923,10 +876,10 @@ const MapViewNative: React.FC = () => {
     // Get initial status
     updateSyncStatus()
 
-    // Update status every 30 seconds
-    const interval = setInterval(updateSyncStatus, 30000)
+    // Temporarily disabled background sync to test touch events
+    // const interval = setInterval(updateSyncStatus, 30000)
 
-    return () => clearInterval(interval)
+    // return () => clearInterval(interval)
   }, [])
 
   // Monitor authentication status changes and update banner
@@ -936,6 +889,122 @@ const MapViewNative: React.FC = () => {
       console.log(`🎯 Current loading radius: ${currentLoadingRadius}km`)
     }
   }, [isAuthenticated, currentLoadingRadius])
+
+  // Socket.IO real-time event listeners - Force refresh from server
+  useEffect(() => {
+    console.log('🔌 Setting up Socket.IO event listeners for real-time updates')
+    
+    // Listen for real-time event updates - Force refresh from server
+    const handleEventUpdated = async () => {
+      console.log('🔄 Real-time event update received, forcing refresh from all sources...')
+      
+      try {
+        // Force refresh from all sources to ensure all devices have latest data
+        const freshEvents = await eventService.getAllEvents(true) // Force refresh
+        console.log(`🔄 Refreshed ${freshEvents.length} events from all sources after update`)
+        
+        setEvents(freshEvents)
+        setFilteredEvents(freshEvents)
+        setForceRefresh(prev => prev + 1) // Force re-render of markers
+      } catch (error) {
+        console.error('Error refreshing events after update:', error)
+      }
+    }
+
+    const handleEventCreated = async () => {
+      console.log('🆕 Real-time event creation received, forcing refresh from all sources...')
+      
+      try {
+        // Force refresh from all sources to ensure all devices have latest data
+        const freshEvents = await eventService.getAllEvents(true) // Force refresh
+        console.log(`🆕 Refreshed ${freshEvents.length} events from all sources after creation`)
+        
+        setEvents(freshEvents)
+        setFilteredEvents(freshEvents)
+        setForceRefresh(prev => prev + 1) // Force re-render of markers
+      } catch (error) {
+        console.error('Error refreshing events after creation:', error)
+      }
+    }
+
+    const handleEventDeleted = async () => {
+      console.log('🗑️ Real-time event deletion received, forcing refresh from all sources...')
+      
+      try {
+        // Force refresh from all sources to ensure all devices have latest data
+        const freshEvents = await eventService.getAllEvents(true) // Force refresh
+        console.log(`🗑️ Refreshed ${freshEvents.length} events from all sources after deletion`)
+        
+        setEvents(freshEvents)
+        setFilteredEvents(freshEvents)
+        setForceRefresh(prev => prev + 1) // Force re-render of markers
+      } catch (error) {
+        console.error('Error refreshing events after deletion:', error)
+      }
+    }
+
+    // Temporarily disabled Socket.IO listeners to test touch events
+    // syncService.addListener('eventUpdated', handleEventUpdated)
+    // syncService.addListener('eventCreated', handleEventCreated)
+    // syncService.addListener('eventDeleted', handleEventDeleted)
+
+    // Cleanup function to remove listeners
+    return () => {
+      console.log('🔌 Cleaning up Socket.IO event listeners')
+      // syncService.removeListener('eventUpdated', handleEventUpdated)
+      // syncService.removeListener('eventCreated', handleEventCreated)
+      // syncService.removeListener('eventDeleted', handleEventDeleted)
+    }
+  }, [searchFilters.userLocation])
+
+  // Manual refresh function
+  const refreshEvents = async () => {
+    console.log('🔄 Manual refresh triggered...')
+    try {
+      setIsLoading(true)
+      
+      const freshEvents = await eventService.getAllEvents(true) // Force refresh
+      console.log(`🔄 Manually refreshed ${freshEvents.length} events from all sources`)
+      
+      setEvents(freshEvents)
+      setFilteredEvents(freshEvents)
+      setForceRefresh(prev => prev + 1) // Force re-render of markers
+      Alert.alert('Success', `Refreshed ${freshEvents.length} events from all sources!`)
+    } catch (error) {
+      console.error('Error manually refreshing events:', error)
+      Alert.alert('Error', 'Failed to refresh events. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Force refresh events when app becomes active
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        console.log('📱 App became active, refreshing events from all sources...')
+        try {
+          // Force refresh from all sources to ensure all devices have latest data
+          const freshEvents = await eventService.getAllEvents(true) // Force refresh
+          console.log(`🔄 Refreshed ${freshEvents.length} events from all sources on app state change`)
+          
+          // Update both events and filtered events
+          setEvents(freshEvents)
+          setFilteredEvents(freshEvents)
+          setForceRefresh(prev => prev + 1) // Force re-render of markers
+        } catch (error) {
+          console.error('Error refreshing events on app state change:', error)
+        }
+      }
+    }
+
+    // Listen for app state changes
+    const subscription = AppState.addEventListener('change', handleAppStateChange)
+    
+    return () => {
+      subscription?.remove()
+    }
+  }, [searchFilters.userLocation])
 
   // Keyboard event listeners for review input
   useEffect(() => {
@@ -988,10 +1057,9 @@ const MapViewNative: React.FC = () => {
     try {
       if (!userLocation) return
 
-      const radius = await getEventLoadingRadius()
-      const allEvents = await syncService.fetchEvents(userLocation, radius)
+      const allEvents = await eventService.getAllEvents(true) // Force refresh
       
-      console.log(`🎯 Reloading events with radius filter: ${allEvents.length} events`)
+      console.log(`🎯 Reloading events from all sources: ${allEvents.length} events`)
       setEvents(allEvents)
       setFilteredEvents(allEvents)
     } catch (error) {
@@ -1438,20 +1506,103 @@ const MapViewNative: React.FC = () => {
     clickedMarkerIdRef.current = null
   }, []) // Remove dependencies to prevent recreation
 
+  // Update event details when events change (if modal is open)
+  useEffect(() => {
+    if (eventDetails && showEventDetailsModal) {
+      // Find the updated event in the current events array
+      const updatedEvent = events.find(e => e.id === eventDetails.event.id) || 
+                          filteredEvents.find(e => e.id === eventDetails.event.id)
+      
+      if (updatedEvent && (
+        updatedEvent.category !== eventDetails.event.category ||
+        updatedEvent.name !== eventDetails.event.name ||
+        updatedEvent.description !== eventDetails.event.description ||
+        updatedEvent.venue !== eventDetails.event.venue ||
+        updatedEvent.address !== eventDetails.event.address ||
+        updatedEvent.startsAt !== eventDetails.event.startsAt ||
+        updatedEvent.updatedAt !== eventDetails.event.updatedAt
+      )) {
+        // Removed console.log to reduce overhead
+        
+        // Recalculate event details with updated data
+        let distanceInfo = '📍 Location not available'
+        if (searchFilters.userLocation && updatedEvent.latitude && updatedEvent.longitude) {
+          const distance = calculateDistance(
+            searchFilters.userLocation.latitude,
+            searchFilters.userLocation.longitude,
+            updatedEvent.latitude,
+            updatedEvent.longitude
+          )
+          distanceInfo = `📍 Distance: ${distance.toFixed(1)} km from you`
+        }
+        
+        const averageRating = getAverageRating(updatedEvent.id)
+        const ratingCount = getRatingCount(updatedEvent.id)
+        const userRating = getUserRating(updatedEvent.id)
+        const ratingInfo = `⭐ Community Rating: ${averageRating}/5 (${ratingCount} reviews)`
+        const userRatingInfo = userRating > 0 ? `👤 Your Rating: ${userRating}/5` : ''
+        const syncInfo = '📱 Local rating only (backend not configured)'
+        
+        const { date, time } = parseDateTime(updatedEvent.startsAt)
+        const category = updatedEvent.category || determineCategory(updatedEvent.name, updatedEvent.description)
+        
+        setEventDetails({
+          event: updatedEvent,
+          distanceInfo,
+          ratingInfo,
+          userRatingInfo,
+          syncInfo,
+          date,
+          time,
+          category
+        })
+      }
+    }
+  }, [events, filteredEvents, eventDetails, showEventDetailsModal])
 
+  // Effect to handle modal closing
+  useEffect(() => {
+    if (shouldCloseModal) {
+              // Removed console.log to reduce overhead
+      setShowCreateEventModal(false)
+      setIsEditingEvent(false)
+      setEditingEventId(null)
+      
+      // Reset form
+      setNewEvent({
+        name: '',
+        description: '',
+        venue: '',
+        address: '',
+        startsAt: '',
+        category: 'Other',
+        latitude: 0,
+        longitude: 0,
+        isRecurring: false,
+        recurringPattern: 'daily',
+        recurringDays: [0],
+        recurringInterval: 1,
+        recurringEndDate: '',
+        recurringOccurrences: 1
+      })
+      setSelectedLocation(null)
+      
+      // Reset the flag
+      setShouldCloseModal(false)
+      console.log('✅ Modal closed and form reset')
+    }
+  }, [shouldCloseModal])
 
-  // Create clusters from filtered events
+  // Create clusters from filtered events - re-enabled with optimization
   const memoizedClusters = useMemo(() => {
-    console.log(`🎯 Creating clusters from ${filteredEvents.length} filtered events`)
-    const clusters = createClusters(filteredEvents)
-    console.log(`🎯 Created ${clusters.length} clusters`)
-    return clusters
+    // Only create clusters if we have events and not too many
+    if (filteredEvents.length === 0) return []
+    if (filteredEvents.length > 100) {
+      // For large datasets, limit clustering to prevent performance issues
+      return createClusters(filteredEvents.slice(0, 100))
+    }
+    return createClusters(filteredEvents)
   }, [filteredEvents])
-
-  // Update clusters when filtered events change
-  // useEffect(() => {
-  //   setClusters(memoizedClusters)
-  // }, [memoizedClusters]) // Removed - using memoizedClusters directly
 
   // Cluster press handler
   const handleClusterPress = useCallback((cluster: EventCluster) => {
@@ -1488,27 +1639,58 @@ const MapViewNative: React.FC = () => {
     }
   }, [createMarkerPressHandler])
 
-  // Memoized markers to prevent unnecessary re-renders
+  // Memoized markers to prevent unnecessary re-renders - re-enabled with optimization
   const memoizedMarkers = useMemo(() => {
-    console.log(`🎯 Creating markers from ${memoizedClusters.length} clusters`)
-    const markers: React.ReactElement[] = []
+    // Only create markers if we have clusters and not too many
+    if (memoizedClusters.length === 0) return []
+    if (memoizedClusters.length > 50) {
+      // For large datasets, limit markers to prevent performance issues
+      return memoizedClusters.slice(0, 50).map((cluster) => {
+        if (cluster.count === 1) {
+          const event = cluster.events[0]
+          const category = event.category || determineCategory(event.name, event.description)
+          return (
+            <CustomMarker
+              key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
+              event={event}
+              category={category}
+              onPress={createMarkerPressHandler(event)}
+              markerRef={(ref) => {
+                if (ref) {
+                  markerRefs.current[event.id] = ref
+                }
+              }}
+            />
+          )
+        } else {
+          return (
+            <ClusterMarker
+              key={`${cluster.id}-${forceRefresh}`}
+              cluster={cluster}
+              onPress={() => handleClusterPress(cluster)}
+              markerRef={(ref) => {
+                if (ref) {
+                  markerRefs.current[cluster.id] = ref
+                }
+              }}
+            />
+          )
+        }
+      })
+    }
     
+    // Full marker creation for smaller datasets
+    const markers: React.ReactElement[] = []
     memoizedClusters.forEach((cluster) => {
       if (cluster.count === 1) {
-        // Single event - render as normal marker
         const event = cluster.events[0]
         const category = event.category || determineCategory(event.name, event.description)
-        
         markers.push(
           <CustomMarker
-            key={event.id}
+            key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
             event={event}
             category={category}
             onPress={createMarkerPressHandler(event)}
-            onLongPress={() => {
-              setSelectedEventForEditor(event)
-              setShowEventEditor(true)
-            }}
             markerRef={(ref) => {
               if (ref) {
                 markerRefs.current[event.id] = ref
@@ -1516,11 +1698,10 @@ const MapViewNative: React.FC = () => {
             }}
           />
         )
-      } else if (cluster.count >= 10) {
-        // Large cluster (10+ events) - render cluster marker only
+      } else {
         markers.push(
           <ClusterMarker
-            key={cluster.id}
+            key={`${cluster.id}-${forceRefresh}`}
             cluster={cluster}
             onPress={() => handleClusterPress(cluster)}
             markerRef={(ref) => {
@@ -1530,36 +1711,10 @@ const MapViewNative: React.FC = () => {
             }}
           />
         )
-      } else {
-        // Small multi-event cluster (2-9 events) - render individual markers for editor access
-        cluster.events.forEach((event) => {
-          const category = event.category || determineCategory(event.name, event.description)
-          
-          markers.push(
-            <CustomMarker
-              key={event.id}
-              event={event}
-              category={category}
-              onPress={createMarkerPressHandler(event)}
-              onLongPress={() => {
-                setSelectedEventForEditor(event)
-                setShowEventEditor(true)
-              }}
-              markerRef={(ref) => {
-                if (ref) {
-                  markerRefs.current[event.id] = ref
-                }
-              }}
-              clusterCount={cluster.count}
-            />
-          )
-        })
       }
     })
-    
-    console.log(`🎯 Created ${markers.length} markers`)
     return markers
-  }, [memoizedClusters, createMarkerPressHandler, handleClusterPress])
+  }, [memoizedClusters, createMarkerPressHandler, handleClusterPress, forceRefresh])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -1896,10 +2051,13 @@ const MapViewNative: React.FC = () => {
     }
   }
 
-  const loadUserCreatedEvents = async (currentEvents: Event[] = events) => {
+  const loadUserCreatedEvents = async (currentEvents: Event[] = events, forceRefresh: boolean = false) => {
     try {
+      console.log(`🔄 loadUserCreatedEvents called with forceRefresh: ${forceRefresh}`)
       // Load user-created events using getAllEvents (which includes local events)
-      const userEvents = await eventService.getAllEvents()
+      const userEvents = await eventService.getAllEvents(forceRefresh)
+      console.log(`📊 Loaded ${userEvents.length} events from eventService`)
+      console.log('📋 Current events before merge:', currentEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
       
       // Ensure all user events have required fields
       const validatedUserEvents = userEvents.map(event => ({
@@ -1914,13 +2072,24 @@ const MapViewNative: React.FC = () => {
         category: event.category || 'Other'
       }))
       
-      // Merge with current events, avoiding duplicates
-      const mergedEvents = [...currentEvents, ...validatedUserEvents]
-      const uniqueEvents = mergedEvents.filter((event, index, self) => 
-        index === self.findIndex(e => e.id === event.id)
-      )
+      // Merge with current events, prioritizing updated events
+      const eventMap = new Map()
+      
+      // First, add all current events
+      currentEvents.forEach(event => {
+        eventMap.set(event.id, event)
+      })
+      
+      // Then, override with validated user events (these are the updated ones)
+      validatedUserEvents.forEach(event => {
+        eventMap.set(event.id, event)
+      })
+      
+      const uniqueEvents = Array.from(eventMap.values())
       
       console.log(`🎯 loadUserCreatedEvents: Setting ${uniqueEvents.length} events (${validatedUserEvents.length} user events added)`)
+      console.log('📋 Events to be set:', uniqueEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
+      console.log('📋 Validated user events:', validatedUserEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
       setEvents(uniqueEvents)
       setFilteredEvents(uniqueEvents)
       
@@ -2023,6 +2192,18 @@ const MapViewNative: React.FC = () => {
       return
     }
 
+    console.log('🔄 Starting event update...')
+    console.log('📝 Event ID:', editingEventId)
+    console.log('📝 New category:', newEvent.category)
+    console.log('📝 Current events count:', events.length)
+    
+    // Check if the event exists in current events list
+    const eventInState = events.find(e => e.id === editingEventId)
+    console.log('📝 Event found in current state:', !!eventInState)
+    if (eventInState) {
+      console.log('📝 Event details:', { id: eventInState.id, name: eventInState.name, category: eventInState.category, source: eventInState.source })
+    }
+    
     setIsCreatingEvent(true)
 
     const updatedData = {
@@ -2044,42 +2225,109 @@ const MapViewNative: React.FC = () => {
 
     const result = await eventService.updateEvent(editingEventId, updatedData)
     
+    console.log('📊 Event update result:', result)
+    console.log('📊 Result type:', typeof result)
+    console.log('📊 Result keys:', Object.keys(result))
+    console.log('📊 Success value:', result.success)
+    console.log('📊 Error value:', result.error)
+    
     if (result.success) {
-      Alert.alert(
-        'Success!', 
-        'Event updated successfully! 🎉',
-        [{ text: 'OK', onPress: () => {
-          setShowCreateEventModal(false)
-          setIsEditingEvent(false)
-          setEditingEventId(null)
-        }}]
-      )
-
-      // Reload events to reflect changes
-      await loadUserCreatedEvents()
+      console.log('🔄 Event updated successfully, refreshing data...')
       
-      // Reset form
-      setNewEvent({
-        name: '',
-        description: '',
-        venue: '',
-        address: '',
-        startsAt: '',
-        category: 'Other',
-        latitude: 0,
-        longitude: 0,
-        isRecurring: false,
-        recurringPattern: 'daily',
-        recurringDays: [0],
-        recurringInterval: 1,
-        recurringEndDate: '',
-        recurringOccurrences: 1
-      })
-      setSelectedLocation(null)
+      // Force refresh events from all sources (local + server)
+      try {
+        console.log('🔄 Fetching fresh events from all sources...')
+        const freshEvents = await eventService.getAllEvents(true) // Force refresh
+        console.log(`🔄 Refreshed ${freshEvents.length} events from all sources after update`)
+        console.log('📊 Fresh events categories:', freshEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
+        
+        // Update both events and filtered events
+        console.log('🔄 Updating events state with fresh data...')
+        setEvents(freshEvents)
+        setFilteredEvents(freshEvents)
+        
+        // Force re-render of markers with new data
+        console.log('🔄 Forcing marker re-render...')
+        setForceRefresh(prev => prev + 1)
+        
+        console.log('✅ Events state updated')
+        
+        // Close modal immediately after successful update
+        console.log('🔄 Closing modal immediately after successful update...')
+        
+        // Trigger modal closing through useEffect
+        console.log('🔄 Setting shouldCloseModal to true...')
+        setShouldCloseModal(true)
+        
+        // Update event details if the modal is currently showing the updated event
+        if (eventDetails && eventDetails.event.id === editingEventId) {
+          const updatedEvent = freshEvents.find(e => e.id === editingEventId)
+          if (updatedEvent) {
+            console.log('🔄 Updating event details modal with new data:', {
+              oldCategory: eventDetails.event.category,
+              newCategory: updatedEvent.category
+            })
+            
+            // Recalculate event details with updated data
+            const distance = calculateDistance(
+              (userLocation || { latitude: 0, longitude: 0 }).latitude,
+              (userLocation || { latitude: 0, longitude: 0 }).longitude,
+              updatedEvent.latitude,
+              updatedEvent.longitude
+            )
+            const distanceInfo = distance > 0 ? `📍 ${distance.toFixed(1)}km away` : '📍 At your location'
+            const date = parseDateTime(updatedEvent.startsAt).date
+            const time = parseDateTime(updatedEvent.startsAt).time
+            const category = updatedEvent.category || determineCategory(updatedEvent.name, updatedEvent.description)
+            
+            setEventDetails({
+              ...eventDetails,
+              event: updatedEvent,
+              distanceInfo,
+              date,
+              time,
+              category
+            })
+          }
+        }
+        
+        // Show success alert after modal is closed
+        Alert.alert(
+          'Success!', 
+          'Event updated successfully! 🎉',
+          [{ text: 'OK', onPress: () => {
+            console.log('✅ Success alert OK button pressed')
+            
+            // Additional refresh after alert to ensure UI is updated
+            setTimeout(async () => {
+              console.log('🔄 Additional refresh after alert...')
+              try {
+                const freshEvents = await eventService.getAllEvents(true) // Force refresh
+                setEvents(freshEvents)
+                setFilteredEvents(freshEvents)
+                setForceRefresh(prev => prev + 1)
+                console.log('✅ Additional refresh completed')
+              } catch (error) {
+                console.error('Error in additional refresh:', error)
+              }
+            }, 500)
+          }}]
+        )
+        
+        // Additional fallback: Force modal close after 1 second
+        setTimeout(() => {
+          console.log('🔄 Fallback: Forcing modal close after 1 second...')
+          setShouldCloseModal(true)
+        }, 1000)
+      } catch (error) {
+        console.error('Error refreshing events after update:', error)
+        Alert.alert('Warning', 'Event updated but refresh failed. Try manual refresh.')
+      }
     } else {
-      Alert.alert('Error', result.error || 'Failed to update event. Please try again.')
+      console.error('Event update failed:', result.error)
+      Alert.alert('Error', `Failed to update event: ${result.error}`)
     }
-
+    
     setIsCreatingEvent(false)
   }
 
@@ -2113,11 +2361,25 @@ const MapViewNative: React.FC = () => {
             const result = await eventService.deleteEvent(eventId)
             
             if (result.success) {
-              Alert.alert('Success', 'Event deleted successfully!')
-              setShowEventDetailsModal(false)
+              console.log('🗑️ Event deleted successfully, refreshing data...')
               
-              // Reload events to reflect changes
-              await loadUserCreatedEvents()
+              // Force refresh events from all sources immediately
+              try {
+                const freshEvents = await eventService.getAllEvents(true) // Force refresh
+                console.log(`🗑️ Refreshed ${freshEvents.length} events from all sources after deletion`)
+                
+                // Update both events and filtered events
+                setEvents(freshEvents)
+                setFilteredEvents(freshEvents)
+                setForceRefresh(prev => prev + 1) // Force re-render of markers
+                
+                Alert.alert('Success', 'Event deleted successfully!')
+                setShowEventDetailsModal(false)
+              } catch (error) {
+                console.error('Error refreshing events after deletion:', error)
+                Alert.alert('Success', 'Event deleted successfully!')
+                setShowEventDetailsModal(false)
+              }
             } else {
               Alert.alert('Error', result.error || 'Failed to delete event. Please try again.')
             }
@@ -2345,10 +2607,12 @@ const MapViewNative: React.FC = () => {
     )
   }
 
+  // Debug modal states - removed console.log to reduce overhead
+
   return (
     <View style={styles.container}>
-      {/* Authentication Status Banner */}
-      {currentLoadingRadius === 10 && !isAuthenticated && (
+      {/* Authentication Status Banner - Temporarily disabled to test touch events */}
+      {/* {currentLoadingRadius === 10 && !isAuthenticated && (
         <View style={styles.authBanner}>
           <Text style={styles.authBannerText}>
             🔒 Limited to 10km radius. Sign in to see more events!
@@ -2363,7 +2627,7 @@ const MapViewNative: React.FC = () => {
             <Text style={styles.authBannerButtonText}>Sign In</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
       
       {/* Search Button */}
       <TouchableOpacity 
@@ -2392,6 +2656,14 @@ const MapViewNative: React.FC = () => {
 
 
 
+
+      {/* Refresh Button */}
+      <TouchableOpacity 
+        style={[styles.createEventButton, { bottom: 180, backgroundColor: '#007AFF' }]}
+        onPress={refreshEvents}
+      >
+        <Text style={styles.createEventButtonText}>🔄</Text>
+      </TouchableOpacity>
 
       {/* Create Event Button */}
       <TouchableOpacity 
@@ -2431,7 +2703,7 @@ const MapViewNative: React.FC = () => {
         initialRegion={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={true}
-        onPress={handleMapPress}
+        onPress={handleMapPress} // Re-enabled with optimization
         onRegionChangeComplete={handleRegionChange}
         mapType="standard"
         showsCompass={true}
@@ -2478,9 +2750,13 @@ const MapViewNative: React.FC = () => {
 
       {/* Create Event Modal */}
       <Modal
+        key={`modal-${showCreateEventModal}-${isEditingEvent}-${editingEventId}`}
         visible={showCreateEventModal}
         animationType="slide"
         presentationStyle="fullScreen"
+        onRequestClose={() => {
+          setShouldCloseModal(true)
+        }}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -2498,28 +2774,8 @@ const MapViewNative: React.FC = () => {
               )}
               <TouchableOpacity 
                 onPress={() => {
-                  setShowCreateEventModal(false)
+                  setShouldCloseModal(true)
                   setIsMapMode(false)
-                  setIsEditingEvent(false)
-                  setEditingEventId(null)
-                  // Reset form
-                  setNewEvent({
-                    name: '',
-                    description: '',
-                    venue: '',
-                    address: '',
-                    startsAt: '',
-                    category: 'Other',
-                    latitude: 0,
-                    longitude: 0,
-                    isRecurring: false,
-                    recurringPattern: 'daily',
-                    recurringDays: [0],
-                    recurringInterval: 1,
-                    recurringEndDate: '',
-                    recurringOccurrences: 1
-                  })
-                  setSelectedLocation(null)
                 }}
                 style={styles.closeButton}
               >
@@ -3836,6 +4092,9 @@ const MapViewNative: React.FC = () => {
         onClose={() => setShowEventEditor(false)}
         selectedEvent={selectedEventForEditor}
         onEventUpdated={(updatedEvent) => {
+          console.log('🔄 Event updated via onEventUpdated callback:', updatedEvent.id);
+          console.log('🎨 Updated event category:', updatedEvent.category);
+          
           // Update the event in the local state
           setEvents(prevEvents => 
             prevEvents.map(event => 
@@ -3847,12 +4106,17 @@ const MapViewNative: React.FC = () => {
               event.id === updatedEvent.id ? updatedEvent : event
             )
           )
+          
+          // Force re-render of markers to update icons
+          setForceRefresh(prev => prev + 1);
+          console.log('🔄 Force refresh triggered for onEventUpdated');
         }}
         events={events}
         onUpdateEvent={(eventId, updatedEvent) => {
           console.log('🔄 Updating event in map state:', eventId);
           console.log('📊 Updated event data:', updatedEvent);
           console.log('📍 Event coordinates:', updatedEvent.latitude, updatedEvent.longitude);
+          console.log('🎨 Event category:', updatedEvent.category);
           
           setEvents(prevEvents => {
             const newEvents = prevEvents.map(event => 
@@ -3869,10 +4133,20 @@ const MapViewNative: React.FC = () => {
             console.log(`🎯 Filtered events state updated: ${newFilteredEvents.length} events`);
             return newFilteredEvents;
           });
+          
+          // Force re-render of markers to update icons
+          setForceRefresh(prev => prev + 1);
+          console.log('🔄 Force refresh triggered for marker update');
         }}
         onDeleteEvent={(eventId) => {
+          console.log('🗑️ Event deleted via onDeleteEvent callback:', eventId);
+          
           setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId))
           setFilteredEvents(prevEvents => prevEvents.filter(event => event.id !== eventId))
+          
+          // Force re-render of markers to update icons
+          setForceRefresh(prev => prev + 1);
+          console.log('🔄 Force refresh triggered for onDeleteEvent');
         }}
       />
 
@@ -4528,7 +4802,7 @@ const styles = StyleSheet.create({
   settingsButton: {
     position: 'absolute',
     bottom: 30,
-    right: 160,
+    right: 200, // Moved further right to avoid overlap with search button
     backgroundColor: '#f0f0f0',
     padding: 10,
     borderRadius: 20,

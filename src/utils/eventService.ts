@@ -5,13 +5,14 @@ export interface EventResponse {
   success: boolean
   event?: Event
   events?: Event[]
+  data?: Event[]
   total?: number
   message?: string
   error?: string
 }
 
-// Set to null to disable backend connection for now
-const API_BASE_URL = null // 'http://localhost:3002/api' // Replace with your actual backend URL
+// Backend API URL
+const API_BASE_URL = 'http://olympio.ee:4000/api' // Backend URL
 const API_ENDPOINTS = {
   events: '/events',
   stats: '/events/stats',
@@ -161,14 +162,20 @@ class EventService {
   }
   
   // Get all events (local + shared)
-  async getAllEvents(): Promise<Event[]> {
+  async getAllEvents(forceRefresh: boolean = false): Promise<Event[]> {
     try {
+      console.log(`🔄 getAllEvents called with forceRefresh: ${forceRefresh}`)
       const localEvents = await this.getLocalEvents()
-      const sharedEvents = await this.getSharedEvents()
+      console.log(`📊 Local events: ${localEvents.length}`)
+      console.log(`📋 Local event IDs:`, localEvents.map(e => `${e.id} (${e.name})`))
+      const sharedEvents = forceRefresh ? await this.refreshSharedEvents() : await this.getSharedEvents()
+      console.log(`📊 Shared events: ${sharedEvents.length}`)
       
       // Merge events, avoiding duplicates
       const allEvents = [...localEvents, ...sharedEvents]
+      console.log(`📊 Total events before deduplication: ${allEvents.length}`)
       const uniqueEvents = this.removeDuplicates(allEvents)
+      console.log(`📊 Unique events after deduplication: ${uniqueEvents.length}`)
       
       return uniqueEvents
     } catch (error) {
@@ -184,7 +191,7 @@ class EventService {
   }
   
   // Get shared events from backend
-  async getSharedEvents(): Promise<Event[]> {
+  async getSharedEvents(forceRefresh: boolean = false): Promise<Event[]> {
     try {
       // Try to get from backend first (if configured)
       if (API_BASE_URL) {
@@ -192,13 +199,15 @@ class EventService {
           const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}`)
           if (response.ok) {
             const result: EventResponse = await response.json()
-            if (result.success && result.events) {
+            if (result.success && result.data) {
+              console.log(`📊 Received ${result.data.length} events from backend`)
               // Cache the result locally
-              await this.cacheSharedEvents(result.events)
-              return result.events
+              await this.cacheSharedEvents(result.data)
+              return result.data
             }
           }
         } catch (backendError) {
+          console.error('Error fetching from backend:', backendError)
           // Fallback to cached data
         }
       }
@@ -209,6 +218,33 @@ class EventService {
     } catch (error) {
       console.error('Error getting shared events:', error)
       return []
+    }
+  }
+
+  // Force refresh shared events from backend
+  async refreshSharedEvents(): Promise<Event[]> {
+    try {
+      if (!API_BASE_URL) {
+        return await this.getCachedSharedEvents()
+      }
+
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}`)
+      if (response.ok) {
+        const result: EventResponse = await response.json()
+        if (result.success && result.data) {
+          console.log(`📊 Refreshed ${result.data.length} events from backend`)
+          // Cache the result locally
+          await this.cacheSharedEvents(result.data)
+          return result.data
+        }
+      }
+      
+      // If backend call fails, return cached data
+      return await this.getCachedSharedEvents()
+      
+    } catch (error) {
+      console.error('Error refreshing shared events:', error)
+      return await this.getCachedSharedEvents()
     }
   }
   
@@ -340,17 +376,88 @@ class EventService {
   // Update an existing event
   async updateEvent(eventId: string, updatedData: Partial<Event>): Promise<{ success: boolean; error?: string }> {
     try {
+      console.log(`🔄 updateEvent called for eventId: ${eventId}`)
+      console.log(`📊 Update data:`, updatedData)
+      
       // Get all local events
       const localEvents = await this.getLocalEvents()
+      console.log(`📦 Found ${localEvents.length} local events`)
+      console.log(`📋 Local event IDs:`, localEvents.map(e => e.id))
       
       // Find the event to update
-      const eventIndex = localEvents.findIndex(event => event.id === eventId)
+      let eventIndex = localEvents.findIndex(event => event.id === eventId)
+      let originalEvent: Event | null = null
+      
+      console.log(`🔍 Event index in local events: ${eventIndex}`)
+      
       if (eventIndex === -1) {
-        console.error('Event not found for update:', eventId)
-        return { success: false, error: 'Event not found' }
+        // Event not found locally, this might be a synchronization issue
+        console.log('❌ Event not found locally, checking if it exists elsewhere:', eventId)
+        
+        // For local events (starting with 'local_'), they should be in local storage
+        if (eventId.startsWith('local_')) {
+          console.log('🔍 This is a local event, it should be in local storage but was not found')
+          console.log('💡 This might be a race condition or storage issue')
+          
+          // Try to reload local events once more
+          const reloadedLocalEvents = await this.getLocalEvents()
+          console.log(`🔄 Reloaded ${reloadedLocalEvents.length} local events`)
+          console.log(`📋 Reloaded event IDs:`, reloadedLocalEvents.map(e => e.id))
+          
+          const reloadedIndex = reloadedLocalEvents.findIndex(event => event.id === eventId)
+          if (reloadedIndex !== -1) {
+            console.log('✅ Event found after reload!')
+            eventIndex = reloadedIndex
+            originalEvent = reloadedLocalEvents[reloadedIndex]
+            localEvents.splice(0, localEvents.length, ...reloadedLocalEvents) // Replace array contents
+          } else {
+            console.log('❌ Event still not found after reload, this is likely a data consistency issue')
+            return { success: false, error: 'Event not found. This may be due to a synchronization issue. Please try refreshing the app.' }
+          }
+        } else if (API_BASE_URL) {
+          // For server events, check backend
+          try {
+            const { userService } = await import('./userService')
+            const headers = await userService.getAuthHeaders()
+            
+            // Check if event exists in backend
+            const checkResponse = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
+              method: 'GET',
+              headers
+            })
+            
+            if (checkResponse.ok) {
+              const eventData = await checkResponse.json()
+              if (eventData.success) {
+                // Event exists in backend, add it to local storage
+                originalEvent = eventData.data
+                localEvents.push(originalEvent)
+                eventIndex = localEvents.length - 1
+                await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
+                console.log('✅ Event found in backend and added to local storage:', eventId)
+              } else {
+                console.error('❌ Event not found in backend:', eventId)
+                return { success: false, error: 'Event not found' }
+              }
+            } else {
+              console.error('❌ Event not found in backend:', eventId)
+              return { success: false, error: 'Event not found' }
+            }
+          } catch (backendError) {
+            console.error('❌ Error checking backend for event:', backendError)
+            return { success: false, error: 'Event not found' }
+          }
+        } else {
+          console.error('❌ Event not found for update:', eventId)
+          return { success: false, error: 'Event not found' }
+        }
+      } else {
+        originalEvent = localEvents[eventIndex]
       }
       
-      const originalEvent = localEvents[eventIndex]
+      if (!originalEvent) {
+        return { success: false, error: 'Event not found' }
+      }
       
       // Update the event with new data
       const updatedEvent: Event = {
@@ -394,39 +501,82 @@ class EventService {
       
       // Try to sync with backend (if configured)
       if (API_BASE_URL) {
-        try {
-          // Get authentication headers
-          const { userService } = await import('./userService')
-          const headers = await userService.getAuthHeaders()
-          
-          const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
-            method: 'PUT',
-            headers,
-            body: JSON.stringify(updatedData)
-          })
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
+        // For local events that were never synced, try to create them in the backend first
+        if (eventId.startsWith('local_')) {
+          console.log('🔄 Local event detected, attempting to sync to backend first:', eventId)
+          try {
+            const { userService } = await import('./userService')
+            const headers = await userService.getAuthHeaders()
             
-            // Handle specific error cases
-            if (response.status === 401) {
-              throw new Error('Authentication required. Please sign in to edit events.')
-            } else if (response.status === 403) {
-              throw new Error(errorData.error || 'You do not have permission to edit this event. Upgrade to premium to edit any event.')
-            } else if (response.status === 404) {
-              throw new Error('Event not found.')
-            } else {
-              // Queue for later sync if backend update fails
-              await this.queueForSync(updatedEvent)
+            // Try to create the event in the backend
+            const createResponse = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(updatedEvent)
+            })
+            
+            if (createResponse.ok) {
+              const createResult = await createResponse.json()
+              if (createResult.success) {
+                console.log('✅ Local event successfully synced to backend:', eventId)
+                // Update the local event with the server ID
+                const serverEvent = createResult.data
+                updatedEvent.id = serverEvent.id
+                localEvents[eventIndex] = updatedEvent
+                await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
+                return { success: true }
+              }
             }
+            
+            // If creation fails, queue for later sync
+            console.log('⚠️ Failed to sync local event to backend, queuing for later sync:', eventId)
+            await this.queueForSync(updatedEvent)
+          } catch (syncError) {
+            console.log('⚠️ Error syncing local event to backend, queuing for later sync:', syncError)
+            await this.queueForSync(updatedEvent)
           }
-        } catch (backendError) {
-          if (backendError instanceof Error) {
-            throw backendError // Re-throw specific error messages
+        } else {
+          // For server events, try to update them
+          try {
+            const { userService } = await import('./userService')
+            const headers = await userService.getAuthHeaders()
+            
+            const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
+              method: 'PUT',
+              headers,
+              body: JSON.stringify(updatedData)
+            })
+            
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}))
+              
+              // Handle specific error cases
+              if (response.status === 401) {
+                throw new Error('Authentication required. Please sign in to edit events.')
+              } else if (response.status === 403) {
+                throw new Error(errorData.error || 'You do not have permission to edit this event. Upgrade to premium to edit any event.')
+              } else if (response.status === 404) {
+                throw new Error('Event not found.')
+              } else {
+                // Queue for later sync if backend update fails
+                await this.queueForSync(updatedEvent)
+              }
+            }
+          } catch (backendError) {
+            if (backendError instanceof Error) {
+              throw backendError // Re-throw specific error messages
+            }
+            // Queue for later sync if backend is unavailable
+            await this.queueForSync(updatedEvent)
           }
-          // Queue for later sync if backend is unavailable
-          await this.queueForSync(updatedEvent)
         }
+      }
+      
+      // Force refresh shared events to ensure cache is up to date
+      try {
+        await this.refreshSharedEvents()
+      } catch (refreshError) {
+        console.log('Failed to refresh shared events after update:', refreshError)
       }
       
       return { success: true }
@@ -444,9 +594,50 @@ class EventService {
       const localEvents = await this.getLocalEvents()
       
       // Find the event to delete
-      const eventToDelete = localEvents.find(event => event.id === eventId)
+      let eventToDelete = localEvents.find(event => event.id === eventId)
+      
       if (!eventToDelete) {
-        console.error('Event not found for deletion:', eventId)
+        // Event not found locally, check if it exists in backend
+        console.log('Event not found locally for deletion, checking backend:', eventId)
+        
+        if (API_BASE_URL) {
+          try {
+            const { userService } = await import('./userService')
+            const headers = await userService.getAuthHeaders()
+            
+            // Check if event exists in backend
+            const checkResponse = await fetch(`${API_BASE_URL}${API_ENDPOINTS.events}/${eventId}`, {
+              method: 'GET',
+              headers
+            })
+            
+            if (checkResponse.ok) {
+              const eventData = await checkResponse.json()
+              if (eventData.success) {
+                // Event exists in backend, add it to local storage temporarily for deletion
+                eventToDelete = eventData.data
+                localEvents.push(eventToDelete)
+                await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
+                console.log('Event found in backend and added to local storage for deletion:', eventId)
+              } else {
+                console.error('Event not found in backend for deletion:', eventId)
+                return { success: false, error: 'Event not found' }
+              }
+            } else {
+              console.error('Event not found in backend for deletion:', eventId)
+              return { success: false, error: 'Event not found' }
+            }
+          } catch (backendError) {
+            console.error('Error checking backend for event deletion:', backendError)
+            return { success: false, error: 'Event not found' }
+          }
+        } else {
+          console.error('Event not found for deletion:', eventId)
+          return { success: false, error: 'Event not found' }
+        }
+      }
+      
+      if (!eventToDelete) {
         return { success: false, error: 'Event not found' }
       }
       
@@ -501,6 +692,13 @@ class EventService {
           }
           console.warn('Backend unavailable, but event removed locally')
         }
+      }
+      
+      // Force refresh shared events to ensure cache is up to date
+      try {
+        await this.refreshSharedEvents()
+      } catch (refreshError) {
+        console.log('Failed to refresh shared events after deletion:', refreshError)
       }
       
       return { success: true }
@@ -599,12 +797,24 @@ class EventService {
   }
   
   private removeDuplicates(events: Event[]): Event[] {
-    const seen = new Set()
-    return events.filter(event => {
-      const duplicate = seen.has(event.id)
-      seen.add(event.id)
-      return !duplicate
+    const eventMap = new Map()
+    
+    events.forEach(event => {
+      const existingEvent = eventMap.get(event.id)
+      if (!existingEvent) {
+        eventMap.set(event.id, event)
+      } else {
+        // Keep the event with the most recent updatedAt timestamp
+        const existingUpdatedAt = existingEvent.updatedAt || existingEvent.createdAt || '0'
+        const newUpdatedAt = event.updatedAt || event.createdAt || '0'
+        
+        if (newUpdatedAt > existingUpdatedAt) {
+          eventMap.set(event.id, event)
+        }
+      }
     })
+    
+    return Array.from(eventMap.values())
   }
   
   private async getUserId(): Promise<string> {

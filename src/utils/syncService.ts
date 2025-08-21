@@ -85,7 +85,14 @@ class SyncService {
 
   // Socket.IO connection
   private setupSocketConnection(): void {
-    if (!this.deviceId) return;
+    if (!this.deviceId) {
+      console.log('❌ No device ID available for Socket.IO connection');
+      return;
+    }
+
+    console.log('🔌 Setting up Socket.IO connection...');
+    console.log(`📡 Connecting to: ${API_BASE_URL}`);
+    console.log(`🆔 Device ID: ${this.deviceId}`);
 
     this.socket = io(API_BASE_URL, {
       transports: ['websocket', 'polling'],
@@ -96,30 +103,39 @@ class SyncService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to sync server');
+      console.log('✅ Connected to sync server');
+      console.log(`🆔 Socket ID: ${this.socket?.id}`);
       this.socket?.emit('join-device', this.deviceId);
       this.notifyListeners('socketStatus', { connected: true });
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Disconnected from sync server');
+      console.log('❌ Disconnected from sync server');
       this.notifyListeners('socketStatus', { connected: false });
     });
 
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error.message);
+      this.notifyListeners('error', error);
+    });
+
     this.socket.on('event-created', (data) => {
+      console.log('🆕 Received event-created via Socket.IO:', data.eventId);
       this.handleRemoteEventCreated(data);
     });
 
     this.socket.on('event-updated', (data) => {
+      console.log('🔄 Received event-updated via Socket.IO:', data.eventId);
       this.handleRemoteEventUpdated(data);
     });
 
     this.socket.on('event-deleted', (data) => {
+      console.log('🗑️ Received event-deleted via Socket.IO:', data.eventId);
       this.handleRemoteEventDeleted(data);
     });
 
     this.socket.on('error', (error) => {
-      console.error('Socket error:', error);
+      console.error('❌ Socket error:', error);
       this.notifyListeners('error', error);
     });
   }
@@ -283,42 +299,87 @@ class SyncService {
   public async updateEvent(event: Event): Promise<Event> {
     try {
       if (this.isOnline) {
-        const response = await this.makeApiCall(`/events/${event.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(event)
-        });
+        // For local events that were never synced, try to create them first
+        if (event.id.startsWith('local_')) {
+          console.log('🔄 Local event detected in syncService, attempting to create in backend first:', event.id)
+          try {
+            const response = await this.makeApiCall('/events', {
+              method: 'POST',
+              body: JSON.stringify(event)
+            });
 
-        if (response.success) {
-          this.socket?.emit('event-updated', {
-            eventId: response.data.id,
-            eventData: response.data,
-            deviceId: this.deviceId
-          });
-          // Ensure the returned event has all required fields
-          const updatedEvent = {
-            ...event, // Keep original fields as fallback
-            ...response.data, // Override with server data
-            // Ensure required fields are present and properly typed
-            id: response.data.id || event.id,
-            name: response.data.name || event.name,
-            latitude: response.data.latitude !== null && response.data.latitude !== undefined ? Number(response.data.latitude) : (event.latitude !== null && event.latitude !== undefined ? Number(event.latitude) : 0),
-            longitude: response.data.longitude !== null && response.data.longitude !== undefined ? Number(response.data.longitude) : (event.longitude !== null && event.longitude !== undefined ? Number(event.longitude) : 0),
-            venue: response.data.venue || event.venue || '',
-            address: response.data.address || event.address || '',
-            startsAt: response.data.startsAt || event.startsAt,
-            category: response.data.category || event.category || 'other',
-            createdBy: response.data.createdBy || event.createdBy || 'Event Organizer',
-            updatedAt: response.data.updatedAt || new Date().toISOString()
-          };
-          return updatedEvent;
+            if (response.success) {
+              this.socket?.emit('event-created', {
+                eventId: response.data.id,
+                eventData: response.data,
+                deviceId: this.deviceId
+              });
+              // Return the event with the new server ID
+              const createdEvent = {
+                ...event,
+                ...response.data,
+                id: response.data.id || event.id,
+                latitude: response.data.latitude !== null && response.data.latitude !== undefined ? Number(response.data.latitude) : (event.latitude !== null && event.latitude !== undefined ? Number(event.latitude) : 0),
+                longitude: response.data.longitude !== null && response.data.longitude !== undefined ? Number(response.data.longitude) : (event.longitude !== null && event.longitude !== undefined ? Number(event.longitude) : 0),
+                updatedAt: response.data.updatedAt || new Date().toISOString()
+              };
+              console.log('✅ Local event successfully created in backend:', event.id, '->', createdEvent.id)
+              return createdEvent;
+            } else {
+              throw new Error(response.error);
+            }
+          } catch (createError) {
+            console.log('⚠️ Failed to create local event in backend, storing for offline sync:', createError)
+            // Store offline operation for later sync
+            const operation: SyncOperation = {
+              id: this.generateOperationId(),
+              operation: 'CREATE',
+              eventData: event,
+              timestamp: new Date().toISOString(),
+              retryCount: 0
+            };
+            await this.addPendingOperation(operation);
+            return event;
+          }
         } else {
-          throw new Error(response.error);
+          // For server events, try to update them
+          const response = await this.makeApiCall(`/events/${event.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(event)
+          });
+
+          if (response.success) {
+            this.socket?.emit('event-updated', {
+              eventId: response.data.id,
+              eventData: response.data,
+              deviceId: this.deviceId
+            });
+            // Ensure the returned event has all required fields
+            const updatedEvent = {
+              ...event, // Keep original fields as fallback
+              ...response.data, // Override with server data
+              // Ensure required fields are present and properly typed
+              id: response.data.id || event.id,
+              name: response.data.name || event.name,
+              latitude: response.data.latitude !== null && response.data.latitude !== undefined ? Number(response.data.latitude) : (event.latitude !== null && event.latitude !== undefined ? Number(event.latitude) : 0),
+              longitude: response.data.longitude !== null && response.data.longitude !== undefined ? Number(response.data.longitude) : (event.longitude !== null && event.longitude !== undefined ? Number(event.longitude) : 0),
+              venue: response.data.venue || event.venue || '',
+              address: response.data.address || event.address || '',
+              startsAt: response.data.startsAt || event.startsAt,
+              category: response.data.category || event.category || 'other',
+              createdBy: response.data.createdBy || event.createdBy || 'Event Organizer',
+              updatedAt: response.data.updatedAt || new Date().toISOString()
+            };
+            return updatedEvent;
+          } else {
+            throw new Error(response.error);
+          }
         }
       } else {
         // Store offline operation
         const operation: SyncOperation = {
           id: this.generateOperationId(),
-          operation: 'UPDATE',
+          operation: event.id.startsWith('local_') ? 'CREATE' : 'UPDATE',
           eventData: event,
           timestamp: new Date().toISOString(),
           retryCount: 0
@@ -525,8 +586,19 @@ class SyncService {
 
   private async handleRemoteEventUpdated(data: any): Promise<void> {
     try {
+      console.log('🔄 handleRemoteEventUpdated called with data:', {
+        eventId: data.eventId,
+        eventName: data.eventData?.name,
+        category: data.eventData?.category,
+        updatedAt: data.eventData?.updatedAt
+      });
+      
       const events = await this.getCachedEvents();
+      console.log(`📦 Found ${events.length} cached events`);
+      
       const index = events.findIndex(e => e.id === data.eventId);
+      console.log(`🔍 Event found at index: ${index}`);
+      
       if (index !== -1) {
         // Ensure the updated event has properly typed coordinates and field mapping
         const updatedEvent = {
@@ -537,14 +609,32 @@ class SyncService {
           venue: data.eventData.venue || '',
           address: data.eventData.address || '',
           category: data.eventData.category || 'other',
-          createdBy: data.eventData.createdBy || data.eventData.created_by || 'Event Organizer'
+          createdBy: data.eventData.createdBy || data.eventData.created_by || 'Event Organizer',
+          updatedAt: data.eventData.updatedAt || new Date().toISOString()
         };
+        
+        console.log('🔄 Updating event in cache:', {
+          oldCategory: events[index].category,
+          newCategory: updatedEvent.category,
+          oldUpdatedAt: events[index].updatedAt,
+          newUpdatedAt: updatedEvent.updatedAt
+        });
+        
         events[index] = updatedEvent;
         await this.setCachedEvents(events);
+        console.log('✅ Event updated in cache successfully');
+        
+        // Notify listeners with the updated event data
         this.notifyListeners('eventUpdated', updatedEvent);
+        console.log('📢 Notified listeners of event update');
+      } else {
+        console.log('❌ Event not found in cache:', data.eventId);
+        // Even if not in cache, notify listeners to trigger a refresh
+        this.notifyListeners('eventUpdated', data.eventData);
+        console.log('📢 Notified listeners to trigger refresh (event not in cache)');
       }
     } catch (error) {
-      console.error('Error handling remote event updated:', error);
+      console.error('❌ Error handling remote event updated:', error);
     }
   }
 
@@ -574,12 +664,15 @@ class SyncService {
 
   // Sync interval management
   private startSyncInterval(): void {
+    // Temporarily disabled background sync to test touch events
+    /*
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
     this.syncInterval = setInterval(() => {
       this.syncPendingOperations();
     }, SYNC_INTERVAL);
+    */
   }
 
   private stopSyncInterval(): void {

@@ -9,6 +9,19 @@ const { pool } = require('../config/database');
 // Import authentication middleware
 const { authenticateToken, canEditEvent } = require('../middleware/auth');
 
+// Helper function to transform database fields to frontend format
+function transformEventFields(event) {
+  return {
+    ...event,
+    createdBy: event.created_by,
+    createdAt: event.created_at,
+    updatedAt: event.updated_at,
+    startsAt: event.starts_at,
+    deletedAt: event.deleted_at,
+    lastSyncAt: event.last_sync_at
+  };
+}
+
 // Validation schemas
 const eventValidation = [
   body('name').trim().isLength({ min: 1, max: 500 }).withMessage('Name is required and must be less than 500 characters'),
@@ -19,6 +32,19 @@ const eventValidation = [
   body('latitude').isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
   body('longitude').isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
   body('startsAt').isISO8601().withMessage('Invalid date format'),
+  body('createdBy').optional().isLength({ max: 255 }).withMessage('Created by must be less than 255 characters')
+];
+
+// Validation schema for updates (all fields optional)
+const eventUpdateValidation = [
+  body('name').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Name must be less than 500 characters'),
+  body('description').optional().isLength({ max: 2000 }).withMessage('Description must be less than 2000 characters'),
+  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'other']).withMessage('Invalid category'),
+  body('venue').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Venue must be less than 500 characters'),
+  body('address').optional().isLength({ max: 1000 }).withMessage('Address must be less than 1000 characters'),
+  body('latitude').optional().isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+  body('longitude').optional().isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
+  body('startsAt').optional().isISO8601().withMessage('Invalid date format'),
   body('createdBy').optional().isLength({ max: 255 }).withMessage('Created by must be less than 255 characters')
 ];
 
@@ -66,10 +92,13 @@ router.get('/', async (req, res) => {
 
     const result = await pool.query(query, params);
     
+    // Transform field names for frontend compatibility
+    const transformedEvents = result.rows.map(transformEventFields);
+    
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length,
+      data: transformedEvents,
+      count: transformedEvents.length,
       deviceId
     });
   } catch (error) {
@@ -102,7 +131,7 @@ router.get('/:id', async (req, res) => {
 
     res.json({
       success: true,
-      data: result.rows[0],
+      data: transformEventFields(result.rows[0]),
       deviceId
     });
   } catch (error) {
@@ -116,7 +145,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/events - Create new event
-router.post('/', eventValidation, async (req, res) => {
+router.post('/', authenticateToken, eventValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -148,7 +177,7 @@ router.post('/', eventValidation, async (req, res) => {
       
       return res.status(200).json({
         success: true,
-        data: existingEvent,
+        data: transformEventFields(existingEvent),
         message: 'Event already exists',
         deviceId,
         isDuplicate: true
@@ -165,7 +194,7 @@ router.post('/', eventValidation, async (req, res) => {
 
     const values = [
       eventId, name, description, category || 'other', venue, address,
-      latitude, longitude, startsAt, createdBy || 'Event Organizer'
+      latitude, longitude, startsAt, req.user.id // Use authenticated user's ID
     ];
 
     const result = await pool.query(query, values);
@@ -174,18 +203,18 @@ router.post('/', eventValidation, async (req, res) => {
     // Log the creation
     console.log(`Event created: ${newEvent.name} at ${newEvent.venue}`);
 
-    // Broadcast to all connected clients
+    // Broadcast to all connected clients with transformed event data
     if (req.io) {
       req.io.emit('event-created', {
         eventId: newEvent.id,
-        eventData: newEvent,
+        eventData: transformEventFields(newEvent),
         timestamp: new Date().toISOString()
       });
     }
 
     res.status(201).json({
       success: true,
-      data: newEvent,
+      data: transformEventFields(newEvent),
       message: 'Event created successfully',
       deviceId
     });
@@ -211,7 +240,7 @@ router.post('/', eventValidation, async (req, res) => {
 });
 
 // PUT /api/events/:id - Update event
-router.put('/:id', authenticateToken, canEditEvent, eventValidation, async (req, res) => {
+router.put('/:id', authenticateToken, canEditEvent, eventUpdateValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -224,10 +253,7 @@ router.put('/:id', authenticateToken, canEditEvent, eventValidation, async (req,
 
     const { id } = req.params;
     const deviceId = req.headers['x-device-id'];
-    const {
-      name, description, category, venue, address, 
-      latitude, longitude, startsAt, createdBy
-    } = req.body;
+    const updateData = req.body;
 
     // Check if event exists
     const checkResult = await pool.query(
@@ -242,33 +268,77 @@ router.put('/:id', authenticateToken, canEditEvent, eventValidation, async (req,
       });
     }
 
+    const currentEvent = checkResult.rows[0];
+    
+    // Build dynamic update query based on provided fields
+    const updateFields = [];
+    const values = [];
+    let paramCount = 0;
+
+    // Only update fields that are provided in the request
+    if (updateData.name !== undefined) {
+      updateFields.push(`name = $${++paramCount}`);
+      values.push(updateData.name);
+    }
+    if (updateData.description !== undefined) {
+      updateFields.push(`description = $${++paramCount}`);
+      values.push(updateData.description);
+    }
+    if (updateData.category !== undefined) {
+      updateFields.push(`category = $${++paramCount}`);
+      values.push(updateData.category);
+    }
+    if (updateData.venue !== undefined) {
+      updateFields.push(`venue = $${++paramCount}`);
+      values.push(updateData.venue);
+    }
+    if (updateData.address !== undefined) {
+      updateFields.push(`address = $${++paramCount}`);
+      values.push(updateData.address);
+    }
+    if (updateData.latitude !== undefined) {
+      updateFields.push(`latitude = $${++paramCount}`);
+      values.push(updateData.latitude);
+    }
+    if (updateData.longitude !== undefined) {
+      updateFields.push(`longitude = $${++paramCount}`);
+      values.push(updateData.longitude);
+    }
+    if (updateData.startsAt !== undefined) {
+      updateFields.push(`starts_at = $${++paramCount}`);
+      values.push(updateData.startsAt);
+    }
+    if (updateData.createdBy !== undefined) {
+      updateFields.push(`created_by = $${++paramCount}`);
+      values.push(updateData.createdBy);
+    }
+
+    // Add updated_at timestamp
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+    // Add WHERE clause parameter
+    values.push(id);
+
     const query = `
       UPDATE events 
-      SET name = $1, description = $2, category = $3, venue = $4, address = $5,
-          latitude = $6, longitude = $7, starts_at = $8, created_by = $9,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10 AND deleted_at IS NULL
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCount + 1} AND deleted_at IS NULL
       RETURNING *
     `;
-
-    const values = [
-      name, description, category || 'other', venue, address,
-      latitude, longitude, startsAt, createdBy || 'Event Organizer', id
-    ];
 
     const result = await pool.query(query, values);
     const updatedEvent = result.rows[0];
 
-          // Broadcast to all connected clients
+          // Broadcast to all connected clients with transformed event data
       req.io.emit('event-updated', {
         eventId: updatedEvent.id,
-        eventData: updatedEvent,
+        eventData: transformEventFields(updatedEvent),
         timestamp: new Date().toISOString()
       });
 
     res.json({
       success: true,
-      data: updatedEvent,
+      data: transformEventFields(updatedEvent),
       message: 'Event updated successfully',
       deviceId
     });
