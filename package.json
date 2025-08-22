@@ -54,7 +54,7 @@
     "@typescript-eslint/eslint-plugin": "^8.39.1",
     "@typescript-eslint/parser": "^8.39.1",
     "babel-preset-expo": "~13.0.0",
-    "eas-cli": "^7.0.0",
+    "eas-cli": "^16.17.4",
     "eslint": "^8.36.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
