@@ -153,7 +153,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         return {
           venue: venueDisplay,
           events: sortedEvents,
-          coordinates: [sortedEvents[0].latitude, sortedEvents[0].longitude]
+          coordinates: [sortedEvents[0].latitude, sortedEvents[0].longitude] as [number, number]
         }
       })
       .sort((a, b) => {
@@ -207,7 +207,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
           return {
             venue: `⚠️ ${events.length} events with NO coordinates (0,0)`,
             events: sortedEvents,
-            coordinates: [0, 0]
+            coordinates: [0, 0] as [number, number]
           }
         } else {
           // Safely handle coordinateKey which might be undefined
@@ -216,14 +216,14 @@ const EventEditor: React.FC<EventEditorProps> = ({
             return {
               venue: `📍 ${events.length} events at ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
               events: sortedEvents,
-              coordinates: [lat, lng]
+              coordinates: [lat, lng] as [number, number]
             }
           } else {
             // Fallback for invalid coordinate format
             return {
               venue: `⚠️ ${events.length} events with invalid coordinates`,
               events: sortedEvents,
-              coordinates: [0, 0]
+              coordinates: [0, 0] as [number, number]
             }
           }
         }
@@ -398,7 +398,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
   // Select location from search results
   const selectLocation = async (result: any) => {
     try {
-      const coords = await reverseGeocode(result.display_name)
+      // Extract coordinates from the search result
+      const lat = parseFloat(result.lat)
+      const lon = parseFloat(result.lon)
+      const coords: [number, number] = [lat, lon]
       
       if (isBulkEditMode && selectedBulkGroup) {
         // Update bulk edit coordinates
@@ -878,21 +881,25 @@ const EventEditor: React.FC<EventEditorProps> = ({
                       <Text style={styles.sectionTitle}>
                         {groupByCoordinates ? 'Events by Coordinates' : 'Events by Venue'}
                       </Text>
-                      {bulkEditGroups.map((group, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          style={[
-                            styles.venueGroup,
-                            selectedBulkGroup?.venue === group.venue && styles.selectedVenueGroup
-                          ]}
-                          onPress={() => populateBulkForm(group)}
-                        >
-                          <Text style={styles.venueName}>{group.venue}</Text>
-                          <Text style={styles.eventCount}>
-                            {group.events.length} events
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                                            {bulkEditGroups.map((group, index) => {
+                        const typedGroup = group as BulkEditGroup
+                        const isSelected = selectedBulkGroup && selectedBulkGroup.venue === typedGroup.venue
+                        return (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.venueGroup,
+                              isSelected ? styles.selectedVenueGroup : undefined
+                            ]}
+                            onPress={() => populateBulkForm(typedGroup)}
+                          >
+                            <Text style={styles.venueName}>{typedGroup.venue}</Text>
+                            <Text style={styles.eventCount}>
+                              {typedGroup.events.length} events
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </View>
                   )}
                 </ScrollView>
@@ -907,12 +914,13 @@ const EventEditor: React.FC<EventEditorProps> = ({
                       <Text style={styles.backButtonText}>← Back to Groups</Text>
                     </TouchableOpacity>
                     <Text style={styles.sectionTitle}>
-                      Events in "{selectedBulkGroup.venue}" ({selectedBulkGroup.events.length} events)
+                      Events in "{selectedBulkGroup?.venue}" ({selectedBulkGroup?.events.length} events)
                     </Text>
                   </View>
                     
                     {/* Data Quality Warning */}
                     {(() => {
+                      if (!selectedBulkGroup) return null
                       const uniqueCoordinates = new Set(selectedBulkGroup.events.map(e => `${e.latitude},${e.longitude}`))
                       const hasDefaultCoordinates = selectedBulkGroup.events.every(e => e.latitude === 0 && e.longitude === 0)
                       
@@ -972,6 +980,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
                                                {/* Individual Coordinate Assignment Button */}
                         {(() => {
+                          if (!selectedBulkGroup) return null
                           const uniqueCoordinates = new Set(selectedBulkGroup.events.map(e => `${e.latitude},${e.longitude}`))
                           const hasDefaultCoordinates = selectedBulkGroup.events.every(e => e.latitude === 0 && e.longitude === 0)
                           

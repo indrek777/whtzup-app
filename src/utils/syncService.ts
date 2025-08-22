@@ -35,7 +35,7 @@ class SyncService {
   private socket: Socket | null = null;
   private deviceId: string | null = null;
   private isOnline: boolean = false;
-  private syncInterval: NodeInterval | null = null;
+  private syncInterval: NodeJS.Timeout | null = null;
   private pendingOperations: SyncOperation[] = [];
   private listeners: Map<string, Function[]> = new Map();
 
@@ -664,15 +664,13 @@ class SyncService {
 
   // Sync interval management
   private startSyncInterval(): void {
-    // Temporarily disabled background sync to test touch events
-    /*
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
+    // Use longer interval to reduce performance impact
     this.syncInterval = setInterval(() => {
       this.syncPendingOperations();
-    }, SYNC_INTERVAL);
-    */
+    }, SYNC_INTERVAL * 2); // Double the interval (60 seconds instead of 30)
   }
 
   private stopSyncInterval(): void {

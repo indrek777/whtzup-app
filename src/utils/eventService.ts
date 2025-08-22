@@ -431,7 +431,9 @@ class EventService {
               if (eventData.success) {
                 // Event exists in backend, add it to local storage
                 originalEvent = eventData.data
-                localEvents.push(originalEvent)
+                if (originalEvent) {
+                  localEvents.push(originalEvent)
+                }
                 eventIndex = localEvents.length - 1
                 await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
                 console.log('✅ Event found in backend and added to local storage:', eventId)
@@ -616,7 +618,9 @@ class EventService {
               if (eventData.success) {
                 // Event exists in backend, add it to local storage temporarily for deletion
                 eventToDelete = eventData.data
-                localEvents.push(eventToDelete)
+                if (eventToDelete) {
+                  localEvents.push(eventToDelete)
+                }
                 await AsyncStorage.setItem(STORAGE_KEYS.userEvents, JSON.stringify(localEvents))
                 console.log('Event found in backend and added to local storage for deletion:', eventId)
               } else {

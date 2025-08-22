@@ -1,4 +1,4 @@
-import { Event } from '../context/EventContext'
+import { Event } from '../data/events'
 
 // Interface for the imported JSON data structure
 interface ImportedEvent {
@@ -181,20 +181,20 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
       
       return {
         id: item.id || `imported-${index}`,
-        title: item.name,
+        name: item.name,
         description: item.description || `Event at ${item.address || item.venue || 'various locations'}`,
         category: determineCategory(item.name, item.description),
-        location: {
-          name: item.venue || item.address || 'Various locations',
-          address: item.address || item.venue || 'Location TBD',
-          coordinates: [Number(item.latitude), Number(item.longitude)] as [number, number]
-        },
-        date,
-        time,
-        organizer: item.source === 'csv' ? 'Local Organizer' : 
+        venue: item.venue || item.address || 'Various locations',
+        address: item.address || item.venue || 'Location TBD',
+        latitude: Number(item.latitude) || 0,
+        longitude: Number(item.longitude) || 0,
+        startsAt: item.startsAt || new Date().toISOString(),
+        createdBy: item.source === 'csv' ? 'Local Organizer' : 
                   item.source === 'ai' ? 'AI Generated' : 'Event Organizer',
-        attendees,
-        maxAttendees
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: item.source || 'app',
+        url: item.url || 'https://example.com/event'
       }
     })
     // Removed the 100 event limit to show all events

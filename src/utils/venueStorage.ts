@@ -102,8 +102,8 @@ export const findVenue = async (name: string): Promise<VenueData | null> => {
 }
 
 // Get venue coordinates, returning null if not found or has default coordinates
-export const getVenueCoordinates = (name: string): [number, number] | null => {
-  const venue = findVenue(name)
+export const getVenueCoordinates = async (name: string): Promise<[number, number] | null> => {
+  const venue = await findVenue(name)
   if (!venue || isDefaultCoordinates(venue.coordinates)) {
     return null
   }
@@ -111,12 +111,12 @@ export const getVenueCoordinates = (name: string): [number, number] | null => {
 }
 
 // Auto-fix venue coordinates if they're default/unknown
-export const autoFixVenueCoordinates = (name: string, currentCoordinates: [number, number]): [number, number] => {
+export const autoFixVenueCoordinates = async (name: string, currentCoordinates: [number, number]): Promise<[number, number]> => {
   if (!isDefaultCoordinates(currentCoordinates)) {
     return currentCoordinates
   }
   
-  const storedCoordinates = getVenueCoordinates(name)
+  const storedCoordinates = await getVenueCoordinates(name)
   if (storedCoordinates) {
     return storedCoordinates
   }

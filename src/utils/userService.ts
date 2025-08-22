@@ -843,7 +843,7 @@ class UserService {
             
             if (subscriptionResponse.ok) {
               const subscriptionResult = await subscriptionResponse.json()
-              if (subscriptionResult.success) {
+              if (subscriptionResult.success && this.currentUser) {
                 this.currentUser.subscription = subscriptionResult.data
               }
             }

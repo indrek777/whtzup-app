@@ -1,4 +1,4 @@
-import { Event } from '../context/EventContext'
+import { Event } from '../data/events'
 
 // Function to create a backup of current events
 export const createEventBackup = (events: Event[]): void => {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
 import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
+import { Event } from '../data/events'
 
 // Helper function to determine category
 const determineCategory = (name: string, description: string): 'music' | 'food' | 'sports' | 'art' | 'business' | 'other' => {
@@ -63,28 +64,7 @@ const parseTime = (startsAt: string): string => {
   }
 }
 
-export interface Event {
-  id: string
-  title: string
-  description: string
-  category: 'music' | 'food' | 'sports' | 'art' | 'business' | 'other'
-  location: {
-    name: string
-    address: string
-    coordinates: [number, number] // [latitude, longitude]
-  }
-  date: string
-  time: string
-  organizer: string
-  image?: string
-  attendees: number
-  maxAttendees?: number
-  rating?: {
-    average: number
-    count: number
-  }
-  userRating?: number // User's personal rating (1-5)
-}
+// Use the Event interface from data/events.ts instead of defining our own
 
 interface EventContextType {
   events: Event[]
@@ -131,24 +111,24 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             // Convert server format to Event format
             const events: Event[] = serverEvents.map((item: any) => ({
               id: item.id,
-              title: item.name,
+              name: item.name,
               description: item.description,
-              category: determineCategory(item.name, item.description),
-              location: {
-                name: item.venue || item.address || 'Various locations',
-                address: item.address || item.venue || 'Location TBD',
-                coordinates: [Number(item.latitude), Number(item.longitude)] as [number, number]
-              },
-              date: parseDate(item.startsAt),
-              time: parseTime(item.startsAt),
-              organizer: item.source === 'csv' ? 'Local Organizer' : 'Event Organizer',
-              attendees: Math.floor(Math.random() * 200) + 10,
-              maxAttendees: undefined
+              category: item.category || determineCategory(item.name, item.description),
+              venue: item.venue || item.address || 'Various locations',
+              address: item.address || item.venue || 'Location TBD',
+              latitude: Number(item.latitude) || 0,
+              longitude: Number(item.longitude) || 0,
+              startsAt: item.startsAt || new Date().toISOString(),
+              createdBy: item.createdBy || (item.source === 'csv' ? 'Local Organizer' : 'Event Organizer'),
+              createdAt: item.createdAt || new Date().toISOString(),
+              updatedAt: item.updatedAt || new Date().toISOString(),
+              source: item.source || 'app',
+              url: item.url || 'https://example.com/event'
             }))
             
             // Process events with venue storage to auto-fix coordinates
-            const processedEvents = processEventsWithVenueStorage(events)
-                    setEvents(processedEvents)
+            const processedEvents = await processEventsWithVenueStorage(events)
+            setEvents(processedEvents)
             return
           }
         }
@@ -156,13 +136,13 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         // Fallback to localStorage
         const storedEvents = await loadEventsFromStorage()
         if (storedEvents.length > 0) {
-          const processedEvents = processEventsWithVenueStorage(storedEvents)
-                  setEvents(processedEvents)
+          const processedEvents = await processEventsWithVenueStorage(storedEvents)
+          setEvents(processedEvents)
         } else {
           // Fallback to JSON file if no stored events
           const importedEvents = await loadAllEvents()
-          const processedEvents = processEventsWithVenueStorage(importedEvents)
-                  setEvents(processedEvents)
+          const processedEvents = await processEventsWithVenueStorage(importedEvents)
+          setEvents(processedEvents)
         }
       } catch (error) {
         console.error('Error loading events:', error)
@@ -170,43 +150,35 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         const mockEvents: Event[] = [
           {
             id: '1',
-            title: 'Jazz Night at Blue Note',
+            name: 'Jazz Night at Blue Note',
             description: 'Live jazz performance featuring local artists. Enjoy smooth melodies and great cocktails.',
             category: 'music',
-            location: {
-              name: 'Blue Note Jazz Club',
-              address: '123 Music Street, Downtown',
-              coordinates: [59.436962, 24.753574] // Tallinn coordinates
-            },
-            date: '2024-02-15',
-            time: '20:00',
-            organizer: 'Blue Note Club',
-            attendees: 45,
-            maxAttendees: 100,
-            rating: {
-              average: 4.2,
-              count: 15
-            }
+            venue: 'Blue Note Jazz Club',
+            address: '123 Music Street, Downtown',
+            latitude: 59.436962,
+            longitude: 24.753574,
+            startsAt: '2024-02-15T20:00:00.000Z',
+            createdBy: 'Blue Note Club',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            source: 'app',
+            url: 'https://example.com/jazz-night'
           },
           {
             id: '2',
-            title: 'Food Truck Festival',
+            name: 'Food Truck Festival',
             description: 'A celebration of local cuisine with over 20 food trucks serving delicious street food.',
             category: 'food',
-            location: {
-              name: 'Central Park',
-              address: 'Central Park, Manhattan',
-              coordinates: [59.436962, 24.753574] // Tallinn coordinates
-            },
-            date: '2024-02-16',
-            time: '12:00',
-            organizer: 'NYC Food Trucks',
-            attendees: 120,
-            maxAttendees: 500,
-            rating: {
-              average: 4.7,
-              count: 28
-            }
+            venue: 'Central Park',
+            address: 'Central Park, Manhattan',
+            latitude: 59.436962,
+            longitude: 24.753574,
+            startsAt: '2024-02-16T12:00:00.000Z',
+            createdBy: 'NYC Food Trucks',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            source: 'app',
+            url: 'https://example.com/food-truck-festival'
           }
         ]
         setEvents(mockEvents)
@@ -216,10 +188,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     loadEvents()
   }, [])
 
-  const addEvent = (event: Event) => {
+  const addEvent = async (event: Event) => {
+    // Process the new event with venue storage
+    const processedEvents = await processEventsWithVenueStorage([event])
+    const processedEvent = processedEvents[0]
+    
     setEvents(prev => {
-      // Process the new event with venue storage
-      const processedEvent = processEventsWithVenueStorage([event])[0]
       const updatedEvents = [...prev, processedEvent]
       
       // Save to storage
@@ -230,10 +204,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     })
   }
 
-  const updateEvent = (eventId: string, updatedEvent: Event) => {
+  const updateEvent = async (eventId: string, updatedEvent: Event) => {
+    // Process the updated event with venue storage
+    const processedEvents = await processEventsWithVenueStorage([updatedEvent])
+    const processedEvent = processedEvents[0]
+    
     setEvents(prev => {
-      // Process the updated event with venue storage
-      const processedEvent = processEventsWithVenueStorage([updatedEvent])[0]
       const updatedEvents = prev.map(event => 
         event.id === eventId ? processedEvent : event
       )
@@ -256,28 +232,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     })
   }
 
+  // Rating functionality removed as it's not part of the Event interface from data/events.ts
   const rateEvent = (eventId: string, rating: number) => {
-    setEvents(prev => prev.map(event => {
-      if (event.id === eventId) {
-        const currentRating = event.rating || { average: 0, count: 0 }
-        const userRating = event.userRating || 0
-        
-        // If user already rated, remove their previous rating
-        const totalRating = currentRating.average * currentRating.count - userRating + rating
-        const newCount = userRating > 0 ? currentRating.count : currentRating.count + 1
-        const newAverage = newCount > 0 ? totalRating / newCount : 0
-        
-        return {
-          ...event,
-          rating: {
-            average: Math.round(newAverage * 10) / 10, // Round to 1 decimal place
-            count: newCount
-          },
-          userRating: rating
-        }
-      }
-      return event
-    }))
+    // Rating functionality not implemented for this Event structure
+    console.log('Rating functionality not available for this Event structure')
   }
 
   const getEventsNearby = (radius: number): Event[] => {
@@ -287,8 +245,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       const distance = calculateDistance(
         userLocation[0],
         userLocation[1],
-        event.location.coordinates[0],
-        event.location.coordinates[1]
+        event.latitude,
+        event.longitude
       )
       return distance <= radius
     })
@@ -307,43 +265,45 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   }
 
   // Process events to auto-fix venue coordinates
-  const processEventsWithVenueStorage = (eventsToProcess: Event[]): Event[] => {
-    return eventsToProcess.map(event => {
+  const processEventsWithVenueStorage = async (eventsToProcess: Event[]): Promise<Event[]> => {
+    const processedEvents: Event[] = []
+    
+    for (const event of eventsToProcess) {
       // Auto-fix coordinates if they're default/unknown
-      const fixedCoordinates = autoFixVenueCoordinates(
-        event.location.name,
-        event.location.coordinates
+      const fixedCoordinates = await autoFixVenueCoordinates(
+        event.venue,
+        [event.latitude, event.longitude]
       )
       
       // If coordinates were fixed, update the event
-      if (fixedCoordinates !== event.location.coordinates) {
+      if (fixedCoordinates[0] !== event.latitude || fixedCoordinates[1] !== event.longitude) {
         const updatedEvent = {
           ...event,
-          location: {
-            ...event.location,
-            coordinates: fixedCoordinates
-          }
+          latitude: fixedCoordinates[0],
+          longitude: fixedCoordinates[1]
         }
         
         // Also save the venue to storage for future use
         addVenue(
-          event.location.name,
-          event.location.address,
+          event.venue,
+          event.address,
           fixedCoordinates
         )
         
-        return updatedEvent
+        processedEvents.push(updatedEvent)
+      } else {
+        // Always save venue to storage for tracking
+        addVenue(
+          event.venue,
+          event.address,
+          [event.latitude, event.longitude]
+        )
+        
+        processedEvents.push(event)
       }
-      
-      // Always save venue to storage for tracking
-      addVenue(
-        event.location.name,
-        event.location.address,
-        event.location.coordinates
-      )
-      
-      return event
-    })
+    }
+    
+    return processedEvents
   }
 
   const value: EventContextType = {

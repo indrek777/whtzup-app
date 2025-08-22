@@ -698,14 +698,18 @@ const MapViewNative: React.FC = () => {
               allEvents = []
             }
           } else {
-            console.log(`Loaded ${allEvents.length} cached events`)
-                      // Temporarily disabled background sync to test performance
-          // syncService.fetchEvents(
-          //   { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
-          //   radius
-          // ).catch(error => {
-          //   console.log('Background sync failed, using cached data')
-          // })
+                          console.log(`Loaded ${allEvents.length} cached events`)
+              // Re-enabled background sync with throttling
+              if (allEvents.length < 100) {
+                setTimeout(() => {
+                  syncService.fetchEvents(
+                    { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
+                    radius
+                  ).catch(error => {
+                    console.log('Background sync failed, using cached data')
+                  })
+                }, 2000) // Delay background sync by 2 seconds
+              }
           }
           const initialEvents = allEvents.filter(event => {
             const distance = calculateDistance(
@@ -776,10 +780,15 @@ const MapViewNative: React.FC = () => {
           }
         } else {
           console.log(`Loaded ${allEvents.length} cached events`)
-          // Temporarily disabled background sync to test performance
-          // syncService.fetchEvents(userLoc, radius).catch(error => {
-          //   console.log('Background sync failed, using cached data')
-          // })
+          // Re-enabled background sync with throttling
+          // Only sync if we have a reasonable number of events
+          if (allEvents.length < 100) {
+            setTimeout(() => {
+              syncService.fetchEvents(userLoc, radius).catch(error => {
+                console.log('Background sync failed, using cached data')
+              })
+            }, 2000) // Delay background sync by 2 seconds
+          }
         }
         
         // Filter events within dynamic radius of user location based on authentication status
@@ -799,8 +808,13 @@ const MapViewNative: React.FC = () => {
         console.log(`🎯 Events state should now have ${initialEvents.length} events`)
         setIsLoading(false)
         
-        // Temporarily disabled user events loading to test performance
-        // loadUserCreatedEvents(initialEvents)
+        // Re-enabled user events loading with optimization
+        // Only load user events if we have a reasonable number of initial events
+        if (initialEvents.length < 200) {
+          loadUserCreatedEvents(initialEvents)
+        } else {
+          console.log('Skipping user events loading due to large dataset')
+        }
       } catch (error) {
         console.error('Error loading events:', error)
         // Try to load cached events as fallback
@@ -876,10 +890,10 @@ const MapViewNative: React.FC = () => {
     // Get initial status
     updateSyncStatus()
 
-    // Temporarily disabled background sync to test touch events
-    // const interval = setInterval(updateSyncStatus, 30000)
+    // Re-enabled background sync with longer intervals
+    const interval = setInterval(updateSyncStatus, 60000) // Increased from 30s to 60s
 
-    // return () => clearInterval(interval)
+    return () => clearInterval(interval)
   }, [])
 
   // Monitor authentication status changes and update banner
@@ -943,17 +957,36 @@ const MapViewNative: React.FC = () => {
       }
     }
 
-    // Temporarily disabled Socket.IO listeners to test touch events
-    // syncService.addListener('eventUpdated', handleEventUpdated)
-    // syncService.addListener('eventCreated', handleEventCreated)
-    // syncService.addListener('eventDeleted', handleEventDeleted)
+    // Re-enabled Socket.IO listeners with throttling
+    // Add listeners with debouncing to prevent rapid updates
+    let updateTimeout: NodeJS.Timeout | null = null
+    
+    const throttledHandleEventUpdated = () => {
+      if (updateTimeout) clearTimeout(updateTimeout)
+      updateTimeout = setTimeout(handleEventUpdated, 1000) // Debounce updates
+    }
+    
+    const throttledHandleEventCreated = () => {
+      if (updateTimeout) clearTimeout(updateTimeout)
+      updateTimeout = setTimeout(handleEventCreated, 1000) // Debounce updates
+    }
+    
+    const throttledHandleEventDeleted = () => {
+      if (updateTimeout) clearTimeout(updateTimeout)
+      updateTimeout = setTimeout(handleEventDeleted, 1000) // Debounce updates
+    }
+    
+    syncService.addListener('eventUpdated', throttledHandleEventUpdated)
+    syncService.addListener('eventCreated', throttledHandleEventCreated)
+    syncService.addListener('eventDeleted', throttledHandleEventDeleted)
 
     // Cleanup function to remove listeners
     return () => {
       console.log('🔌 Cleaning up Socket.IO event listeners')
-      // syncService.removeListener('eventUpdated', handleEventUpdated)
-      // syncService.removeListener('eventCreated', handleEventCreated)
-      // syncService.removeListener('eventDeleted', handleEventDeleted)
+      if (updateTimeout) clearTimeout(updateTimeout)
+      syncService.removeListener('eventUpdated', throttledHandleEventUpdated)
+      syncService.removeListener('eventCreated', throttledHandleEventCreated)
+      syncService.removeListener('eventDeleted', throttledHandleEventDeleted)
     }
   }, [searchFilters.userLocation])
 
@@ -1641,47 +1674,14 @@ const MapViewNative: React.FC = () => {
 
   // Memoized markers to prevent unnecessary re-renders - re-enabled with optimization
   const memoizedMarkers = useMemo(() => {
-    // Only create markers if we have clusters and not too many
+    // Only create markers if we have clusters
     if (memoizedClusters.length === 0) return []
-    if (memoizedClusters.length > 50) {
-      // For large datasets, limit markers to prevent performance issues
-      return memoizedClusters.slice(0, 50).map((cluster) => {
-        if (cluster.count === 1) {
-          const event = cluster.events[0]
-          const category = event.category || determineCategory(event.name, event.description)
-          return (
-            <CustomMarker
-              key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
-              event={event}
-              category={category}
-              onPress={createMarkerPressHandler(event)}
-              markerRef={(ref) => {
-                if (ref) {
-                  markerRefs.current[event.id] = ref
-                }
-              }}
-            />
-          )
-        } else {
-          return (
-            <ClusterMarker
-              key={`${cluster.id}-${forceRefresh}`}
-              cluster={cluster}
-              onPress={() => handleClusterPress(cluster)}
-              markerRef={(ref) => {
-                if (ref) {
-                  markerRefs.current[cluster.id] = ref
-                }
-              }}
-            />
-          )
-        }
-      })
-    }
     
-    // Full marker creation for smaller datasets
+    // Always use the same logic to ensure consistent hook count
     const markers: React.ReactElement[] = []
-    memoizedClusters.forEach((cluster) => {
+    const clustersToRender = memoizedClusters.length > 50 ? memoizedClusters.slice(0, 50) : memoizedClusters
+    
+    clustersToRender.forEach((cluster) => {
       if (cluster.count === 1) {
         const event = cluster.events[0]
         const category = event.category || determineCategory(event.name, event.description)
@@ -2599,6 +2599,20 @@ const MapViewNative: React.FC = () => {
 
 
 
+  // Performance monitoring
+  useEffect(() => {
+    const performanceCheck = () => {
+      if (events.length > 500) {
+        console.warn('⚠️ Large dataset detected:', events.length, 'events')
+      }
+      if (filteredEvents.length > 200) {
+        console.warn('⚠️ Large filtered dataset:', filteredEvents.length, 'events')
+      }
+    }
+    
+    performanceCheck()
+  }, [events.length, filteredEvents.length])
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -2611,9 +2625,9 @@ const MapViewNative: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Authentication Status Banner - Temporarily disabled to test touch events */}
-      {/* {currentLoadingRadius === 10 && !isAuthenticated && (
-        <View style={styles.authBanner}>
+      {/* Authentication Status Banner - Re-enabled with lower z-index */}
+      {currentLoadingRadius === 10 && !isAuthenticated && (
+        <View style={[styles.authBanner, { zIndex: 999 }]}>
           <Text style={styles.authBannerText}>
             🔒 Limited to 10km radius. Sign in to see more events!
           </Text>
@@ -2627,7 +2641,7 @@ const MapViewNative: React.FC = () => {
             <Text style={styles.authBannerButtonText}>Sign In</Text>
           </TouchableOpacity>
         </View>
-      )} */}
+      )}
       
       {/* Search Button */}
       <TouchableOpacity 
