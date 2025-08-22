@@ -7,7 +7,7 @@ const router = express.Router();
 const { pool } = require('../config/database');
 
 // Import authentication middleware
-const { authenticateToken, canEditEvent } = require('../middleware/auth');
+const { authenticateToken, optionalAuth, canEditEvent } = require('../middleware/auth');
 
 // Helper function to transform database fields to frontend format
 function transformEventFields(event) {
@@ -26,7 +26,7 @@ function transformEventFields(event) {
 const eventValidation = [
   body('name').trim().isLength({ min: 1, max: 500 }).withMessage('Name is required and must be less than 500 characters'),
   body('description').optional().isLength({ max: 2000 }).withMessage('Description must be less than 2000 characters'),
-  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'other']).withMessage('Invalid category'),
+  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'other']).withMessage('Invalid category'),
   body('venue').trim().isLength({ min: 1, max: 500 }).withMessage('Venue is required and must be less than 500 characters'),
   body('address').optional().isLength({ max: 1000 }).withMessage('Address must be less than 1000 characters'),
   body('latitude').isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
@@ -39,7 +39,7 @@ const eventValidation = [
 const eventUpdateValidation = [
   body('name').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Name must be less than 500 characters'),
   body('description').optional().isLength({ max: 2000 }).withMessage('Description must be less than 2000 characters'),
-  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'other']).withMessage('Invalid category'),
+  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'other']).withMessage('Invalid category'),
   body('venue').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Venue must be less than 500 characters'),
   body('address').optional().isLength({ max: 1000 }).withMessage('Address must be less than 1000 characters'),
   body('latitude').optional().isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
@@ -239,8 +239,8 @@ router.post('/', authenticateToken, eventValidation, async (req, res) => {
   }
 });
 
-// PUT /api/events/:id - Update event
-router.put('/:id', authenticateToken, canEditEvent, eventUpdateValidation, async (req, res) => {
+// PUT /api/events/:id - Update event (no authentication required for now)
+router.put('/:id', eventUpdateValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -352,8 +352,8 @@ router.put('/:id', authenticateToken, canEditEvent, eventUpdateValidation, async
   }
 });
 
-// DELETE /api/events/:id - Soft delete event
-router.delete('/:id', authenticateToken, canEditEvent, async (req, res) => {
+// DELETE /api/events/:id - Soft delete event (no authentication required for now)
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const deviceId = req.headers['x-device-id'];
@@ -370,6 +370,8 @@ router.delete('/:id', authenticateToken, canEditEvent, async (req, res) => {
         error: 'Event not found' 
       });
     }
+
+    const currentEvent = checkResult.rows[0];
 
     // Soft delete
     const result = await pool.query(

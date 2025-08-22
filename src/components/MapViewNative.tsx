@@ -68,6 +68,20 @@ const getMarkerIcon = (category: string): string => {
       return '🍽️'
     case 'business':
       return '💼'
+    case 'entertainment':
+    case 'theater':
+    case 'cinema':
+      return '🎭'
+    case 'education':
+    case 'workshop':
+    case 'seminar':
+      return '📚'
+    case 'technology':
+    case 'tech':
+      return '💻'
+    case 'health':
+    case 'wellness':
+      return '🏥'
     case 'other':
       return '⭐'
     default:
@@ -127,11 +141,15 @@ const determineCategory = (name: string, description: string): string => {
     return 'art'
   }
   
-  // Comedy & Entertainment (map to other)
+  // Comedy & Entertainment
   else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
-    return 'other'
+    return 'entertainment'
   } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
-    return 'other'
+    return 'entertainment'
+  } else if (text.includes('theater') || text.includes('theatre') || text.includes('drama')) {
+    return 'entertainment'
+  } else if (text.includes('cinema') || text.includes('movie') || text.includes('film')) {
+    return 'entertainment'
   }
   
   // Food & Drink
@@ -147,22 +165,29 @@ const determineCategory = (name: string, description: string): string => {
     return 'food'
   }
   
+  // Education & Learning
+  else if (text.includes('workshop') || text.includes('seminar') || text.includes('course')) {
+    return 'education'
+  } else if (text.includes('training') || text.includes('education') || text.includes('learning')) {
+    return 'education'
+  } else if (text.includes('lecture') || text.includes('class') || text.includes('tutorial')) {
+    return 'education'
+  }
+  
   // Business & Professional
-  else if (text.includes('conference') || text.includes('seminar') || text.includes('workshop')) {
+  else if (text.includes('conference') || text.includes('meeting') || text.includes('networking')) {
     return 'business'
-  } else if (text.includes('meeting') || text.includes('networking') || text.includes('business')) {
-    return 'business'
-  } else if (text.includes('training') || text.includes('course') || text.includes('education')) {
+  } else if (text.includes('business') || text.includes('corporate') || text.includes('professional')) {
     return 'business'
   }
   
-  // Technology (map to business)
+  // Technology
   else if (text.includes('tech') || text.includes('technology') || text.includes('digital')) {
-    return 'business'
+    return 'technology'
   } else if (text.includes('startup') || text.includes('innovation') || text.includes('ai')) {
-    return 'business'
+    return 'technology'
   } else if (text.includes('coding') || text.includes('programming') || text.includes('hackathon')) {
-    return 'business'
+    return 'technology'
   }
   
   // Family & Kids (map to other)
@@ -172,11 +197,11 @@ const determineCategory = (name: string, description: string): string => {
     return 'other'
   }
   
-  // Health & Wellness (map to other)
+  // Health & Wellness
   else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
-    return 'other'
+    return 'health'
   } else if (text.includes('therapy') || text.includes('healing') || text.includes('mindfulness')) {
-    return 'other'
+    return 'health'
   }
   
   // Cultural & Heritage (map to art)
@@ -832,7 +857,7 @@ const MapViewNative: React.FC = () => {
         // Re-enabled user events loading with optimization
         // Only load user events if we have a reasonable number of initial events
         if (initialEvents.length < 200) {
-          loadUserCreatedEvents(initialEvents)
+          loadAllEvents(initialEvents)
         } else {
           console.log('Loading user events with large dataset')
         }
@@ -2038,9 +2063,9 @@ const MapViewNative: React.FC = () => {
         // Update user stats with daily tracking
         await userService.incrementDailyEventCount()
 
-        // Reload events to include the new ones
+        // Reload all events to include the new ones
         try {
-          await loadUserCreatedEvents()
+          await loadAllEvents(events, true) // Force refresh all events
         } catch (reloadError) {
           // Event was still created successfully, just couldn't reload
         }
@@ -2095,16 +2120,16 @@ const MapViewNative: React.FC = () => {
     }
   }
 
-  const loadUserCreatedEvents = async (currentEvents: Event[] = events, forceRefresh: boolean = false) => {
+  const loadAllEvents = async (currentEvents: Event[] = events, forceRefresh: boolean = false) => {
     try {
-      console.log(`🔄 loadUserCreatedEvents called with forceRefresh: ${forceRefresh}`)
-      // Load user-created events using getAllEvents (which includes local events)
-      const userEvents = await eventService.getAllEvents(forceRefresh)
-      console.log(`📊 Loaded ${userEvents.length} events from eventService`)
+      console.log(`🔄 loadAllEvents called with forceRefresh: ${forceRefresh}`)
+      // Load all events using getAllEvents (which includes local and shared events)
+      const allEvents = await eventService.getAllEvents(forceRefresh)
+      console.log(`📊 Loaded ${allEvents.length} events from eventService`)
       console.log('📋 Current events before merge:', currentEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
       
-      // Ensure all user events have required fields
-      const validatedUserEvents = userEvents.map(event => ({
+      // Ensure all events have required fields
+      const validatedEvents = allEvents.map(event => ({
         ...event,
         name: event.name || 'Untitled Event',
         description: event.description || '',
@@ -2124,16 +2149,16 @@ const MapViewNative: React.FC = () => {
         eventMap.set(event.id, event)
       })
       
-      // Then, override with validated user events (these are the updated ones)
-      validatedUserEvents.forEach(event => {
+      // Then, override with validated events (these are the updated ones)
+      validatedEvents.forEach(event => {
         eventMap.set(event.id, event)
       })
       
       const uniqueEvents = Array.from(eventMap.values())
       
-      console.log(`🎯 loadUserCreatedEvents: Setting ${uniqueEvents.length} events (${validatedUserEvents.length} user events added)`)
+      console.log(`🎯 loadAllEvents: Setting ${uniqueEvents.length} events (${validatedEvents.length} events added)`)
       console.log('📋 Events to be set:', uniqueEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
-      console.log('📋 Validated user events:', validatedUserEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
+      console.log('📋 Validated events:', validatedEvents.map(e => ({ id: e.id, name: e.name, category: e.category, updatedAt: e.updatedAt })))
       setEvents(uniqueEvents)
       setFilteredEvents(uniqueEvents)
       
@@ -4170,27 +4195,35 @@ const MapViewNative: React.FC = () => {
           console.log('🔄 Force refresh triggered for onEventUpdated');
         }}
         events={events}
-        onUpdateEvent={(eventId, updatedEvent) => {
+        onUpdateEvent={async (eventId, updatedEvent) => {
           console.log('🔄 Updating event in map state:', eventId);
           console.log('📊 Updated event data:', updatedEvent);
           console.log('📍 Event coordinates:', updatedEvent.latitude, updatedEvent.longitude);
           console.log('🎨 Event category:', updatedEvent.category);
           
-          setEvents(prevEvents => {
-            const newEvents = prevEvents.map(event => 
-              event.id === eventId ? updatedEvent : event
-            );
-            console.log(`🎯 Events state updated: ${newEvents.length} events`);
-            return newEvents;
-          });
-          
-          setFilteredEvents(prevEvents => {
-            const newFilteredEvents = prevEvents.map(event => 
-              event.id === eventId ? updatedEvent : event
-            );
-            console.log(`🎯 Filtered events state updated: ${newFilteredEvents.length} events`);
-            return newFilteredEvents;
-          });
+          // Reload all events from server to ensure synchronization
+          try {
+            await loadAllEvents(events, true); // Force refresh all events
+            console.log('🔄 All events reloaded from server after update');
+          } catch (error) {
+            console.error('Error reloading events after update:', error);
+            // Fallback: update only the specific event
+            setEvents(prevEvents => {
+              const newEvents = prevEvents.map(event => 
+                event.id === eventId ? updatedEvent : event
+              );
+              console.log(`🎯 Events state updated: ${newEvents.length} events`);
+              return newEvents;
+            });
+            
+            setFilteredEvents(prevEvents => {
+              const newFilteredEvents = prevEvents.map(event => 
+                event.id === eventId ? updatedEvent : event
+              );
+              console.log(`🎯 Filtered events state updated: ${newFilteredEvents.length} events`);
+              return newFilteredEvents;
+            });
+          }
           
           // Force re-render of markers to update icons
           setForceRefresh(prev => prev + 1);
