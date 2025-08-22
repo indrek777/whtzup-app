@@ -301,15 +301,15 @@ interface NewEvent {
 }
 
 // Clustering configuration
-const CLUSTER_RADIUS = 0.001 // About 100 meters in degrees
-const CLUSTER_MIN_SIZE = 2 // Minimum events to form a cluster
+const CLUSTER_RADIUS = 0.0001 // About 10 meters in degrees - much smaller radius
+const CLUSTER_MIN_SIZE = 10 // Minimum events to form a cluster - much higher to show more individual events
 
 // Clustering utility functions
 const createClusters = (events: Event[]): EventCluster[] => {
   const clusters: EventCluster[] = []
   const processedEvents = new Set<string>()
 
-  events.forEach(event => {
+  events.forEach((event, index) => {
     if (processedEvents.has(event.id)) return
 
     // Find nearby events
@@ -320,10 +320,10 @@ const createClusters = (events: Event[]): EventCluster[] => {
         event.latitude, event.longitude,
         otherEvent.latitude, otherEvent.longitude
       )
-      return distance <= 0.1 // 100 meters in km
+      return distance <= 0.0001 // 10 meters in degrees - much smaller clustering radius
     })
 
-    if (nearbyEvents.length >= CLUSTER_MIN_SIZE) {
+    if (nearbyEvents.length >= CLUSTER_MIN_SIZE && nearbyEvents.length < 100) { // Limit cluster size
       // Calculate cluster center
       const avgLat = nearbyEvents.reduce((sum, e) => sum + e.latitude, 0) / nearbyEvents.length
       const avgLng = nearbyEvents.reduce((sum, e) => sum + e.longitude, 0) / nearbyEvents.length
@@ -348,21 +348,42 @@ const createClusters = (events: Event[]): EventCluster[] => {
 
       clusters.push(cluster)
       nearbyEvents.forEach(e => processedEvents.add(e.id))
-    } else if (nearbyEvents.length === 1) {
-      // Single event - create individual cluster
-      const category = event.category || determineCategory(event.name, event.description)
-      const cluster: EventCluster = {
-        id: `single-${event.id}`,
-        latitude: event.latitude,
-        longitude: event.longitude,
-        events: [event],
-        center: { latitude: event.latitude, longitude: event.longitude },
-        count: 1,
-        categories: new Set([category]),
-        isExpanded: false
-      }
-      clusters.push(cluster)
-      processedEvents.add(event.id)
+    } else if (nearbyEvents.length === 1 || nearbyEvents.length >= 100) { // Show individual events for large clusters
+              // Single event or large cluster - create individual clusters
+        if (nearbyEvents.length === 1) {
+          const category = event.category || determineCategory(event.name, event.description)
+          const cluster: EventCluster = {
+            id: `single-${event.id}`,
+            latitude: event.latitude,
+            longitude: event.longitude,
+            events: [event],
+            center: { latitude: event.latitude, longitude: event.longitude },
+            count: 1,
+            categories: new Set([category]),
+            isExpanded: false
+          }
+          clusters.push(cluster)
+          processedEvents.add(event.id)
+        } else {
+          // Large cluster - create individual events
+          nearbyEvents.forEach(singleEvent => {
+            if (!processedEvents.has(singleEvent.id)) {
+              const category = singleEvent.category || determineCategory(singleEvent.name, singleEvent.description)
+              const cluster: EventCluster = {
+                id: `single-${singleEvent.id}`,
+                latitude: singleEvent.latitude,
+                longitude: singleEvent.longitude,
+                events: [singleEvent],
+                center: { latitude: singleEvent.latitude, longitude: singleEvent.longitude },
+                count: 1,
+                categories: new Set([category]),
+                isExpanded: false
+              }
+              clusters.push(cluster)
+              processedEvents.add(singleEvent.id)
+            }
+          })
+        }
     }
   })
 
@@ -619,7 +640,7 @@ const MapViewNative: React.FC = () => {
     dateTo: '', // No date filter by default
     showSearchModal: false,
     distanceFilter: false, // Disable distance filter by default
-    distanceRadius: 500, // Default 500km radius for better coverage
+            distanceRadius: 200, // Default 200km radius for better coverage
     userLocation: null
   })
 
@@ -649,13 +670,13 @@ const MapViewNative: React.FC = () => {
   })
 
   // Current loading radius state
-  const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(500)
+  const [currentLoadingRadius, setCurrentLoadingRadius] = useState<number>(200)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
 
-  // Ensure free users can't have radius greater than 500km (allow reasonable default)
+          // Ensure free users can't have radius greater than 200km (allow reasonable default)
   useEffect(() => {
-    if (!userFeatures.hasPremium && searchFilters.distanceRadius > 500) {
-      setSearchFilters(prev => ({ ...prev, distanceRadius: 500 }))
+          if (!userFeatures.hasPremium && searchFilters.distanceRadius > 200) {
+              setSearchFilters(prev => ({ ...prev, distanceRadius: 200 }))
     }
   }, [userFeatures.hasPremium, searchFilters.distanceRadius])
 
@@ -699,8 +720,8 @@ const MapViewNative: React.FC = () => {
             }
           } else {
                           console.log(`Loaded ${allEvents.length} cached events`)
-              // Re-enabled background sync with throttling
-              if (allEvents.length < 100) {
+                        // Re-enabled background sync with throttling
+          if (allEvents.length < 500) { // Increased limit
                 setTimeout(() => {
                   syncService.fetchEvents(
                     { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
@@ -724,11 +745,11 @@ const MapViewNative: React.FC = () => {
           setEvents(initialEvents)
           setFilteredEvents(initialEvents)
           
-          // Set search filters to use Estonia center with distance filter enabled
+          // Set search filters to use Estonia center with distance filter disabled by default
           setSearchFilters(prev => ({
             ...prev,
             userLocation: { latitude: 59.436962, longitude: 24.753574 }, // Estonia center
-            distanceFilter: true, // Enable distance filter by default
+            distanceFilter: false, // Disable distance filter by default to show all events
             distanceRadius: radius // Use dynamic radius based on user status
           }))
           
@@ -748,11 +769,11 @@ const MapViewNative: React.FC = () => {
         // Get dynamic radius based on user authentication status
         const radius = await getEventLoadingRadius()
         
-        // Update search filters with user location and enable distance filter by default
+        // Update search filters with user location and disable distance filter by default
         setSearchFilters(prev => ({
           ...prev,
           userLocation: userLoc,
-          distanceFilter: true, // Enable distance filter by default
+          distanceFilter: false, // Disable distance filter by default to show all events
           distanceRadius: radius // Use dynamic radius based on user status
         }))
         
@@ -782,7 +803,7 @@ const MapViewNative: React.FC = () => {
           console.log(`Loaded ${allEvents.length} cached events`)
           // Re-enabled background sync with throttling
           // Only sync if we have a reasonable number of events
-          if (allEvents.length < 100) {
+          if (allEvents.length < 500) { // Increased limit
             setTimeout(() => {
               syncService.fetchEvents(userLoc, radius).catch(error => {
                 console.log('Background sync failed, using cached data')
@@ -813,7 +834,7 @@ const MapViewNative: React.FC = () => {
         if (initialEvents.length < 200) {
           loadUserCreatedEvents(initialEvents)
         } else {
-          console.log('Skipping user events loading due to large dataset')
+          console.log('Loading user events with large dataset')
         }
       } catch (error) {
         console.error('Error loading events:', error)
@@ -1069,8 +1090,8 @@ const MapViewNative: React.FC = () => {
         // Non-authenticated users can only see events within 10km
         radius = 10
       } else if (hasPremium) {
-        // Premium users can see events within 500km
-        radius = 500
+        // Premium users can see events within 200km
+        radius = 200
       } else {
         // Free authenticated users can see events within 50km
         radius = 50
@@ -1120,7 +1141,7 @@ const MapViewNative: React.FC = () => {
 
       // Update loading radius based on authentication status
       if (authenticated) {
-        const radius = hasPremium ? 500 : 50
+        const radius = hasPremium ? 200 : 50
         setCurrentLoadingRadius(radius)
         console.log(`🎯 Set radius to ${radius}km for authenticated user`)
       } else {
@@ -1441,8 +1462,8 @@ const MapViewNative: React.FC = () => {
     
     // Fallback: if no events match filters, show some events to prevent empty map
     if (filtered.length === 0 && events.length > 0) {
-      console.log(`🎯 No events match filters, showing first 50 events as fallback`)
-      setFilteredEvents(events.slice(0, 50))
+      console.log(`🎯 No events match filters, showing first 5000 events as fallback`)
+      setFilteredEvents(events.slice(0, 5000)) // 5000 events fallback
     } else {
       setFilteredEvents(filtered)
     }
@@ -1629,11 +1650,15 @@ const MapViewNative: React.FC = () => {
   // Create clusters from filtered events - re-enabled with optimization
   const memoizedClusters = useMemo(() => {
     // Only create clusters if we have events and not too many
-    if (filteredEvents.length === 0) return []
-    if (filteredEvents.length > 100) {
-      // For large datasets, limit clustering to prevent performance issues
-      return createClusters(filteredEvents.slice(0, 100))
+    if (filteredEvents.length === 0) {
+      return []
     }
+    
+    if (filteredEvents.length > 5000) {
+      // For large datasets, limit clustering to prevent performance issues
+      return createClusters(filteredEvents.slice(0, 5000)) // 5000 events for clustering
+    }
+    
     return createClusters(filteredEvents)
   }, [filteredEvents])
 
@@ -1674,14 +1699,32 @@ const MapViewNative: React.FC = () => {
 
   // Memoized markers to prevent unnecessary re-renders - re-enabled with optimization
   const memoizedMarkers = useMemo(() => {
-    // Only create markers if we have clusters
-    if (memoizedClusters.length === 0) return []
+    // Create markers even if no clusters - show individual events
+    if (memoizedClusters.length === 0) {
+      // If no clusters, create individual markers for events
+      return filteredEvents.slice(0, 5000).map(event => { // 5000 individual events limit
+        const category = event.category || determineCategory(event.name, event.description)
+        return (
+          <CustomMarker
+            key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
+            event={event}
+            category={category}
+            onPress={createMarkerPressHandler(event)}
+            markerRef={(ref) => {
+              if (ref) {
+                markerRefs.current[event.id] = ref
+              }
+            }}
+          />
+        )
+      })
+    }
     
     // Always use the same logic to ensure consistent hook count
     const markers: React.ReactElement[] = []
-    const clustersToRender = memoizedClusters.length > 50 ? memoizedClusters.slice(0, 50) : memoizedClusters
+    const clustersToRender = memoizedClusters.length > 5000 ? memoizedClusters.slice(0, 5000) : memoizedClusters // 5000 markers limit
     
-    clustersToRender.forEach((cluster) => {
+    clustersToRender.forEach((cluster, index) => {
       if (cluster.count === 1) {
         const event = cluster.events[0]
         const category = event.category || determineCategory(event.name, event.description)
@@ -1713,8 +1756,9 @@ const MapViewNative: React.FC = () => {
         )
       }
     })
+    
     return markers
-  }, [memoizedClusters, createMarkerPressHandler, handleClusterPress, forceRefresh])
+  }, [memoizedClusters, createMarkerPressHandler, handleClusterPress, forceRefresh, filteredEvents])
 
   const openRatingModal = (event: Event) => {
     setSelectedEvent(event)
@@ -3551,7 +3595,7 @@ const MapViewNative: React.FC = () => {
                     </Text>
                     {!userFeatures.hasPremium && (
                       <Text style={styles.premiumUpgradeText}>
-                        Upgrade to Premium for 500km radius
+                        Upgrade to Premium for 200km radius
                       </Text>
                     )}
                   </View>
