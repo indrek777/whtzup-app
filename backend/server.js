@@ -1,5 +1,8 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -22,7 +25,18 @@ const { validateDeviceId } = require('./middleware/deviceValidation');
 
 // Initialize Express app
 const app = express();
+
+// SSL Certificate configuration
+const sslOptions = {
+  key: process.env.SSL_KEY_PATH ? fs.readFileSync(process.env.SSL_KEY_PATH) : null,
+  cert: process.env.SSL_CERT_PATH ? fs.readFileSync(process.env.SSL_CERT_PATH) : null,
+  ca: process.env.SSL_CA_PATH ? fs.readFileSync(process.env.SSL_CA_PATH) : null
+};
+
+// Create HTTP and HTTPS servers
 const server = http.createServer(app);
+const httpsServer = sslOptions.key && sslOptions.cert ? https.createServer(sslOptions, app) : null;
+
 const io = socketIo(server, {
   cors: {
     origin: "*",
@@ -30,12 +44,20 @@ const io = socketIo(server, {
   }
 });
 
+// Create HTTPS Socket.IO if HTTPS is available
+const httpsIo = httpsServer ? socketIo(httpsServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+}) : null;
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://olympio.ee'] 
-    : ['http://localhost:3000', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'exp://10.0.0.57:8081']
+    ? ['https://olympio.ee', 'https://olympio.ee:4001'] 
+    : ['http://localhost:3000', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'https://olympio.ee:4001', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'exp://10.0.0.57:8081']
 }));
 
 // Rate limiting (can be disabled with DISABLE_RATE_LIMIT=true)
@@ -74,78 +96,88 @@ app.use('/api/events', validateDeviceId, (req, res, next) => {
 app.use('/api/sync', validateDeviceId, syncRouter);
 app.use('/api/health', healthRouter);
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  logger.info(`Client connected: ${socket.id}`);
-  
-  // Join device room for targeted updates
-  socket.on('join-device', (deviceId) => {
-    socket.join(`device-${deviceId}`);
-    logger.info(`Device ${deviceId} joined room`);
-  });
+// Socket.IO connection handling function
+function setupSocketIO(socketIo) {
+  socketIo.on('connection', (socket) => {
+    logger.info(`Client connected: ${socket.id}`);
+    
+    // Join device room for targeted updates
+    socket.on('join-device', (deviceId) => {
+      socket.join(`device-${deviceId}`);
+      logger.info(`Device ${deviceId} joined room`);
+    });
 
-  // Handle event updates
-  socket.on('event-updated', async (data) => {
-    try {
-      const { eventId, eventData, deviceId } = data;
-      
-      // Broadcast to all connected clients except sender
-      socket.broadcast.emit('event-updated', {
-        eventId,
-        eventData,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Log the update
-      await logSyncEvent(eventId, 'UPDATE', null, eventData, deviceId);
-      
-      logger.info(`Event ${eventId} updated by device ${deviceId}`);
-    } catch (error) {
-      logger.error('Error handling event update:', error);
-    }
-  });
+    // Handle event updates
+    socket.on('event-updated', async (data) => {
+      try {
+        const { eventId, eventData, deviceId } = data;
+        
+        // Broadcast to all connected clients except sender
+        socket.broadcast.emit('event-updated', {
+          eventId,
+          eventData,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Log the update
+        await logSyncEvent(eventId, 'UPDATE', null, eventData, deviceId);
+        
+        logger.info(`Event ${eventId} updated by device ${deviceId}`);
+      } catch (error) {
+        logger.error('Error handling event update:', error);
+      }
+    });
 
-  // Handle event creation
-  socket.on('event-created', async (data) => {
-    try {
-      const { eventId, eventData, deviceId } = data;
-      
-      socket.broadcast.emit('event-created', {
-        eventId,
-        eventData,
-        timestamp: new Date().toISOString()
-      });
-      
-      await logSyncEvent(eventId, 'CREATE', null, eventData, deviceId);
-      
-      logger.info(`Event ${eventId} created by device ${deviceId}`);
-    } catch (error) {
-      logger.error('Error handling event creation:', error);
-    }
-  });
+    // Handle event creation
+    socket.on('event-created', async (data) => {
+      try {
+        const { eventId, eventData, deviceId } = data;
+        
+        socket.broadcast.emit('event-created', {
+          eventId,
+          eventData,
+          timestamp: new Date().toISOString()
+        });
+        
+        await logSyncEvent(eventId, 'CREATE', null, eventData, deviceId);
+        
+        logger.info(`Event ${eventId} created by device ${deviceId}`);
+      } catch (error) {
+        logger.error('Error handling event creation:', error);
+      }
+    });
 
-  // Handle event deletion
-  socket.on('event-deleted', async (data) => {
-    try {
-      const { eventId, deviceId } = data;
-      
-      socket.broadcast.emit('event-deleted', {
-        eventId,
-        timestamp: new Date().toISOString()
-      });
-      
-      await logSyncEvent(eventId, 'DELETE', null, null, deviceId);
-      
-      logger.info(`Event ${eventId} deleted by device ${deviceId}`);
-    } catch (error) {
-      logger.error('Error handling event deletion:', error);
-    }
-  });
+    // Handle event deletion
+    socket.on('event-deleted', async (data) => {
+      try {
+        const { eventId, deviceId } = data;
+        
+        socket.broadcast.emit('event-deleted', {
+          eventId,
+          timestamp: new Date().toISOString()
+        });
+        
+        await logSyncEvent(eventId, 'DELETE', null, null, deviceId);
+        
+        logger.info(`Event ${eventId} deleted by device ${deviceId}`);
+      } catch (error) {
+        logger.error('Error handling event deletion:', error);
+      }
+    });
 
-  socket.on('disconnect', () => {
-    logger.info(`Client disconnected: ${socket.id}`);
+    socket.on('disconnect', () => {
+      logger.info(`Client disconnected: ${socket.id}`);
+    });
   });
-});
+}
+
+// Setup Socket.IO for HTTP
+setupSocketIO(io);
+
+// Setup Socket.IO for HTTPS if available
+if (httpsIo) {
+  setupSocketIO(httpsIo);
+}
 
 // Error handling middleware
 app.use(errorHandler);
@@ -248,9 +280,22 @@ process.on('SIGINT', async () => {
 
 // Start server
 const PORT = process.env.PORT || 4000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 4001;
+
 server.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
+  logger.info(`HTTP Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
 });
+
+// Start HTTPS server if SSL certificates are available
+if (httpsServer) {
+  httpsServer.listen(HTTPS_PORT, () => {
+    logger.info(`HTTPS Server running on port ${HTTPS_PORT}`);
+    logger.info(`SSL enabled with certificates`);
+  });
+} else {
+  logger.info(`HTTPS Server not started - SSL certificates not found`);
+  logger.info(`Set SSL_KEY_PATH, SSL_CERT_PATH environment variables to enable HTTPS`);
+}
 
 module.exports = { app, server, io, pool, redis };

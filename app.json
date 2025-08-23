@@ -2,7 +2,7 @@
   "expo": {
     "name": "Event",
     "slug": "event-discovery",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "assets/icon_assets/Expo/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +22,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eventdiscovery.app",
-      "buildNumber": "2",
+      "buildNumber": "5",
       "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
@@ -30,7 +30,8 @@
         "NSCameraUsageDescription": "This app uses camera to take photos for events",
         "NSPhotoLibraryUsageDescription": "This app uses photo library to select images for events",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIStatusBarHidden": true
+        "UIStatusBarHidden": true,
+
       }
     },
     "android": {
@@ -40,7 +41,7 @@
       },
       "icon": "assets/icon_assets/Expo/icon.png",
       "package": "com.eventdiscovery.app",
-      "versionCode": 1,
+      "versionCode": 4,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
