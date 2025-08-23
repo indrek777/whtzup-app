@@ -11,7 +11,8 @@ import {
   Switch,
   SafeAreaView,
   StatusBar,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native'
 import { userService, User, Subscription, UserPreferences } from '../utils/userService'
 
@@ -23,9 +24,16 @@ interface UserProfileProps {
 const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // Modal states
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [showPreferencesModal, setShowPreferencesModal] = useState(false)
+  const [showUsageModal, setShowUsageModal] = useState(false)
+  const [showBillingModal, setShowBillingModal] = useState(false)
+  const [showPlanChangeModal, setShowPlanChangeModal] = useState(false)
+  const [showBenefitsModal, setShowBenefitsModal] = useState(false)
   
   // Auth states
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
@@ -36,6 +44,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   
   // Subscription states
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly')
+  const [subscriptionUsage, setSubscriptionUsage] = useState<any>(null)
+  const [billingHistory, setBillingHistory] = useState<any[]>([])
+  const [subscriptionFeatures, setSubscriptionFeatures] = useState<any>(null)
+  const [subscriptionBenefits, setSubscriptionBenefits] = useState<any>(null)
+  const [detailedSubscription, setDetailedSubscription] = useState<any>(null)
   
   // Preferences states
   const [preferences, setPreferences] = useState<UserPreferences>({
@@ -46,55 +59,78 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     language: 'en',
     theme: 'auto'
   })
-  
-  // Premium features state
-  const [premiumFeatures, setPremiumFeatures] = useState<string[]>([])
-  
-  // User features state
-  const [userFeatures, setUserFeatures] = useState<{
-    hasAdvancedSearch: boolean
-    hasPremium: boolean
-    canCreateEventToday: boolean
-  }>({
-    hasAdvancedSearch: false,
-    hasPremium: false,
-    canCreateEventToday: false
-  })
 
   useEffect(() => {
-    loadUserData()
+    if (visible) {
+      loadUserData()
+    }
   }, [visible])
 
   const loadUserData = async () => {
-    const user = await userService.getCurrentUser()
-    const authenticated = await userService.isAuthenticated()
-    
-    setCurrentUser(user)
-    setIsAuthenticated(authenticated)
-    
-    if (user) {
-      setPreferences(user.preferences || {
-        notifications: true,
-        emailUpdates: true,
-        defaultRadius: 10,
-        favoriteCategories: [],
-        language: 'en',
-        theme: 'auto'
-      })
-      // Load premium features
-      const features = await userService.getPremiumFeatures()
-      setPremiumFeatures(features)
+    setIsLoading(true)
+    try {
+      const user = await userService.getCurrentUser()
+      const authenticated = await userService.isAuthenticated()
       
-      // Load user features
-      const hasAdvancedSearch = await userService.hasFeature('advanced_search')
-      const hasPremium = await userService.hasPremiumSubscription()
-      const canCreateEventToday = await userService.canCreateEventToday()
+      setCurrentUser(user)
+      setIsAuthenticated(authenticated)
       
-      setUserFeatures({
-        hasAdvancedSearch,
-        hasPremium,
-        canCreateEventToday: canCreateEventToday.canCreate
-      })
+      // Always load subscription data (methods now handle authentication internally)
+      try {
+        const usage = await userService.getSubscriptionUsage()
+        setSubscriptionUsage(usage)
+      } catch (error) {
+        console.error('Error loading usage:', error)
+        setSubscriptionUsage(null)
+      }
+      
+      try {
+        const billing = await userService.getBillingHistory()
+        setBillingHistory(billing)
+      } catch (error) {
+        console.error('Error loading billing:', error)
+        setBillingHistory([])
+      }
+      
+      try {
+        const features = await userService.getSubscriptionFeatures()
+        setSubscriptionFeatures(features)
+      } catch (error) {
+        console.error('Error loading features:', error)
+        setSubscriptionFeatures(null)
+      }
+      
+      try {
+        const benefits = await userService.getSubscriptionBenefits()
+        setSubscriptionBenefits(benefits)
+      } catch (error) {
+        console.error('Error loading benefits:', error)
+        setSubscriptionBenefits(null)
+      }
+      
+      try {
+        const detailed = await userService.getDetailedSubscriptionStatus()
+        setDetailedSubscription(detailed)
+      } catch (error) {
+        console.error('Error loading detailed subscription:', error)
+        setDetailedSubscription(null)
+      }
+
+      if (user && authenticated) {
+        
+        setPreferences(user.preferences || {
+          notifications: true,
+          emailUpdates: true,
+          defaultRadius: 10,
+          favoriteCategories: [],
+          language: 'en',
+          theme: 'auto'
+        })
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -112,8 +148,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     setIsAuthLoading(true)
 
     try {
-      let success = false
-      
       let result
       if (authMode === 'signup') {
         result = await userService.signUp(authEmail, authPassword, authName)
@@ -130,28 +164,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         loadUserData()
         resetAuthForm()
       } else {
-        // Show the specific error message from the backend
         let errorMessage = result.error || (authMode === 'signup' 
           ? 'Failed to create account. Please try again.' 
           : 'Sign in failed. Please check your credentials and try again.')
         
-        // Handle validation errors with details
         if (result.error === 'Validation failed' && result.details) {
           const fieldErrors = result.details.map((detail: any) => detail.msg).join('\n• ')
           errorMessage = `Please fix the following:\n• ${fieldErrors}`
         }
         
-        // Handle specific error cases
-        if (result.error === 'Invalid email or password') {
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.'
-        } else if (result.error === 'User with this email already exists') {
-          errorMessage = 'An account with this email already exists. Please sign in instead.'
-        }
-        
-        Alert.alert(
-          'Authentication Error', 
-          errorMessage
-        )
+        Alert.alert('Authentication Error', errorMessage)
       }
     } catch (error) {
       console.error('Authentication error:', error)
@@ -185,7 +207,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
       return
     }
 
-    const planPrice = selectedPlan === 'monthly' ? '$9.99/month' : '$99.99/year'
+    const pricing = userService.getSubscriptionPricing()
+    const planPrice = selectedPlan === 'monthly' 
+      ? `$${pricing.monthly.price}/${pricing.monthly.currency}` 
+      : `$${pricing.yearly.price}/${pricing.yearly.currency}`
     const planName = selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'
 
     Alert.alert(
@@ -206,23 +231,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   `You've successfully subscribed to the ${planName} Premium plan! Welcome to premium features.`,
                   [{ text: 'OK', onPress: () => {
                     setShowSubscriptionModal(false)
-                    loadUserData() // Refresh user data to show new subscription status
+                    loadUserData()
                   }}]
                 )
               } else {
-                Alert.alert(
-                  'Subscription Failed',
-                  result.error || 'Failed to process subscription. Please try again.',
-                  [{ text: 'OK' }]
-                )
+                Alert.alert('Subscription Failed', result.error || 'Failed to process subscription. Please try again.')
               }
             } catch (error) {
               console.error('Subscription error:', error)
-              Alert.alert(
-                'Error',
-                'An unexpected error occurred. Please try again.',
-                [{ text: 'OK' }]
-              )
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.')
             } finally {
               setIsAuthLoading(false)
             }
@@ -253,19 +270,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   [{ text: 'OK', onPress: () => loadUserData() }]
                 )
               } else {
-                Alert.alert(
-                  'Cancellation Failed',
-                  result.error || 'Failed to cancel subscription. Please try again.',
-                  [{ text: 'OK' }]
-                )
+                Alert.alert('Cancellation Failed', result.error || 'Failed to cancel subscription. Please try again.')
               }
             } catch (error) {
               console.error('Cancellation error:', error)
-              Alert.alert(
-                'Error',
-                'An unexpected error occurred. Please try again.',
-                [{ text: 'OK' }]
-              )
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.')
             } finally {
               setIsAuthLoading(false)
             }
@@ -296,19 +305,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   [{ text: 'OK', onPress: () => loadUserData() }]
                 )
               } else {
-                Alert.alert(
-                  'Reactivation Failed',
-                  result.error || 'Failed to reactivate subscription. Please try again.',
-                  [{ text: 'OK' }]
-                )
+                Alert.alert('Reactivation Failed', result.error || 'Failed to reactivate subscription. Please try again.')
               }
             } catch (error) {
               console.error('Reactivation error:', error)
-              Alert.alert(
-                'Error',
-                'An unexpected error occurred. Please try again.',
-                [{ text: 'OK' }]
-              )
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.')
             } finally {
               setIsAuthLoading(false)
             }
@@ -318,14 +319,29 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     )
   }
 
-  const handleUpdatePreferences = async () => {
-    Alert.alert(
-      'Update Preferences',
-      'Preference management features are coming soon!',
-      [
-        { text: 'OK', style: 'default' }
-      ]
-    )
+  const handleChangePlan = async () => {
+    try {
+      setIsAuthLoading(true)
+      const result = await userService.changeSubscriptionPlan(selectedPlan, true)
+      
+      if (result.success) {
+        Alert.alert(
+          'Plan Changed Successfully!',
+          `Your subscription plan has been changed to ${selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'}.`,
+          [{ text: 'OK', onPress: () => {
+            setShowPlanChangeModal(false)
+            loadUserData()
+          }}]
+        )
+      } else {
+        Alert.alert('Plan Change Failed', result.error || 'Failed to change plan. Please try again.')
+      }
+    } catch (error) {
+      console.error('Plan change error:', error)
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.')
+    } finally {
+      setIsAuthLoading(false)
+    }
   }
 
   const resetAuthForm = () => {
@@ -367,6 +383,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     return '#666'
   }
 
+  // Modal render functions
   const renderAuthModal = () => (
     <Modal visible={showAuthModal} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.modalContainer}>
@@ -441,73 +458,77 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     </Modal>
   )
 
-  const renderSubscriptionModal = () => (
-    <Modal visible={showSubscriptionModal} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Premium Subscription</Text>
-          <TouchableOpacity onPress={() => setShowSubscriptionModal(false)} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>Cancel</Text>
-          </TouchableOpacity>
+  const renderSubscriptionModal = () => {
+    const pricing = userService.getSubscriptionPricing()
+    
+    return (
+      <Modal visible={showSubscriptionModal} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Premium Subscription</Text>
+            <TouchableOpacity onPress={() => setShowSubscriptionModal(false)} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.planSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.planOption,
+                  selectedPlan === 'monthly' && styles.planOptionActive
+                ]}
+                onPress={() => setSelectedPlan('monthly')}
+              >
+                <Text style={styles.planTitle}>Monthly</Text>
+                <Text style={styles.planPrice}>${pricing.monthly.price}/{pricing.monthly.currency}</Text>
+                <Text style={styles.planDescription}>Perfect for trying out premium features</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.planOption,
+                  selectedPlan === 'yearly' && styles.planOptionActive
+                ]}
+                onPress={() => setSelectedPlan('yearly')}
+              >
+                <Text style={styles.planTitle}>Yearly</Text>
+                <Text style={styles.planPrice}>${pricing.yearly.price}/{pricing.yearly.currency}</Text>
+                <Text style={styles.planSavings}>{pricing.yearly.savings}</Text>
+                <Text style={styles.planDescription}>Best value for long-term users</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.featuresList}>
+              <Text style={styles.featuresTitle}>Premium Features:</Text>
+              {[
+                '✨ Unlimited event creation',
+                '🔍 Advanced search & filtering',
+                '📊 Analytics & insights',
+                '🎨 Custom categories',
+                '📤 Export your data',
+                '🚫 No advertisements',
+                '⚡ Early access to new features',
+                '🎯 Priority support'
+              ].map((feature, index) => (
+                <Text key={index} style={styles.featureItem}>{feature}</Text>
+              ))}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.submitButton, isAuthLoading && styles.submitButtonDisabled]} 
+              onPress={handleSubscribe}
+              disabled={isAuthLoading}
+            >
+              <Text style={styles.submitButtonText}>
+                {isAuthLoading ? 'Processing...' : 'Subscribe'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
-
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.planSelector}>
-            <TouchableOpacity
-              style={[
-                styles.planOption,
-                selectedPlan === 'monthly' && styles.planOptionActive
-              ]}
-              onPress={() => setSelectedPlan('monthly')}
-            >
-              <Text style={styles.planTitle}>Monthly</Text>
-              <Text style={styles.planPrice}>$9.99/month</Text>
-              <Text style={styles.planDescription}>Perfect for trying out premium features</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.planOption,
-                selectedPlan === 'yearly' && styles.planOptionActive
-              ]}
-              onPress={() => setSelectedPlan('yearly')}
-            >
-              <Text style={styles.planTitle}>Yearly</Text>
-              <Text style={styles.planPrice}>$99.99/year</Text>
-              <Text style={styles.planSavings}>Save $19.89 (17% off)</Text>
-              <Text style={styles.planDescription}>Best value for long-term users</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.featuresList}>
-            <Text style={styles.featuresTitle}>Premium Features:</Text>
-            {[
-              '✨ Unlimited event creation',
-              '🔍 Advanced search & filtering',
-              '📊 Analytics & insights',
-              '🎨 Custom categories',
-              '📤 Export your data',
-              '🚫 No advertisements',
-              '⚡ Early access to new features',
-              '🎯 Priority support'
-            ].map((feature, index) => (
-              <Text key={index} style={styles.featureItem}>{feature}</Text>
-            ))}
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.submitButton, isAuthLoading && styles.submitButtonDisabled]} 
-            onPress={handleSubscribe}
-            disabled={isAuthLoading}
-          >
-            <Text style={styles.submitButtonText}>
-              {isAuthLoading ? 'Processing...' : 'Subscribe'}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
-  )
+      </Modal>
+    )
+  }
 
   const renderPreferencesModal = () => (
     <Modal visible={showPreferencesModal} animationType="slide" presentationStyle="pageSheet">
@@ -547,13 +568,266 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             />
           </View>
 
-          <TouchableOpacity style={styles.submitButton} onPress={handleUpdatePreferences}>
+          <TouchableOpacity style={styles.submitButton}>
             <Text style={styles.submitButtonText}>Save</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
     </Modal>
   )
+
+  const renderUsageModal = () => (
+    <Modal visible={showUsageModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Usage & Limits</Text>
+          <TouchableOpacity onPress={() => setShowUsageModal(false)} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {subscriptionUsage && (
+            <>
+              <View style={styles.usageDetailSection}>
+                <Text style={styles.usageDetailTitle}>Daily Usage</Text>
+                <View style={styles.usageDetailItem}>
+                  <Text style={styles.usageDetailLabel}>Events Created Today:</Text>
+                  <Text style={styles.usageDetailValue}>
+                    {subscriptionUsage.daily.used} / {subscriptionUsage.daily.limit}
+                  </Text>
+                </View>
+                <View style={styles.usageProgressBar}>
+                  <View 
+                    style={[
+                      styles.usageProgressFill, 
+                      { width: `${Math.min(100, (subscriptionUsage.daily.used / subscriptionUsage.daily.limit) * 100)}%` }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.usageRemaining}>
+                  {subscriptionUsage.daily.remaining} events remaining today
+                </Text>
+              </View>
+
+              <View style={styles.usageDetailSection}>
+                <Text style={styles.usageDetailTitle}>Monthly Usage</Text>
+                <View style={styles.usageDetailItem}>
+                  <Text style={styles.usageDetailLabel}>Events Created This Month:</Text>
+                  <Text style={styles.usageDetailValue}>
+                    {subscriptionUsage.monthly.used} / {subscriptionUsage.monthly.limit}
+                  </Text>
+                </View>
+                <View style={styles.usageProgressBar}>
+                  <View 
+                    style={[
+                      styles.usageProgressFill, 
+                      { width: `${Math.min(100, (subscriptionUsage.monthly.used / subscriptionUsage.monthly.limit) * 100)}%` }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.usageRemaining}>
+                  {subscriptionUsage.monthly.remaining} events remaining this month
+                </Text>
+              </View>
+
+              <View style={styles.usageDetailSection}>
+                <Text style={styles.usageDetailTitle}>Total Statistics</Text>
+                <View style={styles.usageDetailItem}>
+                  <Text style={styles.usageDetailLabel}>Total Events Created:</Text>
+                  <Text style={styles.usageDetailValue}>{subscriptionUsage.total.eventsCreated}</Text>
+                </View>
+                <View style={styles.usageDetailItem}>
+                  <Text style={styles.usageDetailLabel}>Events Attended:</Text>
+                  <Text style={styles.usageDetailValue}>{subscriptionUsage.total.eventsAttended}</Text>
+                </View>
+                <View style={styles.usageDetailItem}>
+                  <Text style={styles.usageDetailLabel}>Ratings Given:</Text>
+                  <Text style={styles.usageDetailValue}>{subscriptionUsage.total.ratingsGiven}</Text>
+                </View>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+
+  const renderBillingModal = () => (
+    <Modal visible={showBillingModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Billing History</Text>
+          <TouchableOpacity onPress={() => setShowBillingModal(false)} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {billingHistory.length > 0 ? (
+            billingHistory.map((bill, index) => (
+              <View key={bill.id} style={styles.billingItem}>
+                <View style={styles.billingHeader}>
+                  <Text style={styles.billingDate}>
+                    {new Date(bill.date).toLocaleDateString()}
+                  </Text>
+                  <Text style={[
+                    styles.billingStatus,
+                    { color: bill.status === 'paid' ? '#28a745' : '#ffc107' }
+                  ]}>
+                    {bill.status.toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.billingDescription}>{bill.description}</Text>
+                <Text style={styles.billingAmount}>
+                  ${bill.amount} {bill.currency}
+                </Text>
+                <Text style={styles.billingPlan}>{bill.plan} Plan</Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No billing history available</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+
+  const renderPlanChangeModal = () => {
+    const pricing = userService.getSubscriptionPricing()
+    
+    return (
+      <Modal visible={showPlanChangeModal} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Change Plan</Text>
+            <TouchableOpacity onPress={() => setShowPlanChangeModal(false)} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.planChangeDescription}>
+              Choose your preferred billing cycle. Your current subscription will be adjusted accordingly.
+            </Text>
+
+            <View style={styles.planSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.planOption,
+                  selectedPlan === 'monthly' && styles.planOptionActive
+                ]}
+                onPress={() => setSelectedPlan('monthly')}
+              >
+                <Text style={styles.planTitle}>Monthly</Text>
+                <Text style={styles.planPrice}>${pricing.monthly.price}/{pricing.monthly.currency}</Text>
+                <Text style={styles.planDescription}>Billed monthly</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.planOption,
+                  selectedPlan === 'yearly' && styles.planOptionActive
+                ]}
+                onPress={() => setSelectedPlan('yearly')}
+              >
+                <Text style={styles.planTitle}>Yearly</Text>
+                <Text style={styles.planPrice}>${pricing.yearly.price}/{pricing.yearly.currency}</Text>
+                <Text style={styles.planSavings}>{pricing.yearly.savings}</Text>
+                <Text style={styles.planDescription}>Billed annually</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.submitButton, isAuthLoading && styles.submitButtonDisabled]} 
+              onPress={handleChangePlan}
+              disabled={isAuthLoading}
+            >
+              <Text style={styles.submitButtonText}>
+                {isAuthLoading ? 'Processing...' : 'Change Plan'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+    )
+  }
+
+  const renderBenefitsModal = () => (
+    <Modal visible={showBenefitsModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Subscription Benefits</Text>
+          <TouchableOpacity onPress={() => setShowBenefitsModal(false)} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {subscriptionBenefits && (
+            <>
+              <View style={styles.benefitsSection}>
+                <Text style={styles.benefitsSectionTitle}>Free Plan</Text>
+                <View style={styles.benefitsFeatures}>
+                  {subscriptionBenefits.free.features.map((feature: string, index: number) => (
+                    <Text key={index} style={styles.benefitFeature}>✓ {feature}</Text>
+                  ))}
+                </View>
+                <View style={styles.benefitsLimitations}>
+                  {subscriptionBenefits.free.limitations.map((limitation: string, index: number) => (
+                    <Text key={index} style={styles.benefitLimitation}>• {limitation}</Text>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.benefitsSection}>
+                <Text style={styles.benefitsSectionTitle}>Registered Plan</Text>
+                <View style={styles.benefitsFeatures}>
+                  {subscriptionBenefits.registered.features.map((feature: string, index: number) => (
+                    <Text key={index} style={styles.benefitFeature}>✓ {feature}</Text>
+                  ))}
+                </View>
+                <View style={styles.benefitsLimitations}>
+                  {subscriptionBenefits.registered.limitations.map((limitation: string, index: number) => (
+                    <Text key={index} style={styles.benefitLimitation}>• {limitation}</Text>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.benefitsSection}>
+                <Text style={styles.benefitsSectionTitle}>Premium Plan</Text>
+                <View style={styles.benefitsFeatures}>
+                  {subscriptionBenefits.premium.features.map((feature: string, index: number) => (
+                    <Text key={index} style={styles.benefitFeature}>✓ {feature}</Text>
+                  ))}
+                </View>
+                <View style={styles.benefitsLimitations}>
+                  {subscriptionBenefits.premium.limitations.map((limitation: string, index: number) => (
+                    <Text key={index} style={styles.benefitLimitation}>• {limitation}</Text>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+
+  if (isLoading) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    )
+  }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -601,51 +875,54 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                 </View>
               </View>
 
-              {/* Stats */}
-              {currentUser && (
-                <View style={styles.statsSection}>
-                  <Text style={styles.sectionTitle}>Your Activity</Text>
-                  <View style={styles.statsGrid}>
-                    <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats?.eventsCreated || 0}</Text>
-                      <Text style={styles.statLabel}>Events Created</Text>
-                      {currentUser.subscription?.status === 'free' && (
-                        <Text style={styles.dailyLimitText}>
-                          {userFeatures.canCreateEventToday ? '1 event today' : '0 events today'}
-                        </Text>
-                      )}
+              {/* Usage Statistics */}
+              {subscriptionUsage && subscriptionUsage.daily && (
+                <View style={styles.usageSection}>
+                  <Text style={styles.sectionTitle}>Usage Statistics</Text>
+                  <View style={styles.usageGrid}>
+                    <View style={styles.usageItem}>
+                      <Text style={styles.usageNumber}>{subscriptionUsage.daily.used}</Text>
+                      <Text style={styles.usageLabel}>Today</Text>
+                      <Text style={styles.usageLimit}>/ {subscriptionUsage.daily.limit}</Text>
                     </View>
-                    <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats?.ratingsGiven || 0}</Text>
-                      <Text style={styles.statLabel}>Ratings Given</Text>
+                    <View style={styles.usageItem}>
+                      <Text style={styles.usageNumber}>{subscriptionUsage.monthly.used}</Text>
+                      <Text style={styles.usageLabel}>This Month</Text>
+                      <Text style={styles.usageLimit}>/ {subscriptionUsage.monthly.limit}</Text>
                     </View>
-                    <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats?.totalEvents || 0}</Text>
-                      <Text style={styles.statLabel}>Total Events</Text>
+                    <View style={styles.usageItem}>
+                      <Text style={styles.usageNumber}>{subscriptionUsage.total.eventsCreated}</Text>
+                      <Text style={styles.usageLabel}>Total Created</Text>
                     </View>
                   </View>
+                  <TouchableOpacity 
+                    style={styles.viewDetailsButton}
+                    onPress={() => setShowUsageModal(true)}
+                  >
+                    <Text style={styles.viewDetailsText}>View Detailed Usage</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
               {/* Subscription Details */}
-              {currentUser?.subscription?.status === 'premium' && (
+              {detailedSubscription && detailedSubscription.status && detailedSubscription.status === 'premium' && (
                 <View style={styles.subscriptionSection}>
                   <Text style={styles.sectionTitle}>Premium Subscription</Text>
                   <View style={styles.subscriptionDetails}>
                     <View style={styles.subscriptionDetailItem}>
                       <Text style={styles.subscriptionDetailLabel}>Plan:</Text>
                       <Text style={styles.subscriptionDetailValue}>
-                        {currentUser.subscription.plan === 'monthly' ? 'Monthly ($9.99/month)' : 'Yearly ($99.99/year)'}
+                        {detailedSubscription.plan === 'monthly' ? 'Monthly ($9.99/month)' : 'Yearly ($99.99/year)'}
                       </Text>
                     </View>
                     
-                    {currentUser.subscription.endDate && (
+                    {detailedSubscription.daysRemaining !== null && (
                       <View style={styles.subscriptionDetailItem}>
                         <Text style={styles.subscriptionDetailLabel}>
-                          {currentUser.subscription.autoRenew ? 'Renews:' : 'Expires:'}
+                          {detailedSubscription.autoRenew ? 'Renews:' : 'Expires:'}
                         </Text>
                         <Text style={styles.subscriptionDetailValue}>
-                          {new Date(currentUser.subscription.endDate).toLocaleDateString()}
+                          {detailedSubscription.daysRemaining} days
                         </Text>
                       </View>
                     )}
@@ -654,9 +931,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                       <Text style={styles.subscriptionDetailLabel}>Status:</Text>
                       <Text style={[
                         styles.subscriptionDetailValue,
-                        { color: currentUser.subscription.autoRenew ? '#28a745' : '#ffc107' }
+                        { color: detailedSubscription.autoRenew ? '#28a745' : '#ffc107' }
                       ]}>
-                        {currentUser.subscription.autoRenew ? 'Active (Auto-renew)' : 'Active (Cancelled)'}
+                        {detailedSubscription.autoRenew ? 'Active (Auto-renew)' : 'Active (Cancelled)'}
                       </Text>
                     </View>
                   </View>
@@ -676,7 +953,47 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.actionArrow}>›</Text>
                 </TouchableOpacity>
 
-                {currentUser?.subscription?.status === 'free' ? (
+                <TouchableOpacity 
+                  style={styles.actionItem}
+                  onPress={() => setShowUsageModal(true)}
+                >
+                  <Text style={styles.actionIcon}>📊</Text>
+                  <Text style={styles.actionText}>Usage & Limits</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                {detailedSubscription?.status === 'premium' && (
+                  <TouchableOpacity 
+                    style={styles.actionItem}
+                    onPress={() => setShowBillingModal(true)}
+                  >
+                    <Text style={styles.actionIcon}>💳</Text>
+                    <Text style={styles.actionText}>Billing History</Text>
+                    <Text style={styles.actionArrow}>›</Text>
+                  </TouchableOpacity>
+                )}
+
+                {detailedSubscription?.status === 'premium' && detailedSubscription.plan && (
+                  <TouchableOpacity 
+                    style={styles.actionItem}
+                    onPress={() => setShowPlanChangeModal(true)}
+                  >
+                    <Text style={styles.actionIcon}>🔄</Text>
+                    <Text style={styles.actionText}>Change Plan</Text>
+                    <Text style={styles.actionArrow}>›</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity 
+                  style={styles.actionItem}
+                  onPress={() => setShowBenefitsModal(true)}
+                >
+                  <Text style={styles.actionIcon}>⭐</Text>
+                  <Text style={styles.actionText}>Subscription Benefits</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                {detailedSubscription?.canUpgrade ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={() => setShowSubscriptionModal(true)}
@@ -685,7 +1002,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Upgrade</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : currentUser?.subscription?.status === 'premium' && currentUser?.subscription?.autoRenew ? (
+                ) : detailedSubscription?.canCancel ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={handleCancelSubscription}
@@ -694,22 +1011,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Cancel</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : currentUser?.subscription?.status === 'premium' && !currentUser?.subscription?.autoRenew ? (
+                ) : detailedSubscription?.canReactivate ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={handleReactivateSubscription}
                   >
                     <Text style={styles.actionIcon}>🔄</Text>
                     <Text style={styles.actionText}>Reactivate</Text>
-                    <Text style={styles.actionArrow}>›</Text>
-                  </TouchableOpacity>
-                ) : currentUser?.subscription?.status === 'expired' ? (
-                  <TouchableOpacity 
-                    style={styles.actionItem}
-                    onPress={() => setShowSubscriptionModal(true)}
-                  >
-                    <Text style={styles.actionIcon}>⭐</Text>
-                    <Text style={styles.actionText}>Renew</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -723,44 +1031,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.actionArrow}>›</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Free User Limitations */}
-              {currentUser?.subscription?.status === 'free' && (
-                <View style={styles.limitationsSection}>
-                  <Text style={styles.sectionTitle}>Free Plan Limitations</Text>
-                  <View style={styles.limitationsList}>
-                    <Text style={styles.limitationItem}>• 1 event per day</Text>
-                    <Text style={styles.limitationItem}>• Events visible only 1 week ahead</Text>
-                    <Text style={styles.limitationItem}>• Basic search and filtering</Text>
-                    <Text style={styles.limitationItem}>• Local ratings only</Text>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.upgradeButton}
-                    onPress={() => setShowSubscriptionModal(true)}
-                  >
-                    <Text style={styles.upgradeButtonText}>Upgrade</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Premium Features */}
-              {currentUser?.subscription?.status === 'premium' && currentUser?.subscription?.autoRenew && (
-                <View style={styles.premiumSection}>
-                  <Text style={styles.sectionTitle}>Premium Features</Text>
-                  <View style={styles.featuresList}>
-                    {premiumFeatures.map((feature, index) => (
-                      <Text key={index} style={styles.featureItem}>✓ {feature.replace('_', ' ')}</Text>
-                    ))}
-                  </View>
-                </View>
-              )}
             </>
           )}
         </ScrollView>
 
+        {/* Render all modals */}
         {renderAuthModal()}
         {renderSubscriptionModal()}
         {renderPreferencesModal()}
+        {renderUsageModal()}
+        {renderBillingModal()}
+        {renderPlanChangeModal()}
+        {renderBenefitsModal()}
       </SafeAreaView>
     </Modal>
   )
@@ -867,12 +1149,6 @@ const styles = StyleSheet.create({
   },
   statsSection: {
     marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1105,6 +1381,185 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontWeight: '600',
+  },
+  usageSection: {
+    marginBottom: 30,
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+  },
+  usageGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  usageItem: {
+    alignItems: 'center',
+  },
+  usageNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  usageLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+  },
+  usageLimit: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+  },
+  viewDetailsButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  viewDetailsText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 16,
+  },
+  usageDetailSection: {
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+  },
+  usageDetailTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  usageDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  usageDetailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  usageDetailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  usageProgressBar: {
+    height: 8,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 4,
+    marginBottom: 10,
+  },
+  usageProgressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 4,
+  },
+  usageRemaining: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'right',
+  },
+  billingItem: {
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  billingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  billingDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  billingStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  billingDescription: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 5,
+  },
+  billingAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 5,
+  },
+  billingPlan: {
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  benefitsSection: {
+    marginBottom: 30,
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+  },
+  benefitsSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  benefitsFeatures: {
+    marginBottom: 10,
+  },
+  benefitFeature: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 3,
+  },
+  benefitsLimitations: {
+    marginTop: 10,
+  },
+  benefitLimitation: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 3,
+  },
+  planChangeDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
   },
 })
 

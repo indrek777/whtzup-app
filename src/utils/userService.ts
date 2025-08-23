@@ -10,9 +10,9 @@ export interface User {
   avatar?: string
   createdAt: string
   lastLogin: string
-  subscription: Subscription
-  preferences: UserPreferences
-  stats: UserStats
+  subscription?: Subscription
+  preferences?: UserPreferences
+  stats?: UserStats
   userGroup: UserGroup
 }
 
@@ -254,7 +254,7 @@ class UserService {
     
     // Fallback to local data if backend check fails
     const subscription = this.currentUser.subscription
-    if (subscription.status !== 'premium') return false
+    if (!subscription || subscription.status !== 'premium') return false
     
     if (subscription.endDate) {
       const endDate = new Date(subscription.endDate)
@@ -301,10 +301,10 @@ class UserService {
     
     // Check daily limit
     const today = new Date().toISOString().split('T')[0]
-    const lastCreatedDate = this.currentUser?.stats.lastEventCreatedDate
+    const lastCreatedDate = this.currentUser?.stats?.lastEventCreatedDate
     
     if (lastCreatedDate === today) {
-      const createdToday = this.currentUser?.stats.eventsCreatedToday || 0
+      const createdToday = this.currentUser?.stats?.eventsCreatedToday || 0
       const remaining = Math.max(0, features.maxEventsPerDay - createdToday)
       return { canCreate: remaining > 0, remaining }
     }
@@ -327,14 +327,14 @@ class UserService {
   // Check if subscription is cancelled (auto-renew disabled)
   async isSubscriptionCancelled(): Promise<boolean> {
     await this.ensureInitialized()
-    if (!this.currentUser) return false
+    if (!this.currentUser || !this.currentUser.subscription) return false
     return !this.currentUser.subscription.autoRenew
   }
 
   // Get subscription status
   async getSubscriptionStatus(): Promise<Subscription> {
     await this.ensureInitialized()
-    if (!this.currentUser) {
+    if (!this.currentUser || !this.currentUser.subscription) {
       return {
         status: 'free',
         plan: null,
@@ -434,6 +434,20 @@ class UserService {
   async trackEventCreation(): Promise<void> {
     if (!this.currentUser) return
     
+    // Initialize stats if not present
+    if (!this.currentUser.stats) {
+      this.currentUser.stats = {
+        eventsCreated: 0,
+        eventsAttended: 0,
+        ratingsGiven: 0,
+        reviewsWritten: 0,
+        totalEvents: 0,
+        favoriteVenues: [],
+        lastEventCreatedDate: undefined,
+        eventsCreatedToday: 0
+      }
+    }
+    
     const today = new Date().toISOString().split('T')[0]
     const lastCreatedDate = this.currentUser.stats.lastEventCreatedDate
     
@@ -464,7 +478,7 @@ class UserService {
   }
 
   // Sign in user
-  async signIn(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+  async signIn(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string; details?: any[] }> {
     try {
       console.log('🔐 Attempting sign in for:', email)
       
@@ -505,7 +519,7 @@ class UserService {
   }
 
   // Sign up user
-  async signUp(email: string, password: string, name: string): Promise<{ success: boolean; user?: User; error?: string }> {
+  async signUp(email: string, password: string, name: string): Promise<{ success: boolean; user?: User; error?: string; details?: any[] }> {
     try {
       console.log('🔐 Attempting sign up for:', email)
       
@@ -710,6 +724,364 @@ class UserService {
     } catch (error) {
       console.error('Reactivate subscription error:', error)
       return { success: false, error: 'Network error occurred' }
+    }
+  }
+
+  // Get subscription usage statistics
+  async getSubscriptionUsage(): Promise<{
+    daily: { used: number; limit: number; remaining: number };
+    monthly: { used: number; limit: number; remaining: number };
+    total: { eventsCreated: number; eventsAttended: number; ratingsGiven: number };
+  }> {
+    // Check if user is authenticated before making API calls
+    if (!this.currentUser || !this.authToken) {
+      console.log('User not authenticated, using default usage data')
+      return this.getDefaultUsageData()
+    }
+
+    try {
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/usage`, {
+        method: 'GET',
+        headers
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          return result.data
+        }
+      } else if (response.status === 401) {
+        console.log('Token expired, using local data')
+        return this.getDefaultUsageData()
+      }
+    } catch (error) {
+      console.error('Error getting subscription usage:', error)
+    }
+
+    return this.getDefaultUsageData()
+  }
+
+  private async getDefaultUsageData() {
+    // Fallback to local data
+    const stats = this.currentUser?.stats || { eventsCreated: 0, eventsCreatedToday: 0 }
+    const features = await this.getUserGroupFeatures()
+    
+    return {
+      daily: {
+        used: stats.eventsCreatedToday || 0,
+        limit: features.maxEventsPerDay,
+        remaining: Math.max(0, features.maxEventsPerDay - (stats.eventsCreatedToday || 0))
+      },
+      monthly: {
+        used: stats.eventsCreated || 0,
+        limit: features.maxEventsPerDay * 30,
+        remaining: Math.max(0, (features.maxEventsPerDay * 30) - (stats.eventsCreated || 0))
+      },
+      total: {
+        eventsCreated: stats.eventsCreated || 0,
+        eventsAttended: stats.eventsAttended || 0,
+        ratingsGiven: stats.ratingsGiven || 0
+      }
+    }
+  }
+
+  // Get billing history
+  async getBillingHistory(): Promise<Array<{
+    id: string;
+    date: string;
+    amount: number;
+    currency: string;
+    status: string;
+    description: string;
+    plan: string;
+  }>> {
+    // Check if user is authenticated before making API calls
+    if (!this.currentUser || !this.authToken) {
+      console.log('User not authenticated, no billing history available')
+      return []
+    }
+
+    try {
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/billing`, {
+        method: 'GET',
+        headers
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          return result.data
+        }
+      } else if (response.status === 401) {
+        console.log('Token expired, no billing history available')
+        return []
+      }
+    } catch (error) {
+      console.error('Error getting billing history:', error)
+    }
+
+    return []
+  }
+
+  // Change subscription plan
+  async changeSubscriptionPlan(plan: 'monthly' | 'yearly', autoRenew: boolean = true): Promise<{ success: boolean; error?: string; data?: any }> {
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.currentUser) {
+        return { success: false, error: 'User not authenticated' }
+      }
+
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/change-plan`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ plan, autoRenew })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Update local user data
+        if (this.currentUser.subscription) {
+          this.currentUser.subscription.plan = result.data.plan
+          this.currentUser.subscription.endDate = result.data.endDate
+          this.currentUser.subscription.autoRenew = result.data.autoRenew
+        }
+
+        // Save to storage
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+
+        return { success: true, data: result.data }
+      }
+
+      return { success: false, error: result.error || 'Failed to change subscription plan' }
+    } catch (error) {
+      console.error('Change subscription plan error:', error)
+      return { success: false, error: 'Network error occurred' }
+    }
+  }
+
+  // Get subscription features
+  async getSubscriptionFeatures(): Promise<{
+    status: string;
+    currentFeatures: string[];
+    availableFeatures: { basic: string[]; premium: string[] };
+    upgradeBenefits: string[];
+  }> {
+    // Check if user is authenticated before making API calls
+    if (!this.currentUser || !this.authToken) {
+      console.log('User not authenticated, using default features')
+      return this.getDefaultFeatures()
+    }
+
+    try {
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/features`, {
+        method: 'GET',
+        headers
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          return result.data
+        }
+      } else if (response.status === 401) {
+        console.log('Token expired, using default features')
+        return this.getDefaultFeatures()
+      }
+    } catch (error) {
+      console.error('Error getting subscription features:', error)
+    }
+
+    return this.getDefaultFeatures()
+  }
+
+  private async getDefaultFeatures() {
+    // Fallback to local data
+    const userGroup = await this.getUserGroup()
+    const features = await this.getUserGroupFeatures()
+    
+    return {
+      status: userGroup === 'premium' ? 'premium' : userGroup === 'registered' ? 'registered' : 'free',
+      currentFeatures: features.features,
+      availableFeatures: {
+        basic: ['basic_search', 'basic_filtering', 'view_events', 'create_events', 'rate_events'],
+        premium: [
+          'unlimited_events',
+          'advanced_search',
+          'priority_support',
+          'analytics',
+          'custom_categories',
+          'export_data',
+          'no_ads',
+          'early_access',
+          'extended_event_radius',
+          'advanced_filtering',
+          'premium_categories',
+          'create_groups',
+          'priority_support'
+        ]
+      },
+      upgradeBenefits: userGroup === 'free' ? [
+        'unlimited_events',
+        'advanced_search',
+        'priority_support',
+        'analytics',
+        'custom_categories',
+        'export_data',
+        'no_ads',
+        'early_access',
+        'extended_event_radius',
+        'advanced_filtering',
+        'premium_categories',
+        'create_groups',
+        'priority_support'
+      ] : []
+    }
+  }
+
+  // Get subscription benefits comparison
+  async getSubscriptionBenefits(): Promise<{
+    free: { features: string[]; limitations: string[] };
+    registered: { features: string[]; limitations: string[] };
+    premium: { features: string[]; limitations: string[] };
+  }> {
+    return {
+      free: {
+        features: [
+          'View events',
+          'Basic search',
+          'Basic filtering',
+          'Local ratings'
+        ],
+        limitations: [
+          'Cannot create events',
+          'Limited search radius (50km)',
+          'No advanced features',
+          'No priority support'
+        ]
+      },
+      registered: {
+        features: [
+          'Create events (5/day)',
+          'Edit your events',
+          'Rate and review events',
+          'Advanced filtering',
+          'Invite friends',
+          'Larger search radius (150km)'
+        ],
+        limitations: [
+          'Limited to 5 events per day',
+          'No premium categories',
+          'No analytics',
+          'No export features',
+          'No priority support'
+        ]
+      },
+      premium: {
+        features: [
+          'Unlimited event creation (50/day)',
+          'Premium event categories',
+          'Advanced analytics',
+          'Export events to calendar',
+          'Create event groups',
+          'Priority customer support',
+          'Largest search radius (500km)',
+          'No advertisements',
+          'Early access to new features',
+          'Custom categories'
+        ],
+        limitations: [
+          'No limitations'
+        ]
+      }
+    }
+  }
+
+  // Check if user can access a specific premium feature
+  async canAccessPremiumFeature(feature: string): Promise<boolean> {
+    const subscription = await this.getSubscriptionStatus()
+    if (subscription.status !== 'premium') return false
+    
+    return subscription.features.includes(feature)
+  }
+
+  // Get subscription plan pricing
+  getSubscriptionPricing(): {
+    monthly: { price: number; currency: string; savings?: string };
+    yearly: { price: number; currency: string; savings: string };
+  } {
+    return {
+      monthly: {
+        price: 9.99,
+        currency: 'USD'
+      },
+      yearly: {
+        price: 99.99,
+        currency: 'USD',
+        savings: 'Save $19.89 (17% off)'
+      }
+    }
+  }
+
+  // Get subscription status with detailed information
+  async getDetailedSubscriptionStatus(): Promise<{
+    status: string;
+    plan: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    autoRenew: boolean;
+    features: string[];
+    daysRemaining: number | null;
+    isExpired: boolean;
+    canUpgrade: boolean;
+    canCancel: boolean;
+    canReactivate: boolean;
+  }> {
+    try {
+      const subscription = await this.getSubscriptionStatus()
+      const now = new Date()
+      
+      let daysRemaining: number | null = null
+      let isExpired = false
+      
+      if (subscription.endDate) {
+        const endDate = new Date(subscription.endDate)
+        daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        isExpired = endDate < now
+      }
+      
+      return {
+        ...subscription,
+        daysRemaining,
+        isExpired,
+        canUpgrade: subscription.status === 'free' || subscription.status === 'expired',
+        canCancel: subscription.status === 'premium' && subscription.autoRenew,
+        canReactivate: subscription.status === 'expired'
+      }
+    } catch (error) {
+      console.error('Error getting detailed subscription status:', error)
+      // Return default status for unauthenticated users
+      return {
+        status: 'free',
+        plan: null,
+        startDate: null,
+        endDate: null,
+        autoRenew: false,
+        features: ['basic_search', 'basic_filtering', 'view_events'],
+        daysRemaining: null,
+        isExpired: false,
+        canUpgrade: true,
+        canCancel: false,
+        canReactivate: false
+      }
     }
   }
 }
