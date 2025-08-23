@@ -1,11 +1,21 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, ScrollView, Modal, Image, Switch, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Share, AppState, Pressable } from 'react-native'
-import MapView, { Marker, Circle, Region, Callout } from 'react-native-maps'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  TextInput,
+  Alert,
+  ActivityIndicator
+} from 'react-native'
+import MapView, { Marker, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
-import * as Sharing from 'expo-sharing'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Event } from '../data/events'
 import { loadEventsPartially } from '../utils/eventLoader'
+import { Event } from '../data/events'
+import EventEditor from './EventEditor'
+import { useEvents } from '../context/EventContext'
 
 // Clustering interfaces
 interface EventCluster {
@@ -30,7 +40,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c
 }
 
-// Simple marker color function
+// Comprehensive marker color function
 const getMarkerColor = (category: string): string => {
   const colors: { [key: string]: string } = {
     'music': '#FF6B35',
@@ -46,12 +56,18 @@ const getMarkerColor = (category: string): string => {
     'nightlife': '#673AB7',
     'family & kids': '#E91E63',
     'nature & environment': '#388E3C',
+    'theater': '#FF9800',
+    'comedy': '#FF5722',
+    'charity & community': '#8BC34A',
+    'fashion & beauty': '#E91E63',
+    'science & education': '#00BCD4',
+    'gaming & entertainment': '#9C27B0',
     'other': '#9E9E9E'
   }
   return colors[category.toLowerCase()] || '#9E9E9E'
 }
 
-// Simple marker icon function
+// Comprehensive marker icon function
 const getMarkerIcon = (category: string): string => {
   const icons: { [key: string]: string } = {
     'music': '🎵',
@@ -67,6 +83,12 @@ const getMarkerIcon = (category: string): string => {
     'nightlife': '🌙',
     'family & kids': '👨‍👩‍👧‍👦',
     'nature & environment': '🌿',
+    'theater': '🎭',
+    'comedy': '😄',
+    'charity & community': '🤝',
+    'fashion & beauty': '👗',
+    'science & education': '🔬',
+    'gaming & entertainment': '🎮',
     'other': '⭐'
   }
   return icons[category.toLowerCase()] || '📍'
@@ -96,9 +118,14 @@ const createClusters = (events: Event[], clusterRadius: number = 0.001): EventCl
     // Sort events by start time for better organization
     locationEvents.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     
-    // Use the first event as the cluster center
-    const centerEvent = locationEvents[0]
-    const categories = new Set(locationEvents.map(e => e.category || determineCategory(e.name, e.description)))
+         // Use the first event as the cluster center
+     const centerEvent = locationEvents[0]
+     const categories = new Set(locationEvents.map(e => {
+       // Use determineCategory if category is missing, undefined, or "other"
+       return (!e.category || e.category === 'other') 
+         ? determineCategory(e.name, e.description)
+         : e.category
+     }))
     
     // Create ONE cluster for ALL events at this location
     const cluster: EventCluster = {
@@ -206,7 +233,17 @@ const ClusterMarker = React.memo(({
   } else {
     // Single event
     const event = cluster.events[0]
-    const category = event.category || determineCategory(event.name, event.description)
+    // Use determineCategory if category is missing, undefined, or "other"
+    const originalCategory = event.category
+    const category = (!event.category || event.category === 'other') 
+      ? determineCategory(event.name, event.description)
+      : event.category
+    
+    // Debug logging for category determination
+    if (originalCategory === 'other' || !originalCategory) {
+      console.log(`🎯 Category fix: "${event.name}" - Backend: "${originalCategory}" → Frontend: "${category}"`)
+    }
+    
     const color = getMarkerColor(category)
     const icon = getMarkerIcon(category)
     
@@ -227,79 +264,231 @@ const ClusterMarker = React.memo(({
   }
 })
 
-// Simple category determination function
+// Comprehensive category determination function (matching EventContext)
 const determineCategory = (name: string, description: string): string => {
   const text = (name + ' ' + description).toLowerCase()
   
-  // Music events (check first to avoid conflicts)
-  if (text.includes('music') || text.includes('concert') || text.includes('jazz') || 
-      text.includes('band') || text.includes('orchestra') || text.includes('opera') ||
-      text.includes('festival') && (text.includes('music') || text.includes('concert'))) {
+  // Estonian language patterns
+  const estonianPatterns = {
+    'music': ['kontsert', 'muusika', 'laulmine', 'bänd', 'ansambel', 'ooper', 'sümfoonia', 'jazz', 'rokk', 'pop', 'klassikaline', 'orkester', 'koor', 'kitarr', 'klaver'],
+    'theater': ['teater', 'lavastus', 'etendus', 'näidend', 'drama', 'komöödia', 'balet', 'tants'],
+    'art': ['näitus', 'galerii', 'kunst', 'maal', 'skulptuur', 'foto', 'kunstnik', 'looming', 'arhitektuur', 'keraamika', 'fotograafia'],
+    'sports': ['sport', 'võistlus', 'jooks', 'ujumine', 'jalgratas', 'tennis', 'korvpall', 'jalgpall', 'orienteerumine', 'triatlon', 'maastik', 'jää', 'mäng', 'liiga', 'staadion', 'arena', 'kardisõit', 'rattaõhtud'],
+    'education': ['koolitus', 'seminar', 'loeng', 'õpituba', 'workshop', 'kursus', 'haridus'],
+    'food': ['toit', 'restoran', 'kohvik', 'söök', 'jook', 'vein', 'õlu', 'kokandus', 'turg', 'kokteili', 'õhtusöök', 'pakett'],
+    'cultural': ['kultuur', 'traditsioon', 'pärand', 'ajalugu', 'muuseum', 'festival', 'päev'],
+    'nature & environment': ['loodus', 'keskkond', 'mets', 'park', 'õues', 'looduskaitse', 'öko'],
+    'health & wellness': ['tervis', 'heaolu', 'jooga', 'meditatsion', 'massaaž', 'wellness', 'ravi', 'häälejooga', 'gongihüpnorännakute'],
+    'family & kids': ['lapsed', 'pere', 'laste', 'mudilased', 'noored', 'mäng'],
+    'business': ['äri', 'konverents', 'kohtumine', 'võrgustumine', 'ettevõtlus', 'töötuba', 'networking'],
+    'technology': ['tehnoloogia', 'IT', 'programmeerimine', 'arvuti', 'digitaal']
+  }
+  
+  // Check Estonian patterns first
+  for (const [category, patterns] of Object.entries(estonianPatterns)) {
+    if (patterns.some(pattern => text.includes(pattern))) {
+      return category
+    }
+  }
+  
+  // Music categories (English + specific terms)
+  if (text.includes('concert') || text.includes('music') || text.includes('symphony')) {
+    return 'music'
+  } else if (text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical')) {
+    return 'music'
+  } else if (text.includes('opera') || text.includes('orchestra') || text.includes('band')) {
+    return 'music'
+  } else if (text.includes('live') && (text.includes('music') || text.includes('performance'))) {
     return 'music'
   }
   
-  // Sports events
-  if (text.includes('sport') || text.includes('football') || text.includes('basketball') ||
-      text.includes('volleyball') || text.includes('tennis') || text.includes('running') ||
-      text.includes('fitness') || text.includes('training') || text.includes('hiking') ||
-      text.includes('climbing') || text.includes('cycling') || text.includes('swimming')) {
+  // Sports categories
+  else if (text.includes('football') || text.includes('soccer') || text.includes('match') || text.includes('game')) {
+    return 'sports'
+  } else if (text.includes('basketball') || text.includes('volleyball') || text.includes('tennis')) {
+    return 'sports'
+  } else if (text.includes('running') || text.includes('marathon') || text.includes('race')) {
+    return 'sports'
+  } else if (text.includes('swimming') || text.includes('gym') || text.includes('fitness')) {
+    return 'sports'
+  } else if (text.includes('cycling') || text.includes('bike')) {
+    return 'sports'
+  } else if (text.includes('hiking') || text.includes('climbing')) {
     return 'sports'
   }
   
-  // Health & Wellness
-  if (text.includes('yoga') || text.includes('pilates') || text.includes('wellness') ||
-      text.includes('health') || text.includes('meditation')) {
+  // Health & Wellness (check before generic outdoor activities)
+  else if (text.includes('yoga') || text.includes('pilates') || text.includes('workout')) {
+    return 'health & wellness'
+  } else if (text.includes('beach yoga') || text.includes('outdoor yoga')) {
+    return 'health & wellness'
+  } else if (text.includes('meditation') || text.includes('mindfulness')) {
     return 'health & wellness'
   }
   
-  // Art events
-  if (text.includes('art') || text.includes('gallery') || text.includes('exhibition') ||
-      text.includes('photography') || text.includes('painting') || text.includes('sketching')) {
-    return 'art'
+  // Outdoor activities
+  else if (text.includes('outdoor music') || text.includes('outdoor meditation')) {
+    return 'entertainment'
+  } else if (text.includes('beach volleyball') || text.includes('beach running')) {
+    return 'sports'
+  } else if (text.includes('stand-up paddleboarding') || text.includes('paddleboarding')) {
+    return 'sports'
+  } else if (text.includes('kayaking') || text.includes('canoeing')) {
+    return 'sports'
+  } else if (text.includes('sailing') || text.includes('boating')) {
+    return 'sports'
+  } else if (text.includes('wildlife watching') || text.includes('bird watching')) {
+    return 'nature & environment'
+  } else if (text.includes('beach cleanup') || text.includes('environmental')) {
+    return 'nature & environment'
+  } else if (text.includes('urban sketching') || text.includes('outdoor chess')) {
+    return 'entertainment'
+  } else if (text.includes('tide pool exploration') || text.includes('tree climbing')) {
+    return 'nature & environment'
+  } else if (text.includes('rock climbing') || text.includes('bouldering')) {
+    return 'sports'
+  } else if (text.includes('sunset watching') || text.includes('park picnic')) {
+    return 'entertainment'
+  } else if (text.includes('mountaineering') || text.includes('wilderness camping')) {
+    return 'sports'
+  } else if (text.includes('surfing lessons') || text.includes('surfing')) {
+    return 'sports'
   }
   
-  // Food events
-  if (text.includes('food') || text.includes('restaurant') || text.includes('dining') ||
-      text.includes('market') && text.includes('food')) {
-    return 'food'
-  }
-  
-  // Cultural events
-  if (text.includes('cultural') || text.includes('culture') || text.includes('heritage') ||
-      text.includes('festival') || text.includes('traditional')) {
-    return 'cultural'
-  }
-  
-  // Theater events
-  if (text.includes('theater') || text.includes('theatre') || text.includes('play') ||
-      text.includes('drama') || text.includes('performance')) {
+  // Theater & Performance
+  else if (text.includes('theater') || text.includes('theatre') || text.includes('performance') || text.includes('ballet')) {
+    return 'theater'
+  } else if (text.includes('dance') || text.includes('play')) {
+    return 'theater'
+  } else if (text.includes('musical') || text.includes('drama') || text.includes('acting')) {
     return 'theater'
   }
   
-  // Education events
-  if (text.includes('education') || text.includes('workshop') || text.includes('seminar') ||
-      text.includes('class') || text.includes('learning') || text.includes('gardening')) {
-    return 'education'
+  // Art & Culture
+  else if (text.includes('museum') || text.includes('exhibition') || text.includes('näitus')) {
+    return 'art'
+  } else if (text.includes('gallery') || text.includes('painting') || text.includes('sculpture')) {
+    return 'art'
+  } else if (text.includes('photography') || text.includes('art') || text.includes('creative')) {
+    return 'art'
   }
   
-  // Nature & Environment
-  if (text.includes('nature') || text.includes('environment') || text.includes('park') ||
-      text.includes('outdoor') || text.includes('bird') || text.includes('cleanup')) {
-    return 'nature & environment'
-  }
-  
-  // Entertainment
-  if (text.includes('entertainment') || text.includes('chess') || text.includes('sketching') ||
-      text.includes('reading') || text.includes('picnic')) {
+  // Entertainment (Cinema, etc.)
+  else if (text.includes('cinema') || text.includes('movie') || text.includes('film')) {
+    return 'entertainment'
+  } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
     return 'entertainment'
   }
   
+  // Comedy
+  else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
+    return 'comedy'
+  }
+  
+  // Food & Drink
+  else if (text.includes('food') || text.includes('restaurant') || text.includes('dining')) {
+    return 'food'
+  } else if (text.includes('wine') || text.includes('beer') || text.includes('cocktail')) {
+    return 'food'
+  } else if (text.includes('cooking') || text.includes('chef') || text.includes('culinary')) {
+    return 'food'
+  } else if (text.includes('tasting') || text.includes('market')) {
+    return 'food'
+  } else if (text.includes('festival') && (text.includes('food') || text.includes('culinary'))) {
+    return 'food'
+  }
+  
+  // Education & Learning
+  else if (text.includes('workshop') || text.includes('seminar') || text.includes('course')) {
+    return 'education'
+  } else if (text.includes('training') || text.includes('education') || text.includes('learning')) {
+    return 'education'
+  } else if (text.includes('lecture') || text.includes('class') || text.includes('tutorial')) {
+    return 'education'
+  }
+  
+  // Business & Professional
+  else if (text.includes('conference') || text.includes('meeting') || text.includes('networking')) {
+    return 'business'
+  } else if (text.includes('business') || text.includes('corporate') || text.includes('professional')) {
+    return 'business'
+  }
+  
+  // Technology
+  else if (text.includes('tech') || text.includes('technology') || text.includes('digital')) {
+    return 'technology'
+  } else if (text.includes('startup') || text.includes('innovation') || text.includes('ai')) {
+    return 'technology'
+  } else if (text.includes('coding') || text.includes('programming') || text.includes('hackathon')) {
+    return 'technology'
+  }
+  
   // Family & Kids
-  if (text.includes('family') || text.includes('kids') || text.includes('children') ||
-      text.includes('historical') || text.includes('tour')) {
+  else if (text.includes('kids') || text.includes('children') || text.includes('family')) {
+    return 'family & kids'
+  } else if (text.includes('playground') || text.includes('toy') || text.includes('story')) {
     return 'family & kids'
   }
   
+  // Health & Wellness (additional patterns)
+  else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
+    return 'health & wellness'
+  } else if (text.includes('therapy') || text.includes('healing')) {
+    return 'health & wellness'
+  }
+  
+  // Cultural & Heritage
+  else if (text.includes('cultural') || text.includes('heritage') || text.includes('traditional')) {
+    return 'cultural'
+  } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
+    return 'cultural'
+  } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
+    return 'cultural'
+  }
+  
+  // Nightlife
+  else if (text.includes('club') || text.includes('party') || text.includes('nightlife')) {
+    return 'nightlife'
+  } else if (text.includes('bar') || text.includes('pub') || text.includes('dance')) {
+    return 'nightlife'
+  }
+  
+  // Charity & Community
+  else if (text.includes('charity') || text.includes('volunteer') || text.includes('community')) {
+    return 'charity & community'
+  } else if (text.includes('fundraiser') || text.includes('donation') || text.includes('help')) {
+    return 'charity & community'
+  }
+  
+  // Fashion & Beauty
+  else if (text.includes('fashion') || text.includes('beauty') || text.includes('style')) {
+    return 'fashion & beauty'
+  } else if (text.includes('makeup') || text.includes('cosmetic') || text.includes('design')) {
+    return 'fashion & beauty'
+  }
+  
+  // Science & Education
+  else if (text.includes('science') || text.includes('research') || text.includes('lecture')) {
+    return 'science & education'
+  } else if (text.includes('university') || text.includes('academic') || text.includes('study')) {
+    return 'science & education'
+  }
+  
+  // Nature & Environment
+  else if (text.includes('nature') || text.includes('environment') || text.includes('eco')) {
+    return 'nature & environment'
+  } else if (text.includes('park') || text.includes('garden') || text.includes('outdoor')) {
+    return 'nature & environment'
+  }
+  
+  // Gaming & Entertainment
+  else if (text.includes('game') || text.includes('gaming') || text.includes('esports')) {
+    return 'gaming & entertainment'
+  } else if (text.includes('board') || text.includes('card') || text.includes('tournament')) {
+    return 'gaming & entertainment'
+  }
+  
+  // Default fallback
   return 'other'
 }
 
@@ -311,7 +500,10 @@ const SimpleMarker = React.memo(({
   event: Event
   onPress: () => void
 }) => {
-  const category = event.category || determineCategory(event.name, event.description)
+  // Use determineCategory if category is missing, undefined, or "other"
+  const category = (!event.category || event.category === 'other') 
+    ? determineCategory(event.name, event.description)
+    : event.category
   const color = getMarkerColor(category)
   const icon = getMarkerIcon(category)
   
@@ -332,14 +524,12 @@ const SimpleMarker = React.memo(({
 })
 
 const MapViewNative: React.FC = () => {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null)
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+  const { events, updateEvent, deleteEvent, isLoading, syncStatus, userLocation, locationPermissionGranted } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [events, setEvents] = useState<Event[]>([])
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
+  const [showEventEditor, setShowEventEditor] = useState(false)
   const [showClusterModal, setShowClusterModal] = useState(false)
   const [selectedCluster, setSelectedCluster] = useState<EventCluster | null>(null)
   const [clusterSearchQuery, setClusterSearchQuery] = useState('')
@@ -348,7 +538,7 @@ const MapViewNative: React.FC = () => {
   // Map reference
   const mapRef = useRef<MapView>(null)
   
-  // Simple map state - initialize with Estonia
+  // Map state - initialize with user location or default to Estonia
   const [mapRegion, setMapRegion] = useState<Region>({
     latitude: 58.3776252,
     longitude: 26.7290063,
@@ -356,24 +546,57 @@ const MapViewNative: React.FC = () => {
     longitudeDelta: 0.2,
   })
 
-  // Load events on component mount
+  // Auto-fit map to user location or events when they load
   useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        console.log('🎯 Loading events...')
-        const importedEvents = await loadEventsPartially()
-        console.log(`🎯 Loaded ${importedEvents.length} events`)
-        setEvents(importedEvents)
-        setFilteredEvents(importedEvents)
-        setIsLoading(false)
-      } catch (error) {
-        console.error('Error loading events:', error)
-        setIsLoading(false)
+    if (userLocation) {
+      // Center map on user location first
+      const userRegion: Region = {
+        latitude: userLocation[0],
+        longitude: userLocation[1],
+        latitudeDelta: 1.0, // Show ~100km around user
+        longitudeDelta: 1.0,
+      }
+      console.log('📍 Centering map on user location:', userRegion)
+      setMapRegion(userRegion)
+    } else if (filteredEvents.length > 0) {
+      // Fallback to auto-fit events if no user location
+      const validEvents = filteredEvents.filter(event => 
+        event.latitude && event.longitude && 
+        !isNaN(event.latitude) && !isNaN(event.longitude) &&
+        event.latitude !== 0 && event.longitude !== 0
+      )
+      
+      if (validEvents.length > 0) {
+        const lats = validEvents.map(e => e.latitude)
+        const lngs = validEvents.map(e => e.longitude)
+        const minLat = Math.min(...lats)
+        const maxLat = Math.max(...lats)
+        const minLng = Math.min(...lngs)
+        const maxLng = Math.max(...lngs)
+        
+        const newRegion: Region = {
+          latitude: (minLat + maxLat) / 2,
+          longitude: (minLng + maxLng) / 2,
+          latitudeDelta: Math.max((maxLat - minLat) * 1.1, 0.1),
+          longitudeDelta: Math.max((maxLng - minLng) * 1.1, 0.1),
+        }
+        
+        console.log('🎯 Auto-fitting map to events:', newRegion)
+        setMapRegion(newRegion)
       }
     }
-    
-    loadEvents()
-  }, [])
+  }, [userLocation, filteredEvents])
+
+  // Update filtered events when events change
+  useEffect(() => {
+    console.log('🎯 Events updated:', events.length)
+    if (events.length > 0) {
+      console.log('🎯 Sample event:', events[0])
+      console.log('🎯 Event fields:', Object.keys(events[0]))
+      console.log('🎯 Sample coordinates:', events[0].latitude, events[0].longitude)
+    }
+    setFilteredEvents(events)
+  }, [events])
 
   // Event press handler
   const handleEventPress = useCallback((event: Event) => {
@@ -396,12 +619,29 @@ const MapViewNative: React.FC = () => {
 
   // Create clusters and markers
   const markers = useMemo(() => {
+    console.log('🎯 Creating markers from', filteredEvents.length, 'events')
+    
     // Limit events for performance
     const maxEvents = 1000
     const eventsToShow = filteredEvents.slice(0, maxEvents)
     
+    console.log('🎯 Processing', eventsToShow.length, 'events for markers')
+    
+    // Filter out events with invalid coordinates
+    const validEvents = eventsToShow.filter(event => {
+      const isValid = event.latitude && event.longitude && 
+                     !isNaN(event.latitude) && !isNaN(event.longitude) &&
+                     event.latitude !== 0 && event.longitude !== 0
+      if (!isValid) {
+        console.log('🎯 Invalid coordinates for event:', event.name, event.latitude, event.longitude)
+      }
+      return isValid
+    })
+    
+    console.log('🎯 Valid events with coordinates:', validEvents.length)
+    
     // Create clusters
-    const clusters = createClusters(eventsToShow, 0.01) // 0.01 degrees ≈ 1km
+    const clusters = createClusters(validEvents, 0.01) // 0.01 degrees ≈ 1km
     
     // Debug clustering results
     const singleEventClusters = clusters.filter(c => c.count === 1)
@@ -442,37 +682,31 @@ const MapViewNative: React.FC = () => {
       console.log(`🎯 ✅ Perfect clustering: Each location has exactly one cluster`)
     }
     
-    return clusters.map(cluster => (
-      <ClusterMarker
-        key={cluster.id}
-        cluster={cluster}
-        onPress={() => handleClusterPress(cluster)}
-      />
-    ))
+    console.log('🎯 Rendering', clusters.length, 'cluster markers')
+    
+    return clusters.map(cluster => {
+      console.log('🎯 Rendering cluster:', cluster.id, 'with', cluster.count, 'events at', cluster.latitude, cluster.longitude)
+      return (
+        <ClusterMarker
+          key={cluster.id}
+          cluster={cluster}
+          onPress={() => handleClusterPress(cluster)}
+        />
+      )
+    })
   }, [filteredEvents, handleClusterPress])
 
-  // Get user location
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied')
-        return
-      }
 
-      let location = await Location.getCurrentPositionAsync({})
-      setLocation(location)
-      setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      })
-    })()
-  }, [])
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading events...</Text>
+        <Text style={styles.loadingText}>
+          {locationPermissionGranted === undefined 
+            ? 'Checking location permission...' 
+            : 'Loading events...'
+          }
+        </Text>
       </View>
     )
   }
@@ -508,7 +742,18 @@ const MapViewNative: React.FC = () => {
         {markers}
       </MapView>
 
-             {/* Event Details Modal */}
+      {/* Create New Event Button */}
+      <TouchableOpacity
+        style={styles.createEventButton}
+        onPress={() => {
+          setSelectedEvent(null)
+          setShowEventEditor(true)
+        }}
+      >
+        <Text style={styles.createEventButtonText}>+ Create Event</Text>
+      </TouchableOpacity>
+
+      {/* Event Details Modal */}
        <Modal
          visible={showEventDetailsModal}
          animationType="slide"
@@ -533,10 +778,79 @@ const MapViewNative: React.FC = () => {
                <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
                <Text style={styles.eventVenue}>Venue: {selectedEvent.venue}</Text>
                <Text style={styles.eventAddress}>Address: {selectedEvent.address}</Text>
+               
+               {/* Edit and Delete Buttons */}
+               <View style={styles.actionButtons}>
+                 <TouchableOpacity 
+                   style={[styles.actionButton, styles.editButton]}
+                   onPress={() => {
+                     setShowEventDetailsModal(false)
+                     setShowEventEditor(true)
+                   }}
+                 >
+                   <Text style={styles.actionButtonText}>Edit Event</Text>
+                 </TouchableOpacity>
+                 
+                 <TouchableOpacity 
+                   style={[styles.actionButton, styles.deleteButton]}
+                   onPress={() => {
+                     Alert.alert(
+                       'Delete Event',
+                       `Are you sure you want to delete "${selectedEvent.name}"?`,
+                       [
+                         { text: 'Cancel', style: 'cancel' },
+                         {
+                           text: 'Delete',
+                           style: 'destructive',
+                           onPress: async () => {
+                             try {
+                               await deleteEvent(selectedEvent.id)
+                               setShowEventDetailsModal(false)
+                               Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
+                             } catch (error) {
+                               console.error('Error deleting event:', error)
+                               Alert.alert('Error', 'Failed to delete event. Please try again.')
+                             }
+                           }
+                         }
+                       ]
+                     )
+                   }}
+                 >
+                   <Text style={styles.actionButtonText}>Delete Event</Text>
+                 </TouchableOpacity>
+               </View>
+               
+               {/* Sync Status */}
+               <View style={styles.syncStatus}>
+                 <Text style={styles.syncStatusText}>
+                   Status: {syncStatus.isOnline ? '🟢 Online' : '🔴 Offline'}
+                 </Text>
+                 {syncStatus.pendingOperations > 0 && (
+                   <Text style={styles.syncStatusText}>
+                     Pending: {syncStatus.pendingOperations} operations
+                   </Text>
+                 )}
+               </View>
              </ScrollView>
            )}
          </View>
        </Modal>
+
+       {/* Event Editor Modal */}
+       <EventEditor
+         visible={showEventEditor}
+         onClose={() => setShowEventEditor(false)}
+         selectedEvent={selectedEvent}
+         onEventUpdated={(updatedEvent) => {
+           console.log('🎯 Event updated via editor:', updatedEvent.name)
+           setShowEventEditor(false)
+           setShowEventDetailsModal(false)
+         }}
+         events={events}
+         onUpdateEvent={updateEvent}
+         onDeleteEvent={deleteEvent}
+       />
 
                {/* Enhanced Cluster Details Modal */}
         <Modal
@@ -616,9 +930,22 @@ const MapViewNative: React.FC = () => {
                       >
                         <View style={styles.clusterEventHeader}>
                           <Text style={styles.clusterEventTitle}>{event.name}</Text>
-                          <Text style={styles.clusterEventCategory}>
-                            {event.category || determineCategory(event.name, event.description)}
-                          </Text>
+                          <View style={styles.clusterEventHeaderRight}>
+                            <Text style={styles.clusterEventCategory}>
+                              {event.category || determineCategory(event.name, event.description)}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.clusterEventEditButton}
+                              onPress={(e) => {
+                                e.stopPropagation()
+                                setSelectedEvent(event)
+                                setShowClusterModal(false)
+                                setShowEventEditor(true)
+                              }}
+                            >
+                              <Text style={styles.clusterEventEditButtonText}>✏️</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         <Text style={styles.clusterEventDescription} numberOfLines={2}>
                           {event.description}
@@ -792,6 +1119,60 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 15,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  actionButton: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  editButton: {
+    backgroundColor: '#007AFF',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncStatus: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  syncStatusText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  createEventButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  createEventButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   clusterEventItem: {
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
@@ -805,6 +1186,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  clusterEventHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clusterEventEditButton: {
+    marginLeft: 10,
+    padding: 5,
+  },
+  clusterEventEditButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
   },
   clusterEventTitle: {
     fontSize: 16,

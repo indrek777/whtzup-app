@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import * as Location from 'expo-location'
 import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
 import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
@@ -277,6 +278,7 @@ interface EventContextType {
   selectedEvent: Event | null
   userLocation: [number, number] | null
   isLoading: boolean
+  locationPermissionGranted: boolean | undefined
   syncStatus: {
     isOnline: boolean
     lastSyncAt: string | null
@@ -312,6 +314,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
   const [syncStatus, setSyncStatus] = useState({
     isOnline: false,
     lastSyncAt: null as string | null,
@@ -319,7 +322,34 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     errors: [] as string[]
   })
 
-  // Load events with sync service integration
+  // Get user location for radius filtering
+  useEffect(() => {
+    const getUserLocation = async () => {
+      try {
+        console.log('📍 Requesting location permission...')
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          console.log('❌ Location permission denied, loading all events without filtering')
+          setLocationPermissionGranted(false)
+          return
+        }
+        
+        console.log('✅ Location permission granted, getting user location...')
+        setLocationPermissionGranted(true)
+        const location = await Location.getCurrentPositionAsync({})
+        const userCoords: [number, number] = [location.coords.latitude, location.coords.longitude]
+        setUserLocation(userCoords)
+        console.log('📍 User location obtained:', userCoords)
+      } catch (error) {
+        console.error('❌ Error getting user location:', error)
+        setLocationPermissionGranted(false)
+      }
+    }
+    
+    getUserLocation()
+  }, [])
+
+  // Load events with sync service integration and location-based filtering
   useEffect(() => {
     const loadEvents = async () => {
       try {
@@ -330,9 +360,30 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         const status = await syncService.getSyncStatusAsync()
         setSyncStatus(status)
         
-        // Try to fetch events from backend via sync service
+        // Try to fetch events from backend via sync service with location filtering
         try {
-          const serverEvents = await syncService.fetchEvents()
+          let serverEvents: Event[]
+          
+          // Check if we have location permission and user location
+          if (locationPermissionGranted === true && userLocation) {
+            // Use 500km radius filtering
+            const radiusKm = 500
+            console.log(`🎯 Fetching events within ${radiusKm}km of user location`)
+            serverEvents = await syncService.fetchEvents(
+              { latitude: userLocation[0], longitude: userLocation[1] }, 
+              radiusKm
+            )
+          } else if (locationPermissionGranted === false) {
+            // Location permission was explicitly denied, load all events
+            console.log('📍 Location permission denied, fetching all events')
+            serverEvents = await syncService.fetchEvents()
+          } else {
+            // Location permission check is still pending, wait for it to complete
+            console.log('⏳ Location permission check pending, skipping event load')
+            setIsLoading(false)
+            return
+          }
+          
           console.log(`✅ Loaded ${serverEvents.length} events from backend`)
           
           if (serverEvents.length > 0) {
@@ -417,16 +468,20 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       }
     }
     
-    loadEvents()
-  }, [])
+    // Only load events after location permission check is complete
+    if (locationPermissionGranted !== undefined) {
+      loadEvents()
+    }
+  }, [locationPermissionGranted, userLocation])
 
   // Setup sync service listeners
   useEffect(() => {
     // Listen for real-time updates
     const handleEventCreated = (newEvent: Event) => {
       console.log('🆕 Received event created via sync:', newEvent.name)
+      const normalizedEvent = normalizeEventData(newEvent)
       setEvents(prev => {
-        const updatedEvents = [...prev, newEvent]
+        const updatedEvents = [...prev, normalizedEvent]
         // Save to local storage as backup
         saveEventsToFile(updatedEvents).catch(error => {
           console.error('Error saving events:', error)
@@ -437,9 +492,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
     const handleEventUpdated = (updatedEvent: Event) => {
       console.log('🔄 Received event updated via sync:', updatedEvent.name)
+      const normalizedEvent = normalizeEventData(updatedEvent)
       setEvents(prev => {
         const updatedEvents = prev.map(event => 
-          event.id === updatedEvent.id ? updatedEvent : event
+          event.id === updatedEvent.id ? normalizedEvent : event
         )
         // Save to local storage as backup
         saveEventsToFile(updatedEvents).catch(error => {
@@ -495,9 +551,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       // Use sync service to create event
       const createdEvent = await syncService.createEvent(processedEvent)
       
+      // Normalize the created event
+      const normalizedEvent = normalizeEventData(createdEvent)
+      
       // Update local state
       setEvents(prev => {
-        const updatedEvents = [...prev, createdEvent]
+        const updatedEvents = [...prev, normalizedEvent]
         // Save to local storage as backup
         saveEventsToFile(updatedEvents).catch(error => {
           console.error('Error saving events:', error)
@@ -505,7 +564,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         return updatedEvents
       })
       
-      console.log('✅ Event created successfully:', createdEvent.name)
+      console.log('✅ Event created successfully:', normalizedEvent.name)
     } catch (error) {
       console.error('❌ Error creating event:', error)
       throw error
@@ -523,10 +582,13 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       // Use sync service to update event
       const result = await syncService.updateEvent(processedEvent)
       
+      // Normalize the result
+      const normalizedResult = normalizeEventData(result)
+      
       // Update local state
       setEvents(prev => {
         const updatedEvents = prev.map(event => 
-          event.id === eventId ? result : event
+          event.id === eventId ? normalizedResult : event
         )
         // Save to local storage as backup
         saveEventsToFile(updatedEvents).catch(error => {
@@ -535,7 +597,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         return updatedEvents
       })
       
-      console.log('✅ Event updated successfully:', result.name)
+      console.log('✅ Event updated successfully:', normalizedResult.name)
     } catch (error) {
       console.error('❌ Error updating event:', error)
       throw error
@@ -598,29 +660,47 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     return R * c
   }
 
+  // Normalize event data to ensure proper types
+  const normalizeEventData = (event: any): Event => {
+    return {
+      ...event,
+      // Ensure coordinates are numbers
+      latitude: typeof event.latitude === 'string' ? parseFloat(event.latitude) : event.latitude,
+      longitude: typeof event.longitude === 'string' ? parseFloat(event.longitude) : event.longitude,
+      // Ensure other numeric fields are numbers
+      startsAt: event.startsAt || event.starts_at,
+      createdAt: event.createdAt || event.created_at,
+      updatedAt: event.updatedAt || event.updated_at,
+      createdBy: event.createdBy || event.created_by,
+    }
+  }
+
   // Process events to auto-fix venue coordinates
   const processEventsWithVenueStorage = async (eventsToProcess: Event[]): Promise<Event[]> => {
     const processedEvents: Event[] = []
     
     for (const event of eventsToProcess) {
+      // First normalize the event data
+      const normalizedEvent = normalizeEventData(event)
+      
       // Auto-fix coordinates if they're default/unknown
       const fixedCoordinates = await autoFixVenueCoordinates(
-        event.venue,
-        [event.latitude, event.longitude]
+        normalizedEvent.venue,
+        [normalizedEvent.latitude, normalizedEvent.longitude]
       )
       
       // If coordinates were fixed, update the event
-      if (fixedCoordinates[0] !== event.latitude || fixedCoordinates[1] !== event.longitude) {
+      if (fixedCoordinates[0] !== normalizedEvent.latitude || fixedCoordinates[1] !== normalizedEvent.longitude) {
         const updatedEvent = {
-          ...event,
+          ...normalizedEvent,
           latitude: fixedCoordinates[0],
           longitude: fixedCoordinates[1]
         }
         
         // Also save the venue to storage for future use
         addVenue(
-          event.venue,
-          event.address,
+          normalizedEvent.venue,
+          normalizedEvent.address,
           fixedCoordinates
         )
         
@@ -628,12 +708,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       } else {
         // Always save venue to storage for tracking
         addVenue(
-          event.venue,
-          event.address,
-          [event.latitude, event.longitude]
+          normalizedEvent.venue,
+          normalizedEvent.address,
+          [normalizedEvent.latitude, normalizedEvent.longitude]
         )
         
-        processedEvents.push(event)
+        processedEvents.push(normalizedEvent)
       }
     }
     
@@ -645,6 +725,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     selectedEvent,
     userLocation,
     isLoading,
+    locationPermissionGranted,
     syncStatus,
     setSelectedEvent,
     setUserLocation,
