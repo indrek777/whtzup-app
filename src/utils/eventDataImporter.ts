@@ -18,60 +18,227 @@ interface ImportedEvent {
 const determineCategory = (name: string, description: string): Event['category'] => {
   const text = (name + ' ' + description).toLowerCase()
   
-  // Music events
-  if (text.includes('kontsert') || text.includes('muusika') || text.includes('festival') || 
-      text.includes('orkester') || text.includes('koor') || text.includes('kitarr') ||
-      text.includes('klaver') || text.includes('jazz') || text.includes('rock') ||
-      text.includes('ooper') || text.includes('sümfoonia') || text.includes('concert') ||
-      text.includes('music') || text.includes('orchestra') || text.includes('choir') ||
-      text.includes('guitar') || text.includes('piano') || text.includes('opera') ||
-      text.includes('symphony')) {
+  // Estonian language patterns
+  const estonianPatterns = {
+    'music': ['kontsert', 'muusika', 'laulmine', 'bänd', 'ansambel', 'ooper', 'sümfoonia', 'jazz', 'rokk', 'pop', 'klassikaline', 'orkester', 'koor', 'kitarr', 'klaver'],
+    'theater': ['teater', 'lavastus', 'etendus', 'näidend', 'drama', 'komöödia', 'balet', 'tants'],
+    'art': ['näitus', 'galerii', 'kunst', 'maal', 'skulptuur', 'foto', 'kunstnik', 'looming', 'arhitektuur', 'keraamika', 'fotograafia'],
+    'sports': ['sport', 'võistlus', 'jooks', 'ujumine', 'jalgratas', 'tennis', 'korvpall', 'jalgpall', 'orienteerumine', 'triatlon', 'maastik', 'jää', 'mäng', 'liiga', 'staadion', 'arena', 'kardisõit', 'rattaõhtud'],
+    'education': ['koolitus', 'seminar', 'loeng', 'õpituba', 'workshop', 'kursus', 'haridus'],
+    'food': ['toit', 'restoran', 'kohvik', 'söök', 'jook', 'vein', 'õlu', 'kokandus', 'turg', 'kokteili', 'õhtusöök', 'pakett'],
+    'cultural': ['kultuur', 'traditsioon', 'pärand', 'ajalugu', 'muuseum', 'festival', 'päev'],
+    'nature & environment': ['loodus', 'keskkond', 'mets', 'park', 'õues', 'looduskaitse', 'öko'],
+    'health & wellness': ['tervis', 'heaolu', 'jooga', 'meditatsion', 'massaaž', 'wellness', 'ravi', 'häälejooga', 'gongihüpnorännakute'],
+    'family & kids': ['lapsed', 'pere', 'laste', 'mudilased', 'noored', 'mäng'],
+    'business': ['äri', 'konverents', 'kohtumine', 'võrgustumine', 'ettevõtlus', 'töötuba', 'networking'],
+    'technology': ['tehnoloogia', 'IT', 'programmeerimine', 'arvuti', 'digitaal']
+  }
+  
+  // Check Estonian patterns first
+  for (const [category, patterns] of Object.entries(estonianPatterns)) {
+    if (patterns.some(pattern => text.includes(pattern))) {
+      return category as Event['category']
+    }
+  }
+  
+  // Music categories (English + specific terms)
+  if (text.includes('concert') || text.includes('music') || text.includes('symphony')) {
+    return 'music'
+  } else if (text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical')) {
+    return 'music'
+  } else if (text.includes('opera') || text.includes('orchestra') || text.includes('band')) {
+    return 'music'
+  } else if (text.includes('live') && (text.includes('music') || text.includes('performance'))) {
     return 'music'
   }
   
-  // Food events
-  if (text.includes('söök') || text.includes('restoran') || text.includes('kohvik') ||
-      text.includes('vein') || text.includes('kokteili') || text.includes('õhtusöök') ||
-      text.includes('pakett') || text.includes('dinner') || text.includes('food') ||
-      text.includes('restaurant') || text.includes('cafe') || text.includes('wine') ||
-      text.includes('cocktail') || text.includes('dining') || text.includes('cuisine') ||
-      text.includes('tasting') || text.includes('gastronomy')) {
-    return 'food'
-  }
-  
-  // Sports events
-  if (text.includes('jalgpall') || text.includes('spordi') || text.includes('jää') ||
-      text.includes('võistlus') || text.includes('mäng') || text.includes('liiga') ||
-      text.includes('staadion') || text.includes('arena') || text.includes('kardisõit') ||
-      text.includes('football') || text.includes('sport') || text.includes('ice') ||
-      text.includes('competition') || text.includes('game') || text.includes('league') ||
-      text.includes('stadium') || text.includes('race') || text.includes('marathon') ||
-      text.includes('tournament') || text.includes('championship')) {
+  // Sports categories
+  else if (text.includes('football') || text.includes('soccer') || text.includes('match') || text.includes('game')) {
+    return 'sports'
+  } else if (text.includes('basketball') || text.includes('volleyball') || text.includes('tennis')) {
+    return 'sports'
+  } else if (text.includes('running') || text.includes('marathon') || text.includes('race')) {
+    return 'sports'
+  } else if (text.includes('swimming') || text.includes('gym') || text.includes('fitness')) {
+    return 'sports'
+  } else if (text.includes('cycling') || text.includes('bike')) {
+    return 'sports'
+  } else if (text.includes('hiking') || text.includes('climbing')) {
     return 'sports'
   }
   
-  // Art events
-  if (text.includes('näitus') || text.includes('galerii') || text.includes('kunst') ||
-      text.includes('muuseum') || text.includes('arhitektuur') || text.includes('keraamika') ||
-      text.includes('fotograafia') || text.includes('skulptuur') || text.includes('exhibition') ||
-      text.includes('gallery') || text.includes('art') || text.includes('museum') ||
-      text.includes('architecture') || text.includes('ceramics') || text.includes('photography') ||
-      text.includes('sculpture') || text.includes('painting') || text.includes('drawing') ||
-      text.includes('workshop') || text.includes('creative')) {
+  // Health & Wellness (check before generic outdoor activities)
+  else if (text.includes('yoga') || text.includes('pilates') || text.includes('workout')) {
+    return 'health & wellness'
+  } else if (text.includes('beach yoga') || text.includes('outdoor yoga')) {
+    return 'health & wellness'
+  } else if (text.includes('meditation') || text.includes('mindfulness')) {
+    return 'health & wellness'
+  }
+  
+  // Outdoor activities
+  else if (text.includes('outdoor music') || text.includes('outdoor meditation')) {
+    return 'entertainment'
+  } else if (text.includes('beach volleyball') || text.includes('beach running')) {
+    return 'sports'
+  } else if (text.includes('stand-up paddleboarding') || text.includes('paddleboarding')) {
+    return 'sports'
+  } else if (text.includes('kayaking') || text.includes('canoeing')) {
+    return 'sports'
+  } else if (text.includes('sailing') || text.includes('boating')) {
+    return 'sports'
+  } else if (text.includes('wildlife watching') || text.includes('bird watching')) {
+    return 'nature & environment'
+  } else if (text.includes('beach cleanup') || text.includes('environmental')) {
+    return 'nature & environment'
+  } else if (text.includes('urban sketching') || text.includes('outdoor chess')) {
+    return 'entertainment'
+  } else if (text.includes('tide pool exploration') || text.includes('tree climbing')) {
+    return 'nature & environment'
+  } else if (text.includes('rock climbing') || text.includes('bouldering')) {
+    return 'sports'
+  } else if (text.includes('sunset watching') || text.includes('park picnic')) {
+    return 'entertainment'
+  } else if (text.includes('mountaineering') || text.includes('wilderness camping')) {
+    return 'sports'
+  } else if (text.includes('surfing lessons') || text.includes('surfing')) {
+    return 'sports'
+  }
+  
+  // Theater & Performance
+  else if (text.includes('theater') || text.includes('theatre') || text.includes('performance') || text.includes('ballet')) {
+    return 'theater'
+  } else if (text.includes('dance') || text.includes('play')) {
+    return 'theater'
+  } else if (text.includes('musical') || text.includes('drama') || text.includes('acting')) {
+    return 'theater'
+  }
+  
+  // Art & Culture
+  else if (text.includes('museum') || text.includes('exhibition') || text.includes('näitus')) {
+    return 'art'
+  } else if (text.includes('gallery') || text.includes('painting') || text.includes('sculpture')) {
+    return 'art'
+  } else if (text.includes('photography') || text.includes('art') || text.includes('creative')) {
     return 'art'
   }
   
-  // Business events
-  if (text.includes('konverents') || text.includes('festival') || text.includes('konverents') ||
-      text.includes('seminar') || text.includes('workshop') || text.includes('töötuba') ||
-      text.includes('networking') || text.includes('konverents') || text.includes('conference') ||
-      text.includes('seminar') || text.includes('business') || text.includes('meeting') ||
-      text.includes('summit') || text.includes('forum') || text.includes('presentation') ||
-      text.includes('lecture') || text.includes('training')) {
+  // Entertainment (Cinema, etc.)
+  else if (text.includes('cinema') || text.includes('movie') || text.includes('film')) {
+    return 'entertainment'
+  } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
+    return 'entertainment'
+  }
+  
+  // Comedy
+  else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
+    return 'comedy'
+  }
+  
+  // Food & Drink
+  else if (text.includes('food') || text.includes('restaurant') || text.includes('dining')) {
+    return 'food'
+  } else if (text.includes('wine') || text.includes('beer') || text.includes('cocktail')) {
+    return 'food'
+  } else if (text.includes('cooking') || text.includes('chef') || text.includes('culinary')) {
+    return 'food'
+  } else if (text.includes('tasting') || text.includes('market')) {
+    return 'food'
+  } else if (text.includes('festival') && (text.includes('food') || text.includes('culinary'))) {
+    return 'food'
+  }
+  
+  // Education & Learning
+  else if (text.includes('workshop') || text.includes('seminar') || text.includes('course')) {
+    return 'education'
+  } else if (text.includes('training') || text.includes('education') || text.includes('learning')) {
+    return 'education'
+  } else if (text.includes('lecture') || text.includes('class') || text.includes('tutorial')) {
+    return 'education'
+  }
+  
+  // Business & Professional
+  else if (text.includes('conference') || text.includes('meeting') || text.includes('networking')) {
+    return 'business'
+  } else if (text.includes('business') || text.includes('corporate') || text.includes('professional')) {
     return 'business'
   }
   
-  // Default to other
+  // Technology
+  else if (text.includes('tech') || text.includes('technology') || text.includes('digital')) {
+    return 'technology'
+  } else if (text.includes('startup') || text.includes('innovation') || text.includes('ai')) {
+    return 'technology'
+  } else if (text.includes('coding') || text.includes('programming') || text.includes('hackathon')) {
+    return 'technology'
+  }
+  
+  // Family & Kids
+  else if (text.includes('kids') || text.includes('children') || text.includes('family')) {
+    return 'family & kids'
+  } else if (text.includes('playground') || text.includes('toy') || text.includes('story')) {
+    return 'family & kids'
+  }
+  
+  // Health & Wellness (additional patterns)
+  else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
+    return 'health & wellness'
+  } else if (text.includes('therapy') || text.includes('healing')) {
+    return 'health & wellness'
+  }
+  
+  // Cultural & Heritage
+  else if (text.includes('cultural') || text.includes('heritage') || text.includes('traditional')) {
+    return 'cultural'
+  } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
+    return 'cultural'
+  } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
+    return 'cultural'
+  }
+  
+  // Nightlife
+  else if (text.includes('club') || text.includes('party') || text.includes('nightlife')) {
+    return 'nightlife'
+  } else if (text.includes('bar') || text.includes('pub') || text.includes('dance')) {
+    return 'nightlife'
+  }
+  
+  // Charity & Community
+  else if (text.includes('charity') || text.includes('volunteer') || text.includes('community')) {
+    return 'charity & community'
+  } else if (text.includes('fundraiser') || text.includes('donation') || text.includes('help')) {
+    return 'charity & community'
+  }
+  
+  // Fashion & Beauty
+  else if (text.includes('fashion') || text.includes('beauty') || text.includes('style')) {
+    return 'fashion & beauty'
+  } else if (text.includes('makeup') || text.includes('cosmetic') || text.includes('design')) {
+    return 'fashion & beauty'
+  }
+  
+  // Science & Education
+  else if (text.includes('science') || text.includes('research') || text.includes('lecture')) {
+    return 'science & education'
+  } else if (text.includes('university') || text.includes('academic') || text.includes('study')) {
+    return 'science & education'
+  }
+  
+  // Nature & Environment
+  else if (text.includes('nature') || text.includes('environment') || text.includes('eco')) {
+    return 'nature & environment'
+  } else if (text.includes('park') || text.includes('garden') || text.includes('outdoor')) {
+    return 'nature & environment'
+  }
+  
+  // Gaming & Entertainment
+  else if (text.includes('game') || text.includes('gaming') || text.includes('esports')) {
+    return 'gaming & entertainment'
+  } else if (text.includes('board') || text.includes('card') || text.includes('tournament')) {
+    return 'gaming & entertainment'
+  }
+  
+  // Default fallback
   return 'other'
 }
 
@@ -183,7 +350,7 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
         id: item.id || `imported-${index}`,
         name: item.name,
         description: item.description || `Event at ${item.address || item.venue || 'various locations'}`,
-        category: determineCategory(item.name, item.description),
+        category: item.category || determineCategory(item.name, item.description),
         venue: item.venue || item.address || 'Various locations',
         address: item.address || item.venue || 'Location TBD',
         latitude: Number(item.latitude) || 0,

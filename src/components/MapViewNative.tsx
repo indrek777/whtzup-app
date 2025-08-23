@@ -45,9 +45,52 @@ const getMarkerColor = (category: string): string => {
     case 'art':
       return 'green'
     case 'food':
+    case 'food & drink':
       return 'yellow'
     case 'business':
       return 'indigo'
+    case 'technology':
+    case 'tech':
+      return 'blue'
+    case 'health':
+    case 'health & wellness':
+    case 'wellness':
+      return 'lightgreen'
+    case 'entertainment':
+    case 'theater':
+    case 'theatre':
+    case 'cinema':
+    case 'comedy':
+      return 'purple'
+    case 'education':
+    case 'workshop':
+    case 'seminar':
+    case 'science & education':
+      return 'darkblue'
+    case 'cultural':
+    case 'culture':
+      return 'brown'
+    case 'nightlife':
+      return 'darkviolet'
+    case 'family & kids':
+    case 'family':
+    case 'kids':
+      return 'pink'
+    case 'charity & community':
+    case 'community':
+    case 'charity':
+      return 'teal'
+    case 'fashion & beauty':
+    case 'fashion':
+    case 'beauty':
+      return 'hotpink'
+    case 'nature & environment':
+    case 'nature':
+    case 'environment':
+      return 'forestgreen'
+    case 'gaming & entertainment':
+    case 'gaming':
+      return 'crimson'
     case 'other':
       return 'lightgray'
     default:
@@ -65,23 +108,53 @@ const getMarkerIcon = (category: string): string => {
     case 'art':
       return '🎨'
     case 'food':
+    case 'food & drink':
       return '🍽️'
     case 'business':
       return '💼'
-    case 'entertainment':
-    case 'theater':
-    case 'cinema':
-      return '🎭'
-    case 'education':
-    case 'workshop':
-    case 'seminar':
-      return '📚'
     case 'technology':
     case 'tech':
       return '💻'
     case 'health':
+    case 'health & wellness':
     case 'wellness':
       return '🏥'
+    case 'entertainment':
+    case 'theater':
+    case 'theatre':
+    case 'cinema':
+      return '🎭'
+    case 'comedy':
+      return '😂'
+    case 'education':
+    case 'workshop':
+    case 'seminar':
+    case 'science & education':
+      return '📚'
+    case 'cultural':
+    case 'culture':
+      return '🏛️'
+    case 'nightlife':
+      return '🌙'
+    case 'family & kids':
+    case 'family':
+    case 'kids':
+      return '👨‍👩‍👧‍👦'
+    case 'charity & community':
+    case 'community':
+    case 'charity':
+      return '🤝'
+    case 'fashion & beauty':
+    case 'fashion':
+    case 'beauty':
+      return '👗'
+    case 'nature & environment':
+    case 'nature':
+    case 'environment':
+      return '🌿'
+    case 'gaming & entertainment':
+    case 'gaming':
+      return '🎮'
     case 'other':
       return '⭐'
     default:
@@ -89,8 +162,9 @@ const getMarkerIcon = (category: string): string => {
   }
 }
 
-// Category determination function
+// Fallback category determination function (events should now have pre-assigned categories)
 const determineCategory = (name: string, description: string): string => {
+  console.log(`⚠️ determineCategory fallback called for: "${name}" - this event may be missing a category field`)
   const text = (name + ' ' + description).toLowerCase()
   
   // Sports categories
@@ -103,14 +177,17 @@ const determineCategory = (name: string, description: string): string => {
   } else if (text.includes('swimming') || text.includes('gym') || text.includes('fitness')) {
     return 'sports'
   } else if (text.includes('yoga') || text.includes('pilates') || text.includes('workout')) {
-    return 'sports'
+    return 'health & wellness'
   } else if (text.includes('cycling') || text.includes('bike') || text.includes('cycling')) {
     return 'sports'
+  } else if (text.includes('outdoor music') || text.includes('outdoor meditation')) {
+    console.log(`🎯 determineCategory: Matched "outdoor music/meditation" for "${name}", returning 'entertainment'`)
+    return 'entertainment'
   } else if (text.includes('hiking') || text.includes('climbing') || text.includes('outdoor')) {
     return 'sports'
   }
   
-  // Music categories
+  // Music categories (check before generic outdoor activities)
   else if (text.includes('concert') || text.includes('music') || text.includes('symphony')) {
     return 'music'
   } else if (text.includes('jazz') || text.includes('rock') || text.includes('pop') || text.includes('classical')) {
@@ -121,15 +198,68 @@ const determineCategory = (name: string, description: string): string => {
     return 'music'
   }
   
-  // Theater & Performance (map to art)
-  else if (text.includes('theater') || text.includes('performance') || text.includes('ballet')) {
-    return 'art'
+  // Specific outdoor activities from the logs
+  else if (text.includes('beach yoga') || text.includes('outdoor yoga')) {
+    console.log(`🎯 determineCategory: Matched "beach yoga/outdoor yoga" for "${name}", returning 'health & wellness'`)
+    return 'health & wellness'
+  } else if (text.includes('beach volleyball') || text.includes('beach running')) {
+    console.log(`🎯 determineCategory: Matched "beach volleyball/running" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('stand-up paddleboarding') || text.includes('paddleboarding')) {
+    console.log(`🎯 determineCategory: Matched "paddleboarding" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('kayaking') || text.includes('canoeing')) {
+    console.log(`🎯 determineCategory: Matched "kayaking/canoeing" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('sailing') || text.includes('boating')) {
+    console.log(`🎯 determineCategory: Matched "sailing/boating" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('wildlife watching') || text.includes('bird watching')) {
+    console.log(`🎯 determineCategory: Matched "wildlife watching" for "${name}", returning 'nature & environment'`)
+    return 'nature & environment'
+  } else if (text.includes('cultural festival') || text.includes('heritage festival')) {
+    console.log(`🎯 determineCategory: Matched "cultural festival" for "${name}", returning 'cultural'`)
+    return 'cultural'
+  } else if (text.includes('historical tour') || text.includes('architecture walk')) {
+    console.log(`🎯 determineCategory: Matched "historical tour/architecture walk" for "${name}", returning 'cultural'`)
+    return 'cultural'
+  } else if (text.includes('beach cleanup') || text.includes('environmental')) {
+    console.log(`🎯 determineCategory: Matched "beach cleanup/environmental" for "${name}", returning 'nature & environment'`)
+    return 'nature & environment'
+  } else if (text.includes('urban sketching') || text.includes('outdoor chess')) {
+    console.log(`🎯 determineCategory: Matched "urban sketching/outdoor chess" for "${name}", returning 'entertainment'`)
+    return 'entertainment'
+  } else if (text.includes('tide pool exploration') || text.includes('tree climbing')) {
+    console.log(`🎯 determineCategory: Matched "tide pool exploration/tree climbing" for "${name}", returning 'nature & environment'`)
+    return 'nature & environment'
+  } else if (text.includes('rock climbing') || text.includes('bouldering')) {
+    console.log(`🎯 determineCategory: Matched "rock climbing/bouldering" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('sunset watching') || text.includes('park picnic')) {
+    console.log(`🎯 determineCategory: Matched "sunset watching/park picnic" for "${name}", returning 'entertainment'`)
+    return 'entertainment'
+  } else if (text.includes('mountaineering') || text.includes('wilderness camping')) {
+    console.log(`🎯 determineCategory: Matched "mountaineering/wilderness camping" for "${name}", returning 'sports'`)
+    return 'sports'
+  } else if (text.includes('surfing lessons') || text.includes('surfing')) {
+    console.log(`🎯 determineCategory: Matched "surfing" for "${name}", returning 'sports'`)
+    return 'sports'
+  }
+  
+  // Comedy
+  else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
+    return 'comedy'
+  }
+  
+  // Theater & Performance
+  else if (text.includes('theater') || text.includes('theatre') || text.includes('performance') || text.includes('ballet')) {
+    return 'theater'
   } else if (text.includes('dance') || text.includes('play')) {
-    return 'art'
+    return 'theater'
   } else if (text.includes('musical') || text.includes('drama') || text.includes('acting')) {
-    return 'art'
+    return 'theater'
   } else if (text.includes('show') && (text.includes('theater') || text.includes('performance') || text.includes('dance') || text.includes('play') || text.includes('musical') || text.includes('drama') || text.includes('acting'))) {
-    return 'art'
+    return 'theater'
   }
   
   // Art & Culture
@@ -141,14 +271,10 @@ const determineCategory = (name: string, description: string): string => {
     return 'art'
   }
   
-  // Comedy & Entertainment
-  else if (text.includes('comedy') || text.includes('stand-up') || text.includes('humor')) {
+  // Entertainment (Cinema, etc.)
+  else if (text.includes('cinema') || text.includes('movie') || text.includes('film')) {
     return 'entertainment'
   } else if (text.includes('magic') || text.includes('circus') || text.includes('variety')) {
-    return 'entertainment'
-  } else if (text.includes('theater') || text.includes('theatre') || text.includes('drama')) {
-    return 'entertainment'
-  } else if (text.includes('cinema') || text.includes('movie') || text.includes('film')) {
     return 'entertainment'
   }
   
@@ -190,73 +316,74 @@ const determineCategory = (name: string, description: string): string => {
     return 'technology'
   }
   
-  // Family & Kids (map to other)
+  // Family & Kids
   else if (text.includes('kids') || text.includes('children') || text.includes('family')) {
-    return 'other'
+    return 'family & kids'
   } else if (text.includes('playground') || text.includes('toy') || text.includes('story')) {
-    return 'other'
+    return 'family & kids'
   }
   
   // Health & Wellness
   else if (text.includes('health') || text.includes('wellness') || text.includes('medical')) {
-    return 'health'
+    return 'health & wellness'
   } else if (text.includes('therapy') || text.includes('healing') || text.includes('mindfulness')) {
-    return 'health'
+    return 'health & wellness'
   }
   
-  // Cultural & Heritage (map to art)
+  // Cultural & Heritage
   else if (text.includes('cultural') || text.includes('heritage') || text.includes('traditional')) {
-    return 'art'
+    return 'cultural'
   } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
-    return 'art'
+    return 'cultural'
   } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
-    return 'art'
+    return 'cultural'
   }
   
-  // Nightlife (map to other)
+  // Nightlife
   else if (text.includes('club') || text.includes('party') || text.includes('nightlife')) {
-    return 'other'
+    return 'nightlife'
   } else if (text.includes('bar') || text.includes('pub') || text.includes('dance')) {
-    return 'other'
+    return 'nightlife'
   }
   
-  // Charity & Community (map to other)
+  // Charity & Community
   else if (text.includes('charity') || text.includes('volunteer') || text.includes('community')) {
-    return 'other'
+    return 'charity & community'
   } else if (text.includes('fundraiser') || text.includes('donation') || text.includes('help')) {
-    return 'other'
+    return 'charity & community'
   }
   
-  // Fashion & Beauty (map to other)
+  // Fashion & Beauty
   else if (text.includes('fashion') || text.includes('beauty') || text.includes('style')) {
-    return 'other'
+    return 'fashion & beauty'
   } else if (text.includes('makeup') || text.includes('cosmetic') || text.includes('design')) {
-    return 'other'
+    return 'fashion & beauty'
   }
   
-  // Science & Education (map to business)
+  // Science & Education
   else if (text.includes('science') || text.includes('research') || text.includes('lecture')) {
-    return 'business'
+    return 'science & education'
   } else if (text.includes('university') || text.includes('academic') || text.includes('study')) {
-    return 'business'
+    return 'science & education'
   }
   
-  // Nature & Environment (map to other)
+  // Nature & Environment
   else if (text.includes('nature') || text.includes('environment') || text.includes('eco')) {
-    return 'other'
+    return 'nature & environment'
   } else if (text.includes('park') || text.includes('garden') || text.includes('outdoor')) {
-    return 'other'
+    return 'nature & environment'
   }
   
-  // Gaming & Entertainment (map to other)
+  // Gaming & Entertainment
   else if (text.includes('game') || text.includes('gaming') || text.includes('esports')) {
-    return 'other'
+    return 'gaming & entertainment'
   } else if (text.includes('board') || text.includes('card') || text.includes('tournament')) {
-    return 'other'
+    return 'gaming & entertainment'
   }
   
   // Other
   else {
+    console.log(`🎯 determineCategory: No match found for "${name}", returning 'other'`)
     return 'other'
   }
 }
@@ -325,35 +452,63 @@ interface NewEvent {
   recurringOccurrences: number // Number of occurrences
 }
 
-// Clustering configuration
-const CLUSTER_RADIUS = 0.0001 // About 10 meters in degrees - much smaller radius
-const CLUSTER_MIN_SIZE = 10 // Minimum events to form a cluster - much higher to show more individual events
+// Clustering configuration - optimized for better performance
+const CLUSTER_RADIUS = 0.0002 // Increased radius for better clustering
+const CLUSTER_MIN_SIZE = 5 // Reduced minimum size for more efficient clustering
+const MAX_MARKERS_TO_RENDER = 1000 // Limit markers to prevent performance issues
+const MAX_EVENTS_TO_PROCESS = 2000 // Limit events processed for filtering
 
-// Clustering utility functions
+// Optimized clustering utility functions
 const createClusters = (events: Event[]): EventCluster[] => {
+  // Limit the number of events to process for performance
+  const eventsToProcess = events.slice(0, MAX_EVENTS_TO_PROCESS)
   const clusters: EventCluster[] = []
   const processedEvents = new Set<string>()
 
-  events.forEach((event, index) => {
+  // Use a more efficient spatial indexing approach
+  const spatialGrid: { [key: string]: Event[] } = {}
+  
+  // Create spatial grid for faster neighbor lookup
+  eventsToProcess.forEach(event => {
+    const gridKey = `${Math.floor(event.latitude * 1000)},${Math.floor(event.longitude * 1000)}`
+    if (!spatialGrid[gridKey]) {
+      spatialGrid[gridKey] = []
+    }
+    spatialGrid[gridKey].push(event)
+  })
+
+  eventsToProcess.forEach((event, index) => {
     if (processedEvents.has(event.id)) return
 
-    // Find nearby events
-    const nearbyEvents = events.filter(otherEvent => {
-      if (processedEvents.has(otherEvent.id)) return false
-      
-      const distance = calculateDistance(
-        event.latitude, event.longitude,
-        otherEvent.latitude, otherEvent.longitude
-      )
-      return distance <= 0.0001 // 10 meters in degrees - much smaller clustering radius
-    })
+    // Find nearby events using spatial grid
+    const nearbyEvents: Event[] = []
+    const baseGridKey = `${Math.floor(event.latitude * 1000)},${Math.floor(event.longitude * 1000)}`
+    
+    // Check current grid and adjacent grids
+    for (let latOffset = -1; latOffset <= 1; latOffset++) {
+      for (let lngOffset = -1; lngOffset <= 1; lngOffset++) {
+        const gridKey = `${Math.floor(event.latitude * 1000) + latOffset},${Math.floor(event.longitude * 1000) + lngOffset}`
+        const gridEvents = spatialGrid[gridKey] || []
+        
+        gridEvents.forEach(otherEvent => {
+          if (processedEvents.has(otherEvent.id)) return
+          
+          const distance = calculateDistance(
+            event.latitude, event.longitude,
+            otherEvent.latitude, otherEvent.longitude
+          )
+          if (distance <= CLUSTER_RADIUS) {
+            nearbyEvents.push(otherEvent)
+          }
+        })
+      }
+    }
 
-    if (nearbyEvents.length >= CLUSTER_MIN_SIZE && nearbyEvents.length < 100) { // Limit cluster size
-      // Calculate cluster center
+    if (nearbyEvents.length >= CLUSTER_MIN_SIZE && nearbyEvents.length < 50) {
+      // Create cluster
       const avgLat = nearbyEvents.reduce((sum, e) => sum + e.latitude, 0) / nearbyEvents.length
       const avgLng = nearbyEvents.reduce((sum, e) => sum + e.longitude, 0) / nearbyEvents.length
 
-      // Get unique categories
       const categories = new Set<string>()
       nearbyEvents.forEach(e => {
         const category = e.category || determineCategory(e.name, e.description)
@@ -373,46 +528,44 @@ const createClusters = (events: Event[]): EventCluster[] => {
 
       clusters.push(cluster)
       nearbyEvents.forEach(e => processedEvents.add(e.id))
-    } else if (nearbyEvents.length === 1 || nearbyEvents.length >= 100) { // Show individual events for large clusters
-              // Single event or large cluster - create individual clusters
-        if (nearbyEvents.length === 1) {
-          const category = event.category || determineCategory(event.name, event.description)
+    } else if (nearbyEvents.length === 1) {
+      // Single event - create individual cluster
+      const category = event.category || determineCategory(event.name, event.description)
+      const cluster: EventCluster = {
+        id: `single-${event.id}`,
+        latitude: event.latitude,
+        longitude: event.longitude,
+        events: [event],
+        center: { latitude: event.latitude, longitude: event.longitude },
+        count: 1,
+        categories: new Set([category]),
+        isExpanded: false
+      }
+      clusters.push(cluster)
+      processedEvents.add(event.id)
+    } else if (nearbyEvents.length >= 50) {
+      // Large cluster - create individual events for better performance
+      nearbyEvents.forEach(singleEvent => {
+        if (!processedEvents.has(singleEvent.id)) {
+          const category = singleEvent.category || determineCategory(singleEvent.name, singleEvent.description)
           const cluster: EventCluster = {
-            id: `single-${event.id}`,
-            latitude: event.latitude,
-            longitude: event.longitude,
-            events: [event],
-            center: { latitude: event.latitude, longitude: event.longitude },
+            id: `single-${singleEvent.id}`,
+            latitude: singleEvent.latitude,
+            longitude: singleEvent.longitude,
+            events: [singleEvent],
+            center: { latitude: singleEvent.latitude, longitude: singleEvent.longitude },
             count: 1,
             categories: new Set([category]),
             isExpanded: false
           }
           clusters.push(cluster)
-          processedEvents.add(event.id)
-        } else {
-          // Large cluster - create individual events
-          nearbyEvents.forEach(singleEvent => {
-            if (!processedEvents.has(singleEvent.id)) {
-              const category = singleEvent.category || determineCategory(singleEvent.name, singleEvent.description)
-              const cluster: EventCluster = {
-                id: `single-${singleEvent.id}`,
-                latitude: singleEvent.latitude,
-                longitude: singleEvent.longitude,
-                events: [singleEvent],
-                center: { latitude: singleEvent.latitude, longitude: singleEvent.longitude },
-                count: 1,
-                categories: new Set([category]),
-                isExpanded: false
-              }
-              clusters.push(cluster)
-              processedEvents.add(singleEvent.id)
-            }
-          })
+          processedEvents.add(singleEvent.id)
         }
+      })
     }
   })
 
-  return clusters
+  return clusters.slice(0, MAX_MARKERS_TO_RENDER) // Limit total clusters
 }
 
 // Cluster marker component
@@ -453,6 +606,15 @@ const ClusterMarker = React.memo(({
   const clusterColor = getClusterColor()
   const clusterSize = getClusterSize()
   const clusterIcon = getClusterIcon()
+
+  // Add debugging for cluster markers
+  console.log(`🎯 ClusterMarker rendering:`, {
+    clusterId: cluster.id,
+    clusterCount: cluster.count,
+    clusterColor: clusterColor,
+    clusterIcon: clusterIcon,
+    coordinates: cluster.center
+  })
 
   return (
           <Marker
@@ -523,7 +685,15 @@ const CustomMarker = React.memo(({
   const markerColor = getMarkerColor(category)
   const markerIcon = getMarkerIcon(category)
   
-  // Removed console.log to reduce overhead
+  // Add debugging to see what's happening with markers
+  console.log(`🎯 CustomMarker rendering:`, {
+    eventId: event.id,
+    eventName: event.name,
+    category: category,
+    markerColor: markerColor,
+    markerIcon: markerIcon,
+    coordinates: { lat: event.latitude, lng: event.longitude }
+  })
   
   // Create a colored circle with category icon as marker
   return (
@@ -551,7 +721,12 @@ const CustomMarker = React.memo(({
       ]}>
         <Text style={[
           styles.markerText,
-          { color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white' }
+          { 
+            color: markerColor === 'yellow' || markerColor === 'lightgray' || markerColor === 'gray' ? '#333' : 'white',
+            fontSize: 20,
+            fontWeight: 'bold',
+            textAlign: 'center'
+          }
         ]}>
           {markerIcon}
         </Text>
@@ -571,7 +746,6 @@ const CustomMarker = React.memo(({
     prevProps.category !== nextProps.category ||
     prevProps.clusterCount !== nextProps.clusterCount
   
-  // Removed console.log to reduce overhead
   return !shouldUpdate
 })
 
@@ -1316,7 +1490,7 @@ const MapViewNative: React.FC = () => {
     [searchAddressSuggestions]
   )
 
-  // Optimized search and filter function - no limits, only country filter
+  // Optimized search and filter function with performance limits
   const applySearchAndFilters = useCallback(() => {
     console.log(`🎯 applySearchAndFilters called with ${events?.length || 0} events`)
     console.log(`🎯 Current search filters:`, searchFilters)
@@ -1327,8 +1501,9 @@ const MapViewNative: React.FC = () => {
       return
     }
 
-    let filtered = events
-    console.log(`🎯 Starting with ${filtered.length} events`)
+    // Limit events to process for performance
+    let filtered = events.slice(0, MAX_EVENTS_TO_PROCESS)
+    console.log(`🎯 Starting with ${filtered.length} events (limited for performance)`)
 
     // Smart text search with venue/address prioritization
     if (searchFilters.query.trim()) {
@@ -1368,12 +1543,15 @@ const MapViewNative: React.FC = () => {
         return true
       })
       
-      // Sort by relevance score (highest first)
+      // Sort by relevance score (highest first) - limit to top results
       filtered.sort((a, b) => {
         const scoreA = (a as any).relevanceScore || 0
         const scoreB = (b as any).relevanceScore || 0
         return scoreB - scoreA
       })
+      
+      // Limit results for performance
+      filtered = filtered.slice(0, 500)
       
       console.log(`🎯 After text search: ${filtered.length} events`)
     }
@@ -1399,29 +1577,25 @@ const MapViewNative: React.FC = () => {
       })
     }
 
-    // Filter out past events - but be more lenient for demo data
+    // Filter out past events - optimized for performance
     const now = new Date()
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(now.getFullYear() - 1)
     
     filtered = filtered.filter(event => {
-      // Skip events without valid start date
       if (!event.startsAt) return false
       
       try {
         const eventDate = new Date(event.startsAt)
-        // For demo purposes, show events up to 1 year in the past
-        const oneYearAgo = new Date()
-        oneYearAgo.setFullYear(now.getFullYear() - 1)
-        
         return eventDate >= oneYearAgo
       } catch (error) {
-        console.log(`🎯 Invalid date for event ${event.name}: ${event.startsAt}`)
         return false
       }
     })
     
     console.log(`🎯 After past events filter: ${filtered.length} events`)
 
-    // Date range filter (premium feature)
+    // Date range filter (premium feature) - optimized
     if (searchFilters.dateFrom || searchFilters.dateTo) {
       if (!userFeatures.hasAdvancedSearch) {
         // For free users, show limited date filtering (1 week ahead only)
@@ -1435,11 +1609,12 @@ const MapViewNative: React.FC = () => {
         })
       } else {
         // Premium users get full date range filtering
+        const fromDate = searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date()
+        const toDate = searchFilters.dateTo ? new Date(searchFilters.dateTo) : null
+        
         filtered = filtered.filter(event => {
           const eventDate = new Date(event.startsAt)
-          const fromDate = searchFilters.dateFrom ? new Date(searchFilters.dateFrom) : new Date()
-          const toDate = searchFilters.dateTo ? new Date(searchFilters.dateTo) : null
-
+          
           if (fromDate && toDate) {
             return eventDate >= fromDate && eventDate <= toDate
           } else if (fromDate) {
@@ -1452,7 +1627,7 @@ const MapViewNative: React.FC = () => {
       }
       console.log(`🎯 After date range filter: ${filtered.length} events`)
     } else {
-      // If no date filter is applied, show events for the next 2 years by default (much more lenient)
+      // If no date filter is applied, show events for the next 2 years by default
       const today = new Date()
       const twoYearsFromNow = new Date()
       twoYearsFromNow.setFullYear(today.getFullYear() + 2)
@@ -1468,29 +1643,29 @@ const MapViewNative: React.FC = () => {
       console.log(`🎯 After default date filter: ${filtered.length} events`)
     }
 
-    // Distance filter
+    // Distance filter - optimized with early exit
     if (searchFilters.distanceFilter && searchFilters.userLocation) {
+      const userLat = searchFilters.userLocation.latitude
+      const userLng = searchFilters.userLocation.longitude
+      const maxDistance = searchFilters.distanceRadius
+      
       filtered = filtered.filter(event => {
-        const distance = calculateDistance(
-          searchFilters.userLocation!.latitude,
-          searchFilters.userLocation!.longitude,
-          event.latitude,
-          event.longitude
-        )
-        return distance <= searchFilters.distanceRadius
+        const distance = calculateDistance(userLat, userLng, event.latitude, event.longitude)
+        return distance <= maxDistance
       })
       console.log(`🎯 After distance filter: ${filtered.length} events`)
     }
 
-    // No artificial limits - show all filtered events
-    console.log(`🎯 applySearchAndFilters: Setting ${filtered.length} filtered events`)
+    // Limit final results for performance
+    const finalFiltered = filtered.slice(0, 1000)
+    console.log(`🎯 applySearchAndFilters: Setting ${finalFiltered.length} filtered events (limited for performance)`)
     
     // Fallback: if no events match filters, show some events to prevent empty map
-    if (filtered.length === 0 && events.length > 0) {
-      console.log(`🎯 No events match filters, showing first 5000 events as fallback`)
-      setFilteredEvents(events.slice(0, 5000)) // 5000 events fallback
+    if (finalFiltered.length === 0 && events.length > 0) {
+      console.log(`🎯 No events match filters, showing first 100 events as fallback`)
+      setFilteredEvents(events.slice(0, 100)) // Reduced fallback limit
     } else {
-      setFilteredEvents(filtered)
+      setFilteredEvents(finalFiltered)
     }
   }, [events, searchFilters, userFeatures])
 
@@ -1672,19 +1847,16 @@ const MapViewNative: React.FC = () => {
     }
   }, [shouldCloseModal])
 
-  // Create clusters from filtered events - re-enabled with optimization
+  // Optimized clusters creation with performance limits
   const memoizedClusters = useMemo(() => {
-    // Only create clusters if we have events and not too many
+    // Only create clusters if we have events
     if (filteredEvents.length === 0) {
       return []
     }
     
-    if (filteredEvents.length > 5000) {
-      // For large datasets, limit clustering to prevent performance issues
-      return createClusters(filteredEvents.slice(0, 5000)) // 5000 events for clustering
-    }
-    
-    return createClusters(filteredEvents)
+    // Limit events for clustering to prevent performance issues
+    const eventsForClustering = filteredEvents.slice(0, MAX_EVENTS_TO_PROCESS)
+    return createClusters(eventsForClustering)
   }, [filteredEvents])
 
   // Cluster press handler
@@ -1722,13 +1894,27 @@ const MapViewNative: React.FC = () => {
     }
   }, [createMarkerPressHandler])
 
-  // Memoized markers to prevent unnecessary re-renders - re-enabled with optimization
+  // Optimized memoized markers to prevent unnecessary re-renders
   const memoizedMarkers = useMemo(() => {
+    // Limit the number of events/clusters to render for performance
+    const maxMarkersToRender = MAX_MARKERS_TO_RENDER
+    
+    console.log(`🎯 Creating memoized markers:`, {
+      filteredEventsCount: filteredEvents.length,
+      memoizedClustersCount: memoizedClusters.length,
+      maxMarkersToRender: maxMarkersToRender
+    })
+    
     // Create markers even if no clusters - show individual events
     if (memoizedClusters.length === 0) {
       // If no clusters, create individual markers for events
-      return filteredEvents.slice(0, 5000).map(event => { // 5000 individual events limit
+      const individualMarkers = filteredEvents.slice(0, maxMarkersToRender).map(event => {
         const category = event.category || determineCategory(event.name, event.description)
+        console.log(`🎯 Creating individual marker for event:`, {
+          eventId: event.id,
+          eventName: event.name,
+          category: category
+        })
         return (
           <CustomMarker
             key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
@@ -1743,16 +1929,25 @@ const MapViewNative: React.FC = () => {
           />
         )
       })
+      console.log(`🎯 Created ${individualMarkers.length} individual markers`)
+      return individualMarkers
     }
     
     // Always use the same logic to ensure consistent hook count
     const markers: React.ReactElement[] = []
-    const clustersToRender = memoizedClusters.length > 5000 ? memoizedClusters.slice(0, 5000) : memoizedClusters // 5000 markers limit
+    const clustersToRender = memoizedClusters.slice(0, maxMarkersToRender) // Limit clusters to render
+    
+    console.log(`🎯 Creating cluster markers from ${clustersToRender.length} clusters`)
     
     clustersToRender.forEach((cluster, index) => {
       if (cluster.count === 1) {
         const event = cluster.events[0]
         const category = event.category || determineCategory(event.name, event.description)
+        console.log(`🎯 Creating single-event cluster marker:`, {
+          eventId: event.id,
+          eventName: event.name,
+          category: category
+        })
         markers.push(
           <CustomMarker
             key={`${event.id}-${event.updatedAt || event.createdAt || Date.now()}-${forceRefresh}`}
@@ -1767,6 +1962,10 @@ const MapViewNative: React.FC = () => {
           />
         )
       } else {
+        console.log(`🎯 Creating multi-event cluster marker:`, {
+          clusterId: cluster.id,
+          clusterCount: cluster.count
+        })
         markers.push(
           <ClusterMarker
             key={`${cluster.id}-${forceRefresh}`}
@@ -1782,6 +1981,7 @@ const MapViewNative: React.FC = () => {
       }
     })
     
+    console.log(`🎯 Created ${markers.length} total markers`)
     return markers
   }, [memoizedClusters, createMarkerPressHandler, handleClusterPress, forceRefresh, filteredEvents])
 
@@ -2668,7 +2868,7 @@ const MapViewNative: React.FC = () => {
 
 
 
-  // Performance monitoring
+  // Performance monitoring with optimization tracking
   useEffect(() => {
     const performanceCheck = () => {
       if (events.length > 500) {
@@ -2677,10 +2877,17 @@ const MapViewNative: React.FC = () => {
       if (filteredEvents.length > 200) {
         console.warn('⚠️ Large filtered dataset:', filteredEvents.length, 'events')
       }
+      
+      // Performance optimization status
+      console.log('🚀 Performance Status:')
+      console.log(`   - Events processed: ${Math.min(events.length, MAX_EVENTS_TO_PROCESS)}/${events.length}`)
+      console.log(`   - Markers rendered: ${Math.min(memoizedClusters.length, MAX_MARKERS_TO_RENDER)}/${memoizedClusters.length}`)
+      console.log(`   - Clusters created: ${memoizedClusters.length}`)
+      console.log(`   - Filtered events: ${filteredEvents.length}`)
     }
     
     performanceCheck()
-  }, [events.length, filteredEvents.length])
+  }, [events.length, filteredEvents.length, memoizedClusters.length])
 
   if (isLoading) {
     return (
@@ -2827,7 +3034,18 @@ const MapViewNative: React.FC = () => {
           />
         )}
 
-                        {/* Render memoized markers for better performance */}
+                        {/* Test marker to verify map rendering */}
+        <Marker
+          coordinate={{
+            latitude: 59.436962,
+            longitude: 24.753574,
+          }}
+          pinColor="red"
+          title="Test Marker"
+          description="This is a test marker to verify map rendering"
+        />
+
+        {/* Render memoized markers for better performance */}
         {memoizedMarkers}
       </MapView>
 
