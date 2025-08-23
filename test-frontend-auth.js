@@ -1,169 +1,96 @@
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args))
-
-const API_BASE_URL = 'http://olympio.ee:4000/api'
+const AsyncStorage = require('@react-native-async-storage/async-storage').default;
 
 async function testFrontendAuth() {
-  console.log('🔍 Testing frontend authentication flow...')
-  
+  console.log('🔍 Testing Frontend Authentication State\n');
+
   try {
-    // Step 1: Create a test user
-    console.log('📋 Step 1: Creating test user...')
-    const signupData = {
-      email: `frontendtest${Date.now()}@example.com`,
-      password: 'testpassword123',
-      name: 'Frontend Test User'
-    }
+    // Check stored authentication data
+    console.log('1. Checking stored authentication data...');
     
-    const signupResponse = await fetch(`${API_BASE_URL}/auth/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(signupData)
-    })
+    const userData = await AsyncStorage.getItem('user');
+    const authToken = await AsyncStorage.getItem('authToken');
+    const refreshToken = await AsyncStorage.getItem('refresh_token');
     
-    if (!signupResponse.ok) {
-      const errorData = await signupResponse.json().catch(() => ({}))
-      console.log('❌ Signup failed:', errorData)
-      return
-    }
+    console.log('📱 Stored user data:', userData ? 'Present' : 'Missing');
+    console.log('🔑 Stored auth token:', authToken ? 'Present' : 'Missing');
+    console.log('🔄 Stored refresh token:', refreshToken ? 'Present' : 'Missing');
     
-    const signupResult = await signupResponse.json()
-    console.log('✅ Signup successful')
-    
-    // Step 2: Sign in to get tokens
-    console.log('📋 Step 2: Signing in...')
-    const signinData = {
-      email: signupData.email,
-      password: signupData.password
-    }
-    
-    const signinResponse = await fetch(`${API_BASE_URL}/auth/signin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(signinData)
-    })
-    
-    if (!signinResponse.ok) {
-      const errorData = await signinResponse.json().catch(() => ({}))
-      console.log('❌ Signin failed:', errorData)
-      return
-    }
-    
-    const signinResult = await signinResponse.json()
-    console.log('✅ Signin successful, got tokens')
-    
-    const accessToken = signinResult.data.accessToken
-    const refreshToken = signinResult.data.refreshToken
-    
-    // Step 3: Test getting user profile with authentication
-    console.log('📋 Step 3: Testing profile retrieval...')
-    const profileResponse = await fetch(`${API_BASE_URL}/auth/profile`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        console.log('👤 User info:', {
+          name: user.name,
+          email: user.email,
+          userGroup: user.userGroup,
+          subscription: user.subscription?.status || 'none'
+        });
+      } catch (e) {
+        console.log('❌ Error parsing user data:', e.message);
       }
-    })
-    
-    console.log('📊 Profile response status:', profileResponse.status)
-    
-    if (profileResponse.ok) {
-      const profileResult = await profileResponse.json()
-      console.log('✅ Profile retrieval successful:', profileResult)
-    } else {
-      const errorData = await profileResponse.json().catch(() => ({}))
-      console.log('❌ Profile retrieval failed:', errorData)
     }
     
-    // Step 4: Test creating an event with authentication
-    console.log('📋 Step 4: Testing event creation...')
-    const eventData = {
-      name: 'Test Event for Frontend',
-      description: 'This is a test event created with authentication',
-      venue: 'Test Venue',
-      address: 'Test Address, Tallinn',
-      startsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      category: 'Other',
-      latitude: 59.436962,
-      longitude: 24.753574,
-      isRecurring: false,
-      source: 'app'
-    }
-    
-    const createEventResponse = await fetch(`${API_BASE_URL}/events`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'x-device-id': '550e8400-e29b-41d4-a716-446655440000'
-      },
-      body: JSON.stringify(eventData)
-    })
-    
-    console.log('📊 Create event response status:', createEventResponse.status)
-    
-    if (createEventResponse.ok) {
-      const createResult = await createEventResponse.json()
-      console.log('✅ Event creation successful:', createResult)
+    if (authToken) {
+      console.log('🔑 Auth token length:', authToken.length);
+      console.log('🔑 Auth token preview:', authToken.substring(0, 50) + '...');
       
-      const createdEventId = createResult.data.id
-      
-      // Step 5: Test updating the created event
-      console.log('📋 Step 5: Testing event update...')
-      const updateData = {
-        name: 'Updated Test Event',
-        category: 'Music'
+      // Try to decode the JWT to check expiration
+      try {
+        const base64Url = authToken.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const payload = JSON.parse(jsonPayload);
+        const currentTime = Math.floor(Date.now() / 1000);
+        
+        console.log('🕐 Token expiration info:', {
+          issuedAt: new Date(payload.iat * 1000),
+          expiresAt: new Date(payload.exp * 1000),
+          currentTime: new Date(currentTime * 1000),
+          isExpired: payload.exp < currentTime,
+          secondsUntilExpiry: payload.exp - currentTime
+        });
+      } catch (e) {
+        console.log('❌ Error decoding JWT:', e.message);
       }
+    }
+    
+    // Test 2: Check if we can make an authenticated request
+    console.log('\n2. Testing authenticated API request...');
+    
+    if (authToken) {
+      const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
       
-      const updateEventResponse = await fetch(`${API_BASE_URL}/events/${createdEventId}`, {
-        method: 'PUT',
+      const response = await fetch('https://olympio.ee/api/auth/profile', {
+        method: 'GET',
         headers: {
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'x-device-id': '550e8400-e29b-41d4-a716-446655440000'
         },
-        body: JSON.stringify(updateData)
-      })
+      });
       
-      console.log('📊 Update event response status:', updateEventResponse.status)
+      console.log('📡 Profile request status:', response.status);
       
-      if (updateEventResponse.ok) {
-        const updateResult = await updateEventResponse.json()
-        console.log('✅ Event update successful:', updateResult)
-        
-        // Step 6: Verify the update by fetching the event
-        console.log('📋 Step 6: Verifying event update...')
-        const getEventResponse = await fetch(`${API_BASE_URL}/events/${createdEventId}`)
-        
-        if (getEventResponse.ok) {
-          const getResult = await getEventResponse.json()
-          console.log('📋 Retrieved event:', {
-            id: getResult.data.id,
-            name: getResult.data.name,
-            category: getResult.data.category,
-            updatedAt: getResult.data.updatedAt
-          })
-          
-          if (getResult.data.name === updateData.name && getResult.data.category === updateData.category) {
-            console.log('✅ Event update verification successful!')
-          } else {
-            console.log('❌ Event update verification failed!')
-          }
-        }
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Profile request successful');
+        console.log('   User:', data.data?.name);
+        console.log('   Email:', data.data?.email);
       } else {
-        const errorData = await updateEventResponse.json().catch(() => ({}))
-        console.log('❌ Event update failed:', errorData)
+        const errorData = await response.json().catch(() => ({}));
+        console.log('❌ Profile request failed:', errorData);
       }
     } else {
-      const errorData = await createEventResponse.json().catch(() => ({}))
-      console.log('❌ Event creation failed:', errorData)
+      console.log('❌ No auth token available for testing');
     }
     
   } catch (error) {
-    console.error('❌ Test failed:', error)
+    console.error('❌ Test failed with error:', error.message);
   }
+
+  console.log('\n🏁 Frontend authentication test completed!');
 }
 
-testFrontendAuth()
+// Run the test
+testFrontendAuth();

@@ -200,10 +200,15 @@ class SyncService {
     let authHeaders = {};
     try {
       const { userService } = await import('./userService');
-      authHeaders = await userService.getAuthHeaders();
+      if (userService && typeof userService.getAuthHeaders === 'function') {
+        authHeaders = await userService.getAuthHeaders();
+        console.log('🔐 Authentication headers obtained:', Object.keys(authHeaders).length > 0 ? 'Yes' : 'No');
+      } else {
+        console.log('🔓 userService not properly initialized');
+      }
     } catch (error) {
       // If userService is not available, continue without auth headers
-      console.log('🔓 No authentication available for API call');
+      console.log('🔓 No authentication available for API call:', error.message);
     }
     
     const headers = {

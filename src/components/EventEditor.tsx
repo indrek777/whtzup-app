@@ -13,11 +13,13 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 
 import { Event } from '../data/events'
 import { saveEventsToFile, updateEventForAllUsers, deleteEventForAllUsers } from '../utils/eventStorage'
 import { searchAddress, reverseGeocode } from '../utils/geocoding'
 import { syncService } from '../utils/syncService'
+import { userService } from '../utils/userService'
 
 interface EventEditorProps {
   visible: boolean
@@ -72,8 +74,11 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const [attendees, setAttendees] = useState('')
   const [maxAttendees, setMaxAttendees] = useState('')
   
-  // Date/Time picker state - using simple text inputs for now
+  // Date/Time picker state
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showTimePicker, setShowTimePicker] = useState(false)
+  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date')
   
   // Location editing
   const [isEditingLocation, setIsEditingLocation] = useState(false)
@@ -89,15 +94,57 @@ const EventEditor: React.FC<EventEditorProps> = ({
     ]
   }
   
-  // Date/Time picker handlers - simplified for now
-  const handleDateChange = (text: string) => {
-    console.log('📅 Date input changed:', text)
-    setDate(text)
+  // Date/Time picker handlers - Simplified for reliability
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    console.log('📅 Date picker event:', event.type, 'selectedDate:', selectedDate)
+    
+    // Always close the picker
+    setShowDatePicker(false)
+    
+    // Only update if user didn't cancel
+    if (event.type !== 'dismissed' && selectedDate) {
+      const dateStr = selectedDate.toISOString().split('T')[0]
+      setDate(dateStr)
+      console.log('📅 Date updated to:', dateStr)
+      
+      // Keep current time when updating date
+      const currentTime = time || '12:00'
+      const [hours, minutes] = currentTime.split(':')
+      const newDateTime = new Date(selectedDate)
+      newDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      setSelectedDate(newDateTime)
+    }
   }
   
-  const handleTimeChange = (text: string) => {
-    console.log('⏰ Time input changed:', text)
-    setTime(text)
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    console.log('⏰ Time picker event:', event.type, 'selectedDate:', selectedDate)
+    
+    // Always close the picker
+    setShowTimePicker(false)
+    
+    // Only update if user didn't cancel
+    if (event.type !== 'dismissed' && selectedDate) {
+      const timeStr = selectedDate.toTimeString().slice(0, 5)
+      setTime(timeStr)
+      console.log('⏰ Time updated to:', timeStr)
+      
+      // Keep current date when updating time
+      const currentDate = date || new Date().toISOString().split('T')[0]
+      const newDateTime = new Date(`${currentDate}T${timeStr}:00`)
+      setSelectedDate(newDateTime)
+    }
+  }
+  
+  const showDatePickerModal = () => {
+    console.log('📅 showDatePickerModal called')
+    setShowDatePicker(true)
+    console.log('📅 Date picker should now be visible, showDatePicker:', true)
+  }
+  
+  const showTimePickerModal = () => {
+    console.log('⏰ showTimePickerModal called')
+    setShowTimePicker(true)
+    console.log('⏰ Time picker should now be visible, showTimePicker:', true)
   }
   
   const formatDateForDisplay = (dateStr: string) => {
@@ -152,9 +199,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
         setIsBulkEditMode(false)
         populateForm(selectedEvent)
       } else {
-        // New event creation mode
+        // New event creation mode - ALWAYS start in Single Event Mode
+        console.log('🎯 Setting up NEW EVENT creation - forcing Single Event Mode')
         setEditingEvent(null)
-        setIsBulkEditMode(false)
+        setIsBulkEditMode(false) // Force single event mode for new events
         // Initialize form with empty values for new event
         setTitle('')
         setDescription('')
@@ -168,6 +216,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         setAttendees('0')
         setMaxAttendees('')
         setCoordinates([0, 0])
+        console.log('🎯 NEW EVENT setup complete - isBulkEditMode should be false')
       }
       formInitializedRef.current = true
     }
@@ -183,6 +232,20 @@ const EventEditor: React.FC<EventEditorProps> = ({
   useEffect(() => {
     console.log('📅⏰ Date/Time picker state changed:', { selectedDate })
   }, [selectedDate])
+  
+  // Debug logging for date and time state
+  useEffect(() => {
+    console.log('📅 Date state changed:', date)
+  }, [date])
+  
+  useEffect(() => {
+    console.log('⏰ Time state changed:', time)
+  }, [time])
+  
+  // Debug logging for bulk edit mode state
+  useEffect(() => {
+    console.log('🔄 isBulkEditMode changed to:', isBulkEditMode, '- Date/Time buttons should be', isBulkEditMode ? 'HIDDEN' : 'VISIBLE')
+  }, [isBulkEditMode])
   
   // Separate effect to handle modal closing
   useEffect(() => {
@@ -578,6 +641,34 @@ const EventEditor: React.FC<EventEditorProps> = ({
     console.log('💾 Save event called')
     console.log('💾 Editing event:', editingEvent?.name)
     console.log('💾 Form data:', { title, venue, category, date, time })
+    
+    // Check authentication first
+    const isAuthenticated = await userService.isAuthenticated()
+    if (!isAuthenticated) {
+      console.log('❌ User not authenticated, showing auth prompt')
+      Alert.alert(
+        'Authentication Required',
+        'You need to sign in to create or edit events. Would you like to sign in now?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            onPress: () => {
+              // Close the event editor and show the user profile (which has auth)
+              onClose()
+              // You can add a callback here to open the user profile modal
+              // For now, we'll just show a message
+              Alert.alert(
+                'Sign In',
+                'Please open your profile (tap the user icon) to sign in or create an account.',
+                [{ text: 'OK' }]
+              )
+            }
+          }
+        ]
+      )
+      return
+    }
     
     if (!title.trim() || !venue.trim()) {
       console.log('❌ Validation failed: title or venue is empty')
@@ -1397,20 +1488,75 @@ const EventEditor: React.FC<EventEditorProps> = ({
               <Text style={styles.fieldLabel}>Date</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="YYYY-MM-DD"
+                placeholder="YYYY-MM-DD (e.g., 2025-08-25)"
                 value={date}
-                onChangeText={handleDateChange}
-                keyboardType="numeric"
+                onChangeText={(text) => {
+                  // Allow only numbers and dashes
+                  let cleaned = text.replace(/[^0-9-]/g, '')
+                  
+                  // Auto-format as user types: YYYY-MM-DD
+                  if (cleaned.length >= 4 && !cleaned.includes('-')) {
+                    cleaned = cleaned.slice(0, 4) + '-' + cleaned.slice(4)
+                  }
+                  if (cleaned.length >= 7 && cleaned.split('-').length === 2) {
+                    cleaned = cleaned.slice(0, 7) + '-' + cleaned.slice(7)
+                  }
+                  
+                  setDate(cleaned)
+                }}
+                keyboardType="default"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              <Text style={styles.helpText}>
+                Format: YYYY-MM-DD (e.g., 2025-08-25)
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => {
+                  const today = new Date().toISOString().split('T')[0]
+                  setDate(today)
+                  console.log('📅 Set date to today:', today)
+                }}
+              >
+                <Text style={styles.quickButtonText}>📅 Set to Today</Text>
+              </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>Time</Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="HH:MM"
+                placeholder="HH:MM (e.g., 14:30)"
                 value={time}
-                onChangeText={handleTimeChange}
-                keyboardType="numeric"
+                onChangeText={(text) => {
+                  // Allow only numbers and colons
+                  let cleaned = text.replace(/[^0-9:]/g, '')
+                  
+                  // Auto-format as user types: HH:MM
+                  if (cleaned.length >= 2 && !cleaned.includes(':')) {
+                    cleaned = cleaned.slice(0, 2) + ':' + cleaned.slice(2)
+                  }
+                  
+                  setTime(cleaned)
+                }}
+                keyboardType="default"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              <Text style={styles.helpText}>
+                Format: HH:MM (24-hour format, e.g., 14:30 for 2:30 PM)
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.quickButton}
+                onPress={() => {
+                  const now = new Date().toTimeString().slice(0, 5)
+                  setTime(now)
+                  console.log('⏰ Set time to now:', now)
+                }}
+              >
+                <Text style={styles.quickButtonText}>⏰ Set to Now</Text>
+              </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>Organizer</Text>
               <TextInput
@@ -1883,7 +2029,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
        </View>
                         </Modal>
-     
+
+     {/* Date/Time picker removed - using simple text inputs instead */}
 
      </>
    )
@@ -2599,6 +2746,73 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   backButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  dateTimeButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  dateTimePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+  dateTimePickerModal: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  dateTimePickerContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  dateTimePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  dateTimePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  dateTimePickerDoneButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  dateTimePickerDoneText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  quickButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  quickButtonText: {
     fontSize: 14,
     color: '#333',
     fontWeight: '600',

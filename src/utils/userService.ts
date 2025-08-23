@@ -463,11 +463,12 @@ class UserService {
     await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
   }
 
-  // Get authentication headers
+  // Get authentication headers with automatic token refresh
   async getAuthHeaders(): Promise<Record<string, string>> {
     await this.ensureInitialized()
     
     if (!this.authToken) {
+      console.log('❌ No auth token available')
       return {}
     }
     
@@ -483,22 +484,42 @@ class UserService {
       console.log('✅ Token refreshed successfully')
     }
     
+    if (!this.authToken) {
+      console.log('❌ Still no auth token after refresh attempt')
+      return {}
+    }
+    
     return {
       'Authorization': `Bearer ${this.authToken}`,
       'Content-Type': 'application/json'
     }
   }
 
-  // Check if token is expired (simple check - can be enhanced with JWT decode)
+  // Check if token is expired by decoding JWT
   private isTokenExpired(): boolean {
     if (!this.authToken) return true
     
     try {
-      // Simple check - if token exists, assume it's valid for now
-      // In a real app, you'd decode the JWT and check the exp claim
-      // For now, we'll rely on the backend to return 401 for expired tokens
+      // Decode JWT token to check expiration
+      const base64Url = this.authToken.split('.')[1]
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+      }).join(''))
+      
+      const payload = JSON.parse(jsonPayload)
+      const currentTime = Math.floor(Date.now() / 1000)
+      
+      // Check if token is expired (with 30 second buffer)
+      if (payload.exp && payload.exp < (currentTime + 30)) {
+        console.log('🕐 Token expired at:', new Date(payload.exp * 1000), 'Current time:', new Date())
+        return true
+      }
+      
       return false
     } catch (error) {
+      console.log('❌ Error checking token expiration:', error)
+      // If we can't decode the token, assume it's expired
       return true
     }
   }

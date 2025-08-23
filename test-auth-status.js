@@ -1,131 +1,102 @@
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args))
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-const API_BASE_URL = 'http://olympio.ee:4000/api'
+const API_BASE_URL = 'https://olympio.ee/api';
 
 async function testAuthStatus() {
-  console.log('🔍 Testing authentication status...')
-  
+  console.log('🔍 Testing Authentication Status\n');
+
   try {
-    // First, let's try to create a user account
-    console.log('📋 Attempting to create a test user...')
-    const signupData = {
-      email: `testuser${Date.now()}@example.com`,
-      password: 'testpassword123',
-      name: 'Test User'
+    // Test 1: Check if we can access the auth endpoint
+    console.log('1. Testing auth endpoint accessibility...');
+    const authResponse = await fetch(`${API_BASE_URL}/auth/profile`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('📡 Auth endpoint response status:', authResponse.status);
+    
+    if (authResponse.ok) {
+      const authData = await authResponse.json();
+      console.log('✅ Auth endpoint accessible');
+      console.log('   Response:', JSON.stringify(authData, null, 2));
+    } else {
+      const errorData = await authResponse.json().catch(() => ({}));
+      console.log('❌ Auth endpoint error:', errorData);
     }
+
+    // Test 2: Try to create a test user
+    console.log('\n2. Testing user creation...');
+    const timestamp = Date.now();
+    const testEmail = `test${timestamp}@example.com`;
     
     const signupResponse = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(signupData)
-    })
-    
-    console.log('📊 Signup response status:', signupResponse.status)
+      body: JSON.stringify({
+        email: testEmail,
+        password: 'password123',
+        name: 'Test User'
+      }),
+    });
+
+    console.log('📡 Signup response status:', signupResponse.status);
     
     if (signupResponse.ok) {
-      const signupResult = await signupResponse.json()
-      console.log('✅ Signup successful:', signupResult)
+      const signupData = await signupResponse.json();
+      console.log('✅ User created successfully');
+      console.log('   Access Token:', signupData.data?.accessToken ? 'Present' : 'Missing');
+      console.log('   Refresh Token:', signupData.data?.refreshToken ? 'Present' : 'Missing');
       
-      // Now let's sign in to get access token
-      console.log('📋 Attempting to sign in...')
-      const signinData = {
-        email: signupData.email,
-        password: signupData.password
-      }
+      const accessToken = signupData.data?.accessToken;
       
-      const signinResponse = await fetch(`${API_BASE_URL}/auth/signin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(signinData)
-      })
-      
-      console.log('📊 Signin response status:', signinResponse.status)
-      
-      if (signinResponse.ok) {
-        const signinResult = await signinResponse.json()
-        console.log('✅ Signin successful, got access token')
+      if (accessToken) {
+        // Test 3: Try to create an event with the token
+        console.log('\n3. Testing event creation with token...');
+        const eventResponse = await fetch(`${API_BASE_URL}/events`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: 'Test Event',
+            description: 'Test event for authentication',
+            category: 'other',
+            venue: 'Test Venue',
+            address: 'Test Address',
+            latitude: 59.436962,
+            longitude: 24.753574,
+            startsAt: '2025-08-25T10:00:00.000Z'
+          }),
+        });
+
+        console.log('📡 Event creation response status:', eventResponse.status);
         
-        const accessToken = signinResult.accessToken
-        
-        // Now let's test updating an event with authentication
-        console.log('📋 Testing event update with authentication...')
-        
-        // First get an event
-        const eventsResponse = await fetch(`${API_BASE_URL}/events`)
-        const eventsData = await eventsResponse.json()
-        
-        if (eventsData.success && eventsData.data && eventsData.data.length > 0) {
-          const firstEvent = eventsData.data[0]
-          console.log('📋 Found event to update:', {
-            id: firstEvent.id,
-            name: firstEvent.name,
-            category: firstEvent.category
-          })
-          
-          // Try to update the event with authentication
-          const updateData = {
-            name: `Updated ${firstEvent.name} - ${Date.now()}`,
-            category: 'Music'
-          }
-          
-          const updateResponse = await fetch(`${API_BASE_URL}/events/${firstEvent.id}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-              'x-device-id': '550e8400-e29b-41d4-a716-446655440000'
-            },
-            body: JSON.stringify(updateData)
-          })
-          
-          console.log('📊 Update response status:', updateResponse.status)
-          
-          if (updateResponse.ok) {
-            const updateResult = await updateResponse.json()
-            console.log('✅ Event update successful with authentication!')
-            
-            // Verify the update
-            const eventsResponse2 = await fetch(`${API_BASE_URL}/events`)
-            const eventsData2 = await eventsResponse2.json()
-            
-            if (eventsData2.success && eventsData2.data) {
-              const updatedEvent = eventsData2.data.find(e => e.id === firstEvent.id)
-              if (updatedEvent) {
-                console.log('📋 Updated event:', {
-                  id: updatedEvent.id,
-                  name: updatedEvent.name,
-                  category: updatedEvent.category,
-                  updatedAt: updatedEvent.updatedAt
-                })
-                
-                if (updatedEvent.name === updateData.name && updatedEvent.category === updateData.category) {
-                  console.log('✅ Event update is properly reflected in the API!')
-                } else {
-                  console.log('❌ Event update is NOT reflected in the API!')
-                }
-              }
-            }
-          } else {
-            const errorData = await updateResponse.json().catch(() => ({}))
-            console.log('❌ Update failed even with authentication:', errorData)
-          }
+        if (eventResponse.ok) {
+          const eventData = await eventResponse.json();
+          console.log('✅ Event created successfully');
+          console.log('   Event ID:', eventData.data?.id);
+        } else {
+          const errorData = await eventResponse.json().catch(() => ({}));
+          console.log('❌ Event creation failed:', errorData);
         }
-      } else {
-        const errorData = await signinResponse.json().catch(() => ({}))
-        console.log('❌ Signin failed:', errorData)
       }
+      
     } else {
-      const errorData = await signupResponse.json().catch(() => ({}))
-      console.log('❌ Signup failed:', errorData)
+      const errorData = await signupResponse.json().catch(() => ({}));
+      console.log('❌ User creation failed:', errorData);
     }
-    
+
   } catch (error) {
-    console.error('❌ Test failed:', error)
+    console.error('❌ Test failed with error:', error.message);
   }
+
+  console.log('\n🏁 Authentication status test completed!');
 }
 
-testAuthStatus()
+// Run the test
+testAuthStatus();
