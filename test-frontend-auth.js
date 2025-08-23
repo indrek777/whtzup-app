@@ -55,8 +55,8 @@ async function testFrontendAuth() {
     const signinResult = await signinResponse.json()
     console.log('✅ Signin successful, got tokens')
     
-    const accessToken = signinResult.accessToken
-    const refreshToken = signinResult.refreshToken
+    const accessToken = signinResult.data.accessToken
+    const refreshToken = signinResult.data.refreshToken
     
     // Step 3: Test getting user profile with authentication
     console.log('📋 Step 3: Testing profile retrieval...')

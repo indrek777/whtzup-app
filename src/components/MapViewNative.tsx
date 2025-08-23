@@ -9,8 +9,6 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
-  StatusBar,
   Platform
 } from 'react-native'
 import MapView, { Marker, Region } from 'react-native-maps'
@@ -19,8 +17,8 @@ import { loadEventsPartially } from '../utils/eventLoader'
 import { Event } from '../data/events'
 import EventEditor from './EventEditor'
 import { useEvents } from '../context/EventContext'
-import UserGroupBanner from './UserGroupBanner'
 import UserGroupManager from './UserGroupManager'
+import { reverseGeocode } from '../utils/geocoding'
 import UserProfile from './UserProfile'
 import { userService } from '../utils/userService'
 
@@ -544,8 +542,69 @@ const MapViewNative: React.FC = () => {
   const [showUserGroupManager, setShowUserGroupManager] = useState(false)
   const [showUserProfile, setShowUserProfile] = useState(false)
   
+  // Location picker state
+  const [isLocationPickerMode, setIsLocationPickerMode] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number; address?: string } | null>(null)
+  const [onLocationSelected, setOnLocationSelected] = useState<((location: { latitude: number; longitude: number; address?: string }) => void) | null>(null)
+  
   // Map reference
   const mapRef = useRef<MapView>(null)
+  
+  // Function to start location picker mode
+  const startLocationPicker = useCallback((callback: (location: { latitude: number; longitude: number; address?: string }) => void) => {
+    console.log('🗺️ startLocationPicker called')
+    setIsLocationPickerMode(true)
+    setSelectedLocation(null)
+    setOnLocationSelected(() => callback)
+    // EventEditor visibility is now controlled by the visible prop
+    setShowEventDetailsModal(false)
+    console.log('🗺️ Location picker mode activated, modal should be visible')
+  }, [])
+  
+  // Function to handle map press in location picker mode
+  const handleMapPress = useCallback(async (event: any) => {
+    console.log('🗺️ Map pressed, isLocationPickerMode:', isLocationPickerMode)
+    if (!isLocationPickerMode) return
+    
+    const { latitude, longitude } = event.nativeEvent.coordinate
+    console.log('📍 Location selected:', latitude, longitude)
+    
+    try {
+      // Perform reverse geocoding to get address
+      const addressResult = await reverseGeocode(latitude, longitude)
+      const address = addressResult ? addressResult.display_name || 'Unknown location' : 'Unknown location'
+      const location = { latitude, longitude, address }
+      
+      setSelectedLocation(location)
+    } catch (error) {
+      console.error('Error reverse geocoding:', error)
+      const location = { latitude, longitude, address: 'Unknown location' }
+      setSelectedLocation(location)
+    }
+  }, [isLocationPickerMode])
+  
+  // Function to confirm location selection
+  const confirmLocationSelection = useCallback(() => {
+    console.log('📍 confirmLocationSelection called, selectedLocation:', !!selectedLocation, 'onLocationSelected:', !!onLocationSelected)
+    if (selectedLocation && onLocationSelected) {
+      console.log('📍 Confirming location selection, calling callback...')
+      onLocationSelected(selectedLocation)
+      setIsLocationPickerMode(false)
+      setSelectedLocation(null)
+      setOnLocationSelected(null)
+      console.log('📍 Location picker closed, EventEditor should be visible again')
+      // EventEditor will become visible again automatically due to the visible prop
+    } else {
+      console.log('📍 Cannot confirm location: missing selectedLocation or onLocationSelected')
+    }
+  }, [selectedLocation, onLocationSelected])
+  
+  // Function to cancel location picker
+  const cancelLocationPicker = useCallback(() => {
+    setIsLocationPickerMode(false)
+    setSelectedLocation(null)
+    setOnLocationSelected(null)
+  }, [])
   
   // Map state - initialize with user location or default to Estonia
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -554,6 +613,15 @@ const MapViewNative: React.FC = () => {
     latitudeDelta: 0.2,
     longitudeDelta: 0.2,
   })
+
+  // Debug location picker state
+  useEffect(() => {
+    console.log('🗺️ Location picker state changed:', { isLocationPickerMode, selectedLocation: !!selectedLocation })
+  }, [isLocationPickerMode, selectedLocation])
+
+  useEffect(() => {
+    console.log('🎯 showEventEditor state changed:', showEventEditor)
+  }, [showEventEditor])
 
   // Auto-fit map to user location or events when they load
   useEffect(() => {
@@ -701,9 +769,8 @@ const MapViewNative: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      {/* Map */}
+    <View style={styles.container}>
+      {/* Map - Full screen */}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -727,80 +794,117 @@ const MapViewNative: React.FC = () => {
         mapPadding={{ top: 0, right: 0, bottom: 0, left: 0 }}
         maxZoomLevel={20}
         minZoomLevel={3}
+        onPress={handleMapPress}
       >
         {/* Render simple markers */}
         {markers}
+        
+        {/* Location picker marker */}
+        {isLocationPickerMode && selectedLocation && (
+          <Marker
+            coordinate={{
+              latitude: selectedLocation.latitude,
+              longitude: selectedLocation.longitude,
+            }}
+            pinColor="red"
+            title="Selected Location"
+            description={selectedLocation.address || 'Tap confirm to use this location'}
+          />
+        )}
       </MapView>
 
-      {/* Profile Button */}
-      <TouchableOpacity
-        style={styles.profileButton}
-        onPress={() => setShowUserProfile(true)}
-      >
-        <Text style={styles.profileButtonText}>👤</Text>
-      </TouchableOpacity>
-
-             {/* User Group Banner */}
-             <UserGroupBanner 
-               onUpgradePress={() => setShowUserGroupManager(true)}
-               showUpgradeButton={true}
-             />
-
-             {/* Location and Radius Info */}
-       {userLocation && (
-         <View style={styles.locationInfoContainer}>
-                       <Text style={styles.locationInfoText}>
-              📍 {currentRadius}km radius • 📅 {dateFilter.from} to {dateFilter.to} • {events.length} events
-              {isLoading && ' • Loading...'}
-            </Text>
-                       <View style={styles.filterButtonsContainer}>
+      {/* Location Picker Overlay */}
+      {isLocationPickerMode && (
+        <>
+          {/* Transparent overlay for map interaction */}
+          <View style={styles.locationPickerMapOverlay} pointerEvents="box-none" />
+          
+          {/* Header overlay */}
+          <View style={styles.locationPickerHeaderOverlay}>
+            <Text style={styles.locationPickerTitle}>Choose Location</Text>
+            <TouchableOpacity onPress={cancelLocationPicker} style={styles.locationPickerCloseButton}>
+              <Text style={styles.locationPickerCloseButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Bottom content overlay */}
+          <View style={styles.locationPickerContentOverlay}>
+            <Text style={styles.locationPickerSubtitle}>Tap on the map to select a location</Text>
+            
+            {selectedLocation && (
+              <View style={styles.locationPickerInfo}>
+                <Text style={styles.locationPickerCoords}>
+                  📍 {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                </Text>
+                {selectedLocation.address && (
+                  <Text style={styles.locationPickerAddress}>{selectedLocation.address}</Text>
+                )}
+              </View>
+            )}
+            
+            <View style={styles.locationPickerButtons}>
               <TouchableOpacity
-                style={styles.radiusAdjustButton}
-                onPress={() => {
-                  Alert.alert(
-                    'Adjust Search Radius',
-                    'Choose your search radius:',
-                    [
-                      { text: '50km (Local)', onPress: () => {
-                        console.log('🎯 User changed radius to 50km')
-                        setCurrentRadius(50)
-                      }},
-                      { text: '100km (Regional)', onPress: () => {
-                        console.log('🎯 User changed radius to 100km')
-                        setCurrentRadius(100)
-                      }},
-                      { text: '200km (Wide)', onPress: () => {
-                        console.log('🎯 User changed radius to 200km')
-                        setCurrentRadius(200)
-                      }},
-                      { text: '300km (Very Wide)', onPress: () => {
-                        console.log('🎯 User changed radius to 300km')
-                        setCurrentRadius(300)
-                      }},
-                      { text: 'Cancel', style: 'cancel' }
-                    ]
-                  )
-                }}
+                style={styles.locationPickerCancelButton}
+                onPress={cancelLocationPicker}
               >
-                <Text style={styles.radiusAdjustButtonText}>⚙️</Text>
+                <Text style={styles.locationPickerCancelText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={styles.dateFilterButton}
-                onPress={() => {
+                style={[
+                  styles.locationPickerConfirmButton,
+                  !selectedLocation && styles.locationPickerConfirmButtonDisabled
+                ]}
+                onPress={confirmLocationSelection}
+                disabled={!selectedLocation}
+              >
+                <Text style={[
+                  styles.locationPickerConfirmText,
+                  !selectedLocation && styles.locationPickerConfirmTextDisabled
+                ]}>
+                  Confirm Location
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
+
+      {/* Bottom Button Container */}
+      <View style={styles.bottomButtonContainer}>
+        {/* Filter Button */}
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => {
+            Alert.alert(
+              'Filter Options',
+              'Choose your filters:',
+              [
+                { text: 'Adjust Radius', onPress: () => {
                   Alert.alert(
-                    'Adjust Date Range',
+                    'Search Radius',
+                    'Choose your search radius:',
+                    [
+                      { text: '50km (Local)', onPress: () => setCurrentRadius(50) },
+                      { text: '100km (Regional)', onPress: () => setCurrentRadius(100) },
+                      { text: '200km (Wide)', onPress: () => setCurrentRadius(200) },
+                      { text: '300km (Very Wide)', onPress: () => setCurrentRadius(300) },
+                      { text: 'Cancel', style: 'cancel' }
+                    ]
+                  )
+                }},
+                { text: 'Date Range', onPress: () => {
+                  Alert.alert(
+                    'Date Range',
                     'Choose your date range:',
                     [
                       { text: 'Today', onPress: () => {
                         const today = new Date().toISOString().split('T')[0]
-                        console.log('📅 User changed date filter to today')
                         setDateFilter({ from: today, to: today })
                       }},
                       { text: 'This Week', onPress: () => {
                         const now = new Date()
                         const endOfWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-                        console.log('📅 User changed date filter to this week')
                         setDateFilter({ 
                           from: now.toISOString().split('T')[0], 
                           to: endOfWeek.toISOString().split('T')[0] 
@@ -809,7 +913,6 @@ const MapViewNative: React.FC = () => {
                       { text: 'Next 2 Weeks', onPress: () => {
                         const now = new Date()
                         const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-                        console.log('📅 User changed date filter to next 2 weeks')
                         setDateFilter({ 
                           from: now.toISOString().split('T')[0], 
                           to: twoWeeksFromNow.toISOString().split('T')[0] 
@@ -818,7 +921,6 @@ const MapViewNative: React.FC = () => {
                       { text: 'This Month', onPress: () => {
                         const now = new Date()
                         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-                        console.log('📅 User changed date filter to this month')
                         setDateFilter({ 
                           from: now.toISOString().split('T')[0], 
                           to: endOfMonth.toISOString().split('T')[0] 
@@ -826,19 +928,47 @@ const MapViewNative: React.FC = () => {
                       }},
                       { text: 'All Events', onPress: () => {
                         const today = new Date().toISOString().split('T')[0]
-                        console.log('📅 User changed date filter to all events (from today onwards)')
                         setDateFilter({ from: today, to: '' })
                       }},
                       { text: 'Cancel', style: 'cancel' }
                     ]
                   )
-                }}
-              >
-                <Text style={styles.dateFilterButtonText}>📅</Text>
-              </TouchableOpacity>
-            </View>
-         </View>
-       )}
+                }},
+                { text: 'Cancel', style: 'cancel' }
+              ]
+            )
+          }}
+        >
+          <Text style={styles.filterButtonText}>⚙️</Text>
+        </TouchableOpacity>
+
+        {/* Create Event Button */}
+        <TouchableOpacity
+          style={styles.createEventButton}
+          onPress={() => {
+            console.log('🎯 Create Event button clicked')
+            setSelectedEvent(null)
+            setShowEventEditor(true)
+            console.log('🎯 EventEditor should now be visible')
+            // Add a timeout to check if the state actually changed
+            setTimeout(() => {
+              console.log('🎯 After timeout - showEventEditor should be true')
+            }, 100)
+          }}
+        >
+          <Text style={styles.createEventButtonText}>+ Create Event</Text>
+        </TouchableOpacity>
+
+        {/* Profile Button */}
+        <TouchableOpacity
+          style={styles.profileButton}
+          onPress={() => setShowUserProfile(true)}
+        >
+          <Text style={styles.profileButtonText}>👤</Text>
+        </TouchableOpacity>
+      </View>
+
+             {/* User Group Manager - Hidden by default, shown via modal */}
 
        {/* Background Loading Indicator */}
        {isBackgroundLoading && (
@@ -848,16 +978,7 @@ const MapViewNative: React.FC = () => {
          </View>
        )}
 
-       {/* Create New Event Button */}
-       <TouchableOpacity
-         style={styles.createEventButton}
-         onPress={() => {
-           setSelectedEvent(null)
-           setShowEventEditor(true)
-         }}
-       >
-         <Text style={styles.createEventButtonText}>+ Create Event</Text>
-       </TouchableOpacity>
+
 
       {/* Event Details Modal */}
        <Modal
@@ -964,7 +1085,11 @@ const MapViewNative: React.FC = () => {
 
        {/* Event Editor Modal */}
        <EventEditor
-         visible={showEventEditor}
+         visible={(() => {
+           const isVisible = showEventEditor && !isLocationPickerMode
+           console.log('🎯 EventEditor visibility:', { showEventEditor, isLocationPickerMode, isVisible })
+           return isVisible
+         })()}
          onClose={() => setShowEventEditor(false)}
          selectedEvent={selectedEvent}
          onEventUpdated={(updatedEvent) => {
@@ -975,6 +1100,10 @@ const MapViewNative: React.FC = () => {
          events={events}
          onUpdateEvent={updateEvent}
          onDeleteEvent={deleteEvent}
+         startLocationPicker={startLocationPicker}
+         onLocationPickerClose={() => {
+           console.log('🎯 Location picker closed callback received from MapViewNative')
+         }}
        />
 
                {/* Enhanced Cluster Details Modal */}
@@ -1005,10 +1134,10 @@ const MapViewNative: React.FC = () => {
             
             {selectedCluster && (() => {
               // Filter events based on search query
-              const filteredClusterEvents = selectedCluster.events.filter(event =>
+              const filteredClusterEvents = (selectedCluster.events || []).filter(event =>
                 clusterSearchQuery === '' || 
-                event.name.toLowerCase().includes(clusterSearchQuery.toLowerCase()) ||
-                event.description.toLowerCase().includes(clusterSearchQuery.toLowerCase())
+                (event.name || '').toLowerCase().includes(clusterSearchQuery.toLowerCase()) ||
+                (event.description || '').toLowerCase().includes(clusterSearchQuery.toLowerCase())
               )
               
               // Pagination logic
@@ -1054,7 +1183,7 @@ const MapViewNative: React.FC = () => {
                         }}
                       >
                         <View style={styles.clusterEventHeader}>
-                          <Text style={styles.clusterEventTitle}>{event.name}</Text>
+                          <Text style={styles.clusterEventTitle}>{event.name || 'Untitled Event'}</Text>
                           <View style={styles.clusterEventHeaderRight}>
                             <Text style={styles.clusterEventCategory}>
                               {event.category || determineCategory(event.name, event.description)}
@@ -1073,7 +1202,7 @@ const MapViewNative: React.FC = () => {
                           </View>
                         </View>
                         <Text style={styles.clusterEventDescription} numberOfLines={2}>
-                          {event.description}
+                          {event.description || 'No description available'}
                         </Text>
                         <Text style={styles.clusterEventTime}>
                           {new Date(event.startsAt).toLocaleString()}
@@ -1127,7 +1256,7 @@ const MapViewNative: React.FC = () => {
           visible={showUserProfile}
           onClose={() => setShowUserProfile(false)}
         />
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -1310,20 +1439,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-      createEventButton: {
-      position: 'absolute',
-      bottom: Platform.OS === 'ios' ? 40 : 30,
-      right: 20,
-      backgroundColor: '#007AFF',
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderRadius: 25,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 5,
-    },
+                 createEventButton: {
+     backgroundColor: '#007AFF',
+     paddingHorizontal: 20,
+     paddingVertical: 12,
+     borderRadius: 25,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.3,
+     shadowRadius: 4,
+     elevation: 5,
+   },
   createEventButtonText: {
     color: 'white',
     fontSize: 16,
@@ -1441,80 +1567,31 @@ const styles = StyleSheet.create({
      fontWeight: 'bold',
      color: '#333',
    },
-       backgroundLoadingContainer: {
-      position: 'absolute',
-      top: Platform.OS === 'ios' ? 10 : 20,
-      left: 20,
-      right: 20,
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      padding: 10,
-      borderRadius: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
+         backgroundLoadingContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 50, // Increased top margin for iPhone
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
    backgroundLoadingText: {
      marginLeft: 8,
      fontSize: 14,
      color: '#666',
      fontWeight: '500',
    },
-       locationInfoContainer: {
-      position: 'absolute',
-      top: Platform.OS === 'ios' ? 70 : 60,
-      left: 20,
-      right: 20,
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      padding: 12,
-      borderRadius: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-   locationInfoText: {
-     fontSize: 14,
-     color: '#333',
-     fontWeight: '500',
-     flex: 1,
-   },
-   radiusAdjustButton: {
-     padding: 8,
-     backgroundColor: '#007AFF',
-     borderRadius: 6,
-     marginLeft: 10,
-   },
-       radiusAdjustButtonText: {
-      fontSize: 16,
-      color: 'white',
-    },
-    filterButtonsContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    dateFilterButton: {
-      padding: 8,
-      backgroundColor: '#28a745',
-      borderRadius: 6,
-      marginLeft: 8,
-    },
-    dateFilterButtonText: {
-      fontSize: 16,
-      color: 'white',
-    },
-    profileButton: {
-      position: 'absolute',
-      top: Platform.OS === 'ios' ? 10 : 50,
-      right: 20,
+         
+          profileButton: {
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
       paddingHorizontal: 15,
       paddingVertical: 12,
@@ -1524,11 +1601,153 @@ const styles = StyleSheet.create({
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
-      zIndex: 1000,
     },
     profileButtonText: {
       fontSize: 20,
       color: '#007AFF',
+    },
+    bottomButtonContainer: {
+      position: 'absolute',
+      bottom: Platform.OS === 'ios' ? 100 : 100,
+      left: 20,
+      right: 20,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      zIndex: 1000,
+    },
+    filterButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      borderRadius: 25,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    filterButtonText: {
+      fontSize: 20,
+      color: '#007AFF',
+    },
+    // Location picker overlay styles
+    locationPickerMapOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 1000,
+    },
+    locationPickerHeaderOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      backgroundColor: '#fff',
+      borderBottomWidth: 1,
+      borderBottomColor: '#e0e0e0',
+      zIndex: 1001,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    locationPickerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    locationPickerCloseButton: {
+      padding: 8,
+    },
+    locationPickerCloseButtonText: {
+      fontSize: 20,
+      color: '#666',
+    },
+    locationPickerContentOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: '#fff',
+      padding: 16,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 8,
+      zIndex: 1001,
+    },
+    locationPickerSubtitle: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    locationPickerInfo: {
+      backgroundColor: '#f8f9fa',
+      padding: 16,
+      borderRadius: 8,
+      marginBottom: 20,
+    },
+    locationPickerCoords: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#333',
+      marginBottom: 8,
+    },
+    locationPickerAddress: {
+      fontSize: 14,
+      color: '#666',
+      lineHeight: 20,
+    },
+    locationPickerButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    locationPickerCancelButton: {
+      flex: 1,
+      backgroundColor: '#f8f9fa',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#dee2e6',
+    },
+    locationPickerCancelText: {
+      fontSize: 16,
+      color: '#6c757d',
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    locationPickerConfirmButton: {
+      flex: 2,
+      backgroundColor: '#007AFF',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+    },
+    locationPickerConfirmButtonDisabled: {
+      backgroundColor: '#ccc',
+    },
+    locationPickerConfirmText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    locationPickerConfirmTextDisabled: {
+      color: '#999',
     },
   })
 

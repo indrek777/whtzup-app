@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   StyleSheet,
   Switch,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native'
+
 import { Event } from '../data/events'
 import { saveEventsToFile, updateEventForAllUsers, deleteEventForAllUsers } from '../utils/eventStorage'
 import { searchAddress, reverseGeocode } from '../utils/geocoding'
@@ -25,6 +27,8 @@ interface EventEditorProps {
   events: Event[]
   onUpdateEvent: (eventId: string, updatedEvent: Event) => void
   onDeleteEvent: (eventId: string) => void
+  startLocationPicker?: (callback: (location: { latitude: number; longitude: number; address?: string }) => void) => void
+  onLocationPickerClose?: () => void
 }
 
 interface BulkEditGroup {
@@ -40,7 +44,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
   onEventUpdated,
   events,
   onUpdateEvent,
-  onDeleteEvent
+  onDeleteEvent,
+  startLocationPicker,
+  onLocationPickerClose
 }) => {
   
   // Editor state
@@ -66,6 +72,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const [attendees, setAttendees] = useState('')
   const [maxAttendees, setMaxAttendees] = useState('')
   
+  // Date/Time picker state - using simple text inputs for now
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  
   // Location editing
   const [isEditingLocation, setIsEditingLocation] = useState(false)
   const [locationSearch, setLocationSearch] = useState('')
@@ -80,6 +89,37 @@ const EventEditor: React.FC<EventEditorProps> = ({
     ]
   }
   
+  // Date/Time picker handlers - simplified for now
+  const handleDateChange = (text: string) => {
+    console.log('📅 Date input changed:', text)
+    setDate(text)
+  }
+  
+  const handleTimeChange = (text: string) => {
+    console.log('⏰ Time input changed:', text)
+    setTime(text)
+  }
+  
+  const formatDateForDisplay = (dateStr: string) => {
+    if (!dateStr) return 'Select Date'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    })
+  }
+  
+  const formatTimeForDisplay = (timeStr: string) => {
+    if (!timeStr) return 'Select Time'
+    return timeStr
+  }
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('📍 EventEditor state updated:', { address, venue, coordinates })
+  }, [address, venue, coordinates])
+  
   // Bulk edit fields
   const [bulkTitle, setBulkTitle] = useState('')
   const [bulkCategory, setBulkCategory] = useState<string>('other')
@@ -90,28 +130,74 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const [groupByCoordinates, setGroupByCoordinates] = useState(false)
 
     // Initialize editor when modal opens
+  // Track if this is the first time the EventEditor is being opened
+  // Track if form has been initialized to prevent resetting when location picker closes
+  const formInitializedRef = useRef(false)
+
   useEffect(() => {
-    if (visible) {
+    console.log('🎯 Form initialization effect triggered. visible:', visible, 'formInitialized:', formInitializedRef.current, 'selectedEvent:', !!selectedEvent, 'hasLocationData:', hasLocationDataRef.current, 'address:', address, 'venue:', venue)
+    
+    // Don't initialize if we have location data that was just set
+    if (hasLocationDataRef.current && (address || venue)) {
+      console.log('🎯 Location data detected, skipping form initialization')
+      hasLocationDataRef.current = false
+      return
+    }
+    
+    if (visible && !formInitializedRef.current) {
+      console.log('🎯 Initializing EventEditor form for the first time...')
       if (selectedEvent) {
         // Single event edit mode
         setEditingEvent(selectedEvent)
         setIsBulkEditMode(false)
         populateForm(selectedEvent)
       } else {
-        // Bulk edit mode - group events by venue or coordinates
-        setIsBulkEditMode(true)
-        if (groupByCoordinates) {
-          groupEventsByCoordinates()
-        } else {
-          groupEventsByVenue()
-        }
+        // New event creation mode
+        setEditingEvent(null)
+        setIsBulkEditMode(false)
+        // Initialize form with empty values for new event
+        setTitle('')
+        setDescription('')
+        setCategory('other')
+        setVenue('')
+        setAddress('')
+        setDate('')
+        setTime('12:00')
+        setSelectedDate(new Date())
+        setOrganizer('Event Organizer')
+        setAttendees('0')
+        setMaxAttendees('')
+        setCoordinates([0, 0])
       }
-    } else {
-      // When main modal closes, also close coordinate assignment modal
+      formInitializedRef.current = true
+    }
+  }, [visible, selectedEvent, address, venue])
+
+  // Track previous visibility state to detect actual closing
+  const prevVisibleRef = useRef(false)
+  
+  // Track if we have location data that was just set to prevent form re-initialization
+  const hasLocationDataRef = useRef(false)
+  
+  // Debug logging for date/time picker state
+  useEffect(() => {
+    console.log('📅⏰ Date/Time picker state changed:', { selectedDate })
+  }, [selectedDate])
+  
+  // Separate effect to handle modal closing
+  useEffect(() => {
+    console.log('🎯 Modal closing effect triggered. visible:', visible, 'prevVisible:', prevVisibleRef.current)
+    // Only reset when the EventEditor is actually closed by the user (not when location picker closes)
+    // The EventEditor is closed when it goes from visible=true to visible=false AND showEventEditor=false
+    if (!visible && prevVisibleRef.current) {
+      console.log('🎯 Modal is closing, resetting form initialization flag')
+      // When main modal closes, reset the flag and close modals
+      formInitializedRef.current = false
       setShowCoordinateAssignmentEditor(false)
       setShowSingleEventEditor(false)
     }
-  }, [visible, selectedEvent])
+    prevVisibleRef.current = visible
+  }, [visible])
 
      // Debug coordinate assignment modal state
   useEffect(() => {
@@ -126,7 +212,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     const venueGroups = new Map<string, Event[]>()
     
     events.forEach(event => {
-      const venueKey = event.venue.toLowerCase().trim()
+      const venueKey = (event.venue || '').toLowerCase().trim()
       if (!venueGroups.has(venueKey)) {
         venueGroups.set(venueKey, [])
       }
@@ -158,8 +244,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
       })
       .sort((a, b) => {
         // Sort by priority: events with no coordinates first, then by number of events
-        const aHasNoCoords = a.venue.includes('NO coordinates')
-        const bHasNoCoords = b.venue.includes('NO coordinates')
+        const aHasNoCoords = (a.venue || '').includes('NO coordinates')
+        const bHasNoCoords = (b.venue || '').includes('NO coordinates')
         if (aHasNoCoords && !bHasNoCoords) return -1
         if (!aHasNoCoords && bHasNoCoords) return 1
         return b.events.length - a.events.length
@@ -201,7 +287,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
       .filter(([_, events]) => events.length > 1) // Only groups with multiple events
       .map(([coordinateKey, events]) => {
         // Sort events by name for better organization
-        const sortedEvents = events.sort((a, b) => a.name.localeCompare(b.name))
+        const sortedEvents = events.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
         
         if (coordinateKey === 'default_coordinates') {
           return {
@@ -230,8 +316,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
       })
       .sort((a, b) => {
         // Sort by priority: default coordinates first, then by number of events
-        if (a.venue.includes('NO coordinates')) return -1
-        if (b.venue.includes('NO coordinates')) return 1
+        if ((a.venue || '').includes('NO coordinates')) return -1
+        if ((b.venue || '').includes('NO coordinates')) return 1
         return b.events.length - a.events.length
       })
     
@@ -257,18 +343,24 @@ const EventEditor: React.FC<EventEditorProps> = ({
           // Extract time in HH:MM format
           const timeStr = eventDate.toTimeString().split(' ')[0].substring(0, 5)
           setTime(timeStr)
+          
+          // Set selectedDate for the picker
+          setSelectedDate(eventDate)
         } else {
           setDate('')
           setTime('12:00')
+          setSelectedDate(new Date())
         }
       } catch (error) {
         console.error('Error parsing startsAt:', error)
         setDate('')
         setTime('12:00')
+        setSelectedDate(new Date())
       }
     } else {
       setDate('')
       setTime('12:00')
+      setSelectedDate(new Date())
     }
     setOrganizer(event.createdBy || 'Event Organizer')
     setAttendees('0') // Default value since this field doesn't exist in the Event type
@@ -440,16 +532,52 @@ const EventEditor: React.FC<EventEditorProps> = ({
     }
   }
 
+  // Handle location selection from map picker
+  const handleMapLocationPicker = () => {
+    console.log('🗺️ handleMapLocationPicker called, startLocationPicker exists:', !!startLocationPicker)
+    if (!startLocationPicker) return
+    
+    console.log('🗺️ Starting map location picker...')
+    startLocationPicker((location) => {
+      console.log('📍 Location selected from map:', location)
+      
+      if (isBulkEditMode && selectedBulkGroup) {
+        // Update bulk edit coordinates
+        setBulkCoordinates([location.latitude, location.longitude])
+        setBulkAddress(location.address || '')
+        if (location.address) {
+          // Extract venue name from address (first part before comma)
+          const venueName = (location.address || '').split(',')[0].trim()
+          setBulkVenue(venueName)
+        }
+      } else {
+        // Update single event coordinates
+        console.log('📍 Setting coordinates:', [location.latitude, location.longitude])
+        setCoordinates([location.latitude, location.longitude])
+        console.log('📍 Setting address:', location.address || '')
+        setAddress(location.address || '')
+        if (location.address) {
+          // Extract venue name from address (first part before comma)
+          const venueName = (location.address || '').split(',')[0].trim()
+          console.log('📍 Setting venue:', venueName)
+          setVenue(venueName)
+        }
+        // Set flag to prevent form re-initialization
+        hasLocationDataRef.current = true
+        console.log('📍 Location data flag set to prevent form re-initialization')
+      }
+      
+      // The EventEditor should remain visible after location selection
+      // No need to re-open it since it wasn't closed
+      console.log('📍 Location data updated in EventEditor, form should show new data')
+    })
+  }
+
   // Save single event
   const saveEvent = async () => {
     console.log('💾 Save event called')
     console.log('💾 Editing event:', editingEvent?.name)
     console.log('💾 Form data:', { title, venue, category, date, time })
-    
-    if (!editingEvent) {
-      console.log('❌ No editing event found')
-      return
-    }
     
     if (!title.trim() || !venue.trim()) {
       console.log('❌ Validation failed: title or venue is empty')
@@ -457,42 +585,77 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
 
-    const updatedEvent: Event = {
-      ...editingEvent,
-      name: title.trim(),
-      description: description.trim(),
-      category,
-      venue: venue.trim(),
-      address: address.trim(),
-      latitude: safeCoordinates(coordinates)[0],
-      longitude: safeCoordinates(coordinates)[1],
-      startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
-      createdBy: organizer.trim(),
-      updatedAt: new Date().toISOString()
-    }
-
-    console.log('💾 Updated event data:', updatedEvent)
-
     try {
       setIsLoading(true)
-      console.log('💾 Calling syncService.updateEvent...')
-      // Save to backend via sync service
-      const savedEvent = await syncService.updateEvent(updatedEvent)
-      console.log('💾 Event saved successfully:', savedEvent)
       
-      // Update local state
-      console.log('💾 Updating local state...')
-      onUpdateEvent(editingEvent.id, savedEvent)
-      onEventUpdated?.(savedEvent)
-      
-      if (showSingleEventEditor) {
-        // If we're in single event editor mode from bulk view, close it and return to bulk view
-        closeSingleEventEditor()
-        Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+      if (editingEvent) {
+        // Update existing event
+        console.log('💾 Updating existing event...')
+        const updatedEvent: Event = {
+          ...editingEvent,
+          name: title.trim(),
+          description: description.trim(),
+          category,
+          venue: venue.trim(),
+          address: address.trim(),
+          latitude: safeCoordinates(coordinates)[0],
+          longitude: safeCoordinates(coordinates)[1],
+          startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
+          createdBy: organizer.trim(),
+          updatedAt: new Date().toISOString()
+        }
+
+        console.log('💾 Updated event data:', updatedEvent)
+        console.log('💾 Calling syncService.updateEvent...')
+        const savedEvent = await syncService.updateEvent(updatedEvent)
+        console.log('💾 Event updated successfully:', savedEvent)
+        
+        // Update local state
+        console.log('💾 Updating local state...')
+        onUpdateEvent(editingEvent.id, savedEvent)
+        onEventUpdated?.(savedEvent)
+        
+        if (showSingleEventEditor) {
+          // If we're in single event editor mode from bulk view, close it and return to bulk view
+          closeSingleEventEditor()
+          Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+        } else {
+          // If we're in standalone single event editor mode, close the main modal
+          onClose()
+          Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+        }
       } else {
-        // If we're in standalone single event editor mode, close the main modal
+        // Create new event
+        console.log('💾 Creating new event...')
+        const newEvent: Event = {
+          id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: title.trim(),
+          description: description.trim(),
+          category,
+          venue: venue.trim(),
+          address: address.trim(),
+          latitude: safeCoordinates(coordinates)[0],
+          longitude: safeCoordinates(coordinates)[1],
+          startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
+          createdBy: organizer.trim(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          url: '',
+          source: 'user'
+        }
+
+        console.log('💾 New event data:', newEvent)
+        console.log('💾 Calling syncService.createEvent...')
+        const savedEvent = await syncService.createEvent(newEvent)
+        console.log('💾 Event created successfully:', savedEvent)
+        
+        // Add to local state
+        console.log('💾 Adding to local state...')
+        onEventUpdated?.(savedEvent)
+        
+        // Close the modal
         onClose()
-        Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+        Alert.alert('Success', 'Event created successfully! Changes are synced to all users.')
       }
     } catch (error) {
       console.error('❌ Error saving event:', error)
@@ -509,9 +672,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
 
-    const eventsToUpdate = selectedBulkGroup.events.filter(
-      event => selectedEventsForBulkEdit.has(event.id)
-    )
+            const eventsToUpdate = (selectedBulkGroup?.events || []).filter(
+          event => selectedEventsForBulkEdit.has(event.id)
+        )
 
     try {
       setIsLoading(true)
@@ -600,8 +763,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
   // Select all events in the current group
   const selectAllEvents = () => {
     if (selectedBulkGroup) {
-      setSelectedEventsForBulkEdit(new Set(selectedBulkGroup.events.map(e => e.id)))
-      console.log('Selected all events:', selectedBulkGroup.events.length)
+              setSelectedEventsForBulkEdit(new Set((selectedBulkGroup?.events || []).map(e => e.id)))
+        console.log('Selected all events:', (selectedBulkGroup?.events || []).length)
     }
   }
 
@@ -618,15 +781,15 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
 
-    const selectedEvents = selectedBulkGroup.events.filter(e => selectedEventsForBulkEdit.has(e.id))
+    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
     if (selectedEvents.length < 2) {
       Alert.alert('Error', 'Need at least 2 events to spread out')
       return
     }
 
     // Calculate spread radius (in degrees) - adjust as needed
-    const baseLat = selectedEvents[0].latitude
-    const baseLng = selectedEvents[0].longitude
+    const baseLat = selectedEvents[0]?.latitude || 0
+    const baseLng = selectedEvents[0]?.longitude || 0
     const radius = 0.001 // About 100 meters
     const angleStep = (2 * Math.PI) / selectedEvents.length
 
@@ -680,9 +843,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
 
-    const selectedEvents = selectedBulkGroup.events.filter(e => selectedEventsForBulkEdit.has(e.id))
-    const baseLat = selectedEvents[0].latitude
-    const baseLng = selectedEvents[0].longitude
+    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
+    const baseLat = selectedEvents[0]?.latitude || 0
+    const baseLng = selectedEvents[0]?.longitude || 0
     const radius = 0.002 // About 200 meters
 
     const updatedEvents = selectedEvents.map((event) => {
@@ -778,9 +941,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
 
-    const selectedEvents = selectedBulkGroup.events.filter(e => selectedEventsForBulkEdit.has(e.id))
-    const baseLat = selectedEvents[0].latitude
-    const baseLng = selectedEvents[0].longitude
+    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
+    const baseLat = selectedEvents[0]?.latitude || 0
+    const baseLng = selectedEvents[0]?.longitude || 0
     const spacing = 0.0005 // About 50 meters between events
     const eventsPerRow = Math.ceil(Math.sqrt(selectedEvents.length))
 
@@ -830,7 +993,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const exportEvents = () => {
     try {
       const eventsToExport = selectedBulkGroup 
-        ? selectedBulkGroup.events.filter(e => selectedEventsForBulkEdit.has(e.id))
+        ? (selectedBulkGroup.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
         : editingEvent 
         ? [editingEvent] 
         : events
@@ -909,7 +1072,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            {isBulkEditMode ? 'Bulk Event Editor' : 'Event Editor'}
+            {isBulkEditMode ? 'Bulk Event Editor' : (editingEvent ? 'Edit Event' : 'Create New Event')}
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>✕</Text>
@@ -998,8 +1161,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
                     {/* Data Quality Warning */}
                     {(() => {
                       if (!selectedBulkGroup) return null
-                      const uniqueCoordinates = new Set(selectedBulkGroup.events.map(e => `${e.latitude},${e.longitude}`))
-                      const hasDefaultCoordinates = selectedBulkGroup.events.every(e => e.latitude === 0 && e.longitude === 0)
+                      const uniqueCoordinates = new Set((selectedBulkGroup.events || []).map(e => `${e.latitude},${e.longitude}`))
+                      const hasDefaultCoordinates = (selectedBulkGroup.events || []).every(e => e.latitude === 0 && e.longitude === 0)
                       
                       if (hasDefaultCoordinates) {
                         return (
@@ -1058,29 +1221,29 @@ const EventEditor: React.FC<EventEditorProps> = ({
                                                {/* Individual Coordinate Assignment Button */}
                         {(() => {
                           if (!selectedBulkGroup) return null
-                          const uniqueCoordinates = new Set(selectedBulkGroup.events.map(e => `${e.latitude},${e.longitude}`))
-                          const hasDefaultCoordinates = selectedBulkGroup.events.every(e => e.latitude === 0 && e.longitude === 0)
+                          const uniqueCoordinates = new Set((selectedBulkGroup.events || []).map(e => `${e.latitude},${e.longitude}`))
+                          const hasDefaultCoordinates = (selectedBulkGroup.events || []).every(e => e.latitude === 0 && e.longitude === 0)
                           
                           console.log('Checking individual coordinate button:', {
                             uniqueCoordinates: uniqueCoordinates.size,
                             hasDefaultCoordinates,
-                            events: selectedBulkGroup.events.length
+                            events: (selectedBulkGroup.events || []).length
                           })
                           
                           // Show button for any group of events (not just when they all have same coordinates)
-                          console.log('Rendering individual coordinate button for', selectedBulkGroup.events.length, 'events')
+                          console.log('Rendering individual coordinate button for', (selectedBulkGroup.events || []).length, 'events')
                           return (
                             <TouchableOpacity
                               style={styles.individualCoordinateButton}
                               onPress={() => {
-                                console.log('Button pressed! Opening coordinate assignment editor for', selectedBulkGroup.events.length, 'events')
+                                console.log('Button pressed! Opening coordinate assignment editor for', (selectedBulkGroup.events || []).length, 'events')
                                 console.log('Current showCoordinateAssignmentEditor state:', showCoordinateAssignmentEditor)
-                                openCoordinateAssignmentEditor(selectedBulkGroup.events)
+                                openCoordinateAssignmentEditor(selectedBulkGroup.events || [])
                                 console.log('After calling openCoordinateAssignmentEditor, showCoordinateAssignmentEditor should be true')
                               }}
                             >
                               <Text style={styles.individualCoordinateButtonText}>
-                                🎯 Assign Individual Coordinates ({selectedBulkGroup.events.length} events)
+                                🎯 Assign Individual Coordinates ({(selectedBulkGroup.events || []).length} events)
                               </Text>
                             </TouchableOpacity>
                           )
@@ -1089,7 +1252,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                     
                     {/* Event List */}
                     <FlatList
-                      data={selectedBulkGroup.events}
+                      data={selectedBulkGroup.events || []}
                       keyExtractor={(item) => item.id}
                       renderItem={({ item }) => (
                         <TouchableOpacity
@@ -1188,6 +1351,15 @@ const EventEditor: React.FC<EventEditorProps> = ({
                 </Text>
                 <Text style={styles.locationIcon}>📍</Text>
               </TouchableOpacity>
+              
+              {startLocationPicker && (
+                <TouchableOpacity
+                  style={styles.mapPickerButton}
+                  onPress={handleMapLocationPicker}
+                >
+                  <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+                </TouchableOpacity>
+              )}
 
               <Text style={styles.fieldLabel}>Coordinates</Text>
               <Text style={styles.helpText}>
@@ -1224,18 +1396,20 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
               <Text style={styles.fieldLabel}>Date</Text>
               <TextInput
-                style={styles.input}
-                value={date}
-                onChangeText={setDate}
+                style={styles.textInput}
                 placeholder="YYYY-MM-DD"
+                value={date}
+                onChangeText={handleDateChange}
+                keyboardType="numeric"
               />
 
               <Text style={styles.fieldLabel}>Time</Text>
               <TextInput
-                style={styles.input}
-                value={time}
-                onChangeText={setTime}
+                style={styles.textInput}
                 placeholder="HH:MM"
+                value={time}
+                onChangeText={handleTimeChange}
+                keyboardType="numeric"
               />
 
               <Text style={styles.fieldLabel}>Organizer</Text>
@@ -1265,13 +1439,15 @@ const EventEditor: React.FC<EventEditorProps> = ({
               />
 
               <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.button, styles.dangerButton]}
-                  onPress={deleteEventHandler}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.dangerButtonText}>Delete</Text>
-                </TouchableOpacity>
+                {editingEvent && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.dangerButton]}
+                    onPress={deleteEventHandler}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.dangerButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={[styles.button, styles.primaryButton]}
                   onPress={saveEvent}
@@ -1283,7 +1459,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                       <Text style={styles.primaryButtonText}>Saving...</Text>
                     </View>
                   ) : (
-                    <Text style={styles.primaryButtonText}>Save</Text>
+                    <Text style={styles.primaryButtonText}>{editingEvent ? 'Save' : 'Create Event'}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1420,6 +1596,15 @@ const EventEditor: React.FC<EventEditorProps> = ({
                    </Text>
                    <Text style={styles.locationIcon}>📍</Text>
                  </TouchableOpacity>
+                 
+                 {startLocationPicker && (
+                   <TouchableOpacity
+                     style={styles.mapPickerButton}
+                     onPress={handleMapLocationPicker}
+                   >
+                     <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+                   </TouchableOpacity>
+                 )}
 
                  <Text style={styles.fieldLabel}>Coordinates</Text>
                  <Text style={styles.helpText}>
@@ -1455,20 +1640,26 @@ const EventEditor: React.FC<EventEditorProps> = ({
                  </View>
 
                  <Text style={styles.fieldLabel}>Date</Text>
-                <TextInput
-                  style={styles.input}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="YYYY-MM-DD"
-                />
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {formatDateForDisplay(date)}
+                  </Text>
+                  <Text style={styles.dateTimeButtonIcon}>📅</Text>
+                </TouchableOpacity>
 
                 <Text style={styles.fieldLabel}>Time</Text>
-                <TextInput
-                  style={styles.input}
-                  value={time}
-                  onChangeText={setTime}
-                  placeholder="HH:MM"
-                />
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {formatTimeForDisplay(time)}
+                  </Text>
+                  <Text style={styles.dateTimeButtonIcon}>🕐</Text>
+                </TouchableOpacity>
 
                 <Text style={styles.fieldLabel}>Organizer</Text>
                 <TextInput
@@ -1615,6 +1806,15 @@ const EventEditor: React.FC<EventEditorProps> = ({
              </Text>
              <Text style={styles.locationIcon}>📍</Text>
            </TouchableOpacity>
+           
+           {startLocationPicker && (
+             <TouchableOpacity
+               style={styles.mapPickerButton}
+               onPress={handleMapLocationPicker}
+             >
+               <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+             </TouchableOpacity>
+           )}
 
            <Text style={styles.fieldLabel}>Coordinates</Text>
            <Text style={styles.helpText}>
@@ -1676,11 +1876,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
                )}
              </TouchableOpacity>
            </View>
+           
+           
          </ScrollView>
+         
+
        </View>
-     </Modal>
-   </>
- )
+                        </Modal>
+     
+
+     </>
+   )
  }
 
 const styles = StyleSheet.create({
@@ -1830,6 +2036,20 @@ const styles = StyleSheet.create({
   },
   locationIcon: {
     fontSize: 20,
+  },
+  mapPickerButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  mapPickerButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   categoryButtons: {
     flexDirection: 'row',
@@ -2383,6 +2603,7 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '600',
   },
+
 })
 
 export default EventEditor

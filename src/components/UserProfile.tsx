@@ -73,7 +73,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     setIsAuthenticated(authenticated)
     
     if (user) {
-      setPreferences(user.preferences)
+      setPreferences(user.preferences || {
+        notifications: true,
+        emailUpdates: true,
+        defaultRadius: 10,
+        favoriteCategories: [],
+        language: 'en',
+        theme: 'auto'
+      })
       // Load premium features
       const features = await userService.getPremiumFeatures()
       setPremiumFeatures(features)
@@ -123,15 +130,32 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         loadUserData()
         resetAuthForm()
       } else {
+        // Show the specific error message from the backend
+        let errorMessage = result.error || (authMode === 'signup' 
+          ? 'Failed to create account. Please try again.' 
+          : 'Sign in failed. Please check your credentials and try again.')
+        
+        // Handle validation errors with details
+        if (result.error === 'Validation failed' && result.details) {
+          const fieldErrors = result.details.map((detail: any) => detail.msg).join('\n• ')
+          errorMessage = `Please fix the following:\n• ${fieldErrors}`
+        }
+        
+        // Handle specific error cases
+        if (result.error === 'Invalid email or password') {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.'
+        } else if (result.error === 'User with this email already exists') {
+          errorMessage = 'An account with this email already exists. Please sign in instead.'
+        }
+        
         Alert.alert(
-          'Error', 
-          authMode === 'signup' 
-            ? 'Failed to create account. Please try again.' 
-            : 'Sign in failed. Please check your credentials and try again.'
+          'Authentication Error', 
+          errorMessage
         )
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred')
+      console.error('Authentication error:', error)
+      Alert.alert('Error', 'Network error. Please check your internet connection and try again.')
     } finally {
       setIsAuthLoading(false)
     }
@@ -161,11 +185,49 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
       return
     }
 
+    const planPrice = selectedPlan === 'monthly' ? '$9.99/month' : '$99.99/year'
+    const planName = selectedPlan === 'monthly' ? 'Monthly' : 'Yearly'
+
     Alert.alert(
-      'Subscribe to Premium',
-      'Premium subscription features are coming soon!',
+      'Confirm Subscription',
+      `Subscribe to ${planName} Premium plan for ${planPrice}?\n\nThis is a demo - no actual payment will be charged.`,
       [
-        { text: 'OK', style: 'default' }
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Subscribe',
+          onPress: async () => {
+            try {
+              setIsAuthLoading(true)
+              const result = await userService.upgradeSubscription(selectedPlan, true)
+              
+              if (result.success) {
+                Alert.alert(
+                  'Success!',
+                  `You've successfully subscribed to the ${planName} Premium plan! Welcome to premium features.`,
+                  [{ text: 'OK', onPress: () => {
+                    setShowSubscriptionModal(false)
+                    loadUserData() // Refresh user data to show new subscription status
+                  }}]
+                )
+              } else {
+                Alert.alert(
+                  'Subscription Failed',
+                  result.error || 'Failed to process subscription. Please try again.',
+                  [{ text: 'OK' }]
+                )
+              }
+            } catch (error) {
+              console.error('Subscription error:', error)
+              Alert.alert(
+                'Error',
+                'An unexpected error occurred. Please try again.',
+                [{ text: 'OK' }]
+              )
+            } finally {
+              setIsAuthLoading(false)
+            }
+          }
+        }
       ]
     )
   }
@@ -173,9 +235,42 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const handleCancelSubscription = async () => {
     Alert.alert(
       'Cancel Subscription',
-      'Subscription management features are coming soon!',
+      'Are you sure you want to cancel your premium subscription? You will lose access to premium features at the end of your current billing period.',
       [
-        { text: 'OK', style: 'default' }
+        { text: 'Keep Subscription', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsAuthLoading(true)
+              const result = await userService.cancelSubscription()
+              
+              if (result.success) {
+                Alert.alert(
+                  'Subscription Cancelled',
+                  'Your premium subscription has been cancelled. You will retain access to premium features until the end of your current billing period.',
+                  [{ text: 'OK', onPress: () => loadUserData() }]
+                )
+              } else {
+                Alert.alert(
+                  'Cancellation Failed',
+                  result.error || 'Failed to cancel subscription. Please try again.',
+                  [{ text: 'OK' }]
+                )
+              }
+            } catch (error) {
+              console.error('Cancellation error:', error)
+              Alert.alert(
+                'Error',
+                'An unexpected error occurred. Please try again.',
+                [{ text: 'OK' }]
+              )
+            } finally {
+              setIsAuthLoading(false)
+            }
+          }
+        }
       ]
     )
   }
@@ -183,9 +278,42 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const handleReactivateSubscription = async () => {
     Alert.alert(
       'Reactivate Subscription',
-      'Subscription management features are coming soon!',
+      'Reactivate your premium subscription with the same plan?',
       [
-        { text: 'OK', style: 'default' }
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reactivate',
+          onPress: async () => {
+            try {
+              setIsAuthLoading(true)
+              const currentPlan = currentUser?.subscription?.plan || 'monthly'
+              const result = await userService.reactivateSubscription(currentPlan as 'monthly' | 'yearly', true)
+              
+              if (result.success) {
+                Alert.alert(
+                  'Subscription Reactivated!',
+                  'Your premium subscription has been reactivated. Welcome back to premium features!',
+                  [{ text: 'OK', onPress: () => loadUserData() }]
+                )
+              } else {
+                Alert.alert(
+                  'Reactivation Failed',
+                  result.error || 'Failed to reactivate subscription. Please try again.',
+                  [{ text: 'OK' }]
+                )
+              }
+            } catch (error) {
+              console.error('Reactivation error:', error)
+              Alert.alert(
+                'Error',
+                'An unexpected error occurred. Please try again.',
+                [{ text: 'OK' }]
+              )
+            } finally {
+              setIsAuthLoading(false)
+            }
+          }
+        }
       ]
     )
   }
@@ -206,7 +334,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     setAuthName('')
   }
 
-  const getSubscriptionStatusText = (subscription: Subscription): string => {
+  const getSubscriptionStatusText = (subscription?: Subscription): string => {
+    if (!subscription) return 'Free'
     if (subscription.status === 'premium') {
       if (subscription.endDate) {
         const endDate = new Date(subscription.endDate)
@@ -230,7 +359,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     return 'Free'
   }
 
-  const getSubscriptionColor = (subscription: Subscription): string => {
+  const getSubscriptionColor = (subscription?: Subscription): string => {
+    if (!subscription) return '#666'
     if (subscription.status === 'premium') {
       return '#FFD700'
     }
@@ -365,9 +495,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubscribe}>
+          <TouchableOpacity 
+            style={[styles.submitButton, isAuthLoading && styles.submitButtonDisabled]} 
+            onPress={handleSubscribe}
+            disabled={isAuthLoading}
+          >
             <Text style={styles.submitButtonText}>
-              Subscribe
+              {isAuthLoading ? 'Processing...' : 'Subscribe'}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -389,7 +523,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
           <View style={styles.preferenceItem}>
             <Text style={styles.preferenceLabel}>Push Notifications</Text>
             <Switch
-              value={preferences.notifications}
+              value={preferences?.notifications ?? true}
               onValueChange={(value) => setPreferences(prev => ({ ...prev, notifications: value }))}
             />
           </View>
@@ -397,7 +531,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
           <View style={styles.preferenceItem}>
             <Text style={styles.preferenceLabel}>Email Updates</Text>
             <Switch
-              value={preferences.emailUpdates}
+              value={preferences?.emailUpdates ?? true}
               onValueChange={(value) => setPreferences(prev => ({ ...prev, emailUpdates: value }))}
             />
           </View>
@@ -407,7 +541,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             <TextInput
               style={styles.textInput}
               placeholder="10"
-              value={preferences.defaultRadius.toString()}
+              value={(preferences?.defaultRadius || 10).toString()}
               onChangeText={(text) => setPreferences(prev => ({ ...prev, defaultRadius: parseInt(text) || 10 }))}
               keyboardType="numeric"
             />
@@ -460,9 +594,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.userEmail}>{currentUser?.email}</Text>
                   <Text style={[
                     styles.subscriptionStatus,
-                    { color: getSubscriptionColor(currentUser?.subscription!) }
+                    { color: getSubscriptionColor(currentUser?.subscription) }
                   ]}>
-                    {currentUser ? getSubscriptionStatusText(currentUser.subscription) : 'Free'}
+                    {currentUser?.subscription ? getSubscriptionStatusText(currentUser.subscription) : 'Free'}
                   </Text>
                 </View>
               </View>
@@ -473,21 +607,57 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.sectionTitle}>Your Activity</Text>
                   <View style={styles.statsGrid}>
                     <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats.eventsCreated}</Text>
+                      <Text style={styles.statNumber}>{currentUser.stats?.eventsCreated || 0}</Text>
                       <Text style={styles.statLabel}>Events Created</Text>
-                      {currentUser.subscription.status === 'free' && (
+                      {currentUser.subscription?.status === 'free' && (
                         <Text style={styles.dailyLimitText}>
                           {userFeatures.canCreateEventToday ? '1 event today' : '0 events today'}
                         </Text>
                       )}
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats.ratingsGiven}</Text>
+                      <Text style={styles.statNumber}>{currentUser.stats?.ratingsGiven || 0}</Text>
                       <Text style={styles.statLabel}>Ratings Given</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={styles.statNumber}>{currentUser.stats.totalEvents}</Text>
+                      <Text style={styles.statNumber}>{currentUser.stats?.totalEvents || 0}</Text>
                       <Text style={styles.statLabel}>Total Events</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Subscription Details */}
+              {currentUser?.subscription?.status === 'premium' && (
+                <View style={styles.subscriptionSection}>
+                  <Text style={styles.sectionTitle}>Premium Subscription</Text>
+                  <View style={styles.subscriptionDetails}>
+                    <View style={styles.subscriptionDetailItem}>
+                      <Text style={styles.subscriptionDetailLabel}>Plan:</Text>
+                      <Text style={styles.subscriptionDetailValue}>
+                        {currentUser.subscription.plan === 'monthly' ? 'Monthly ($9.99/month)' : 'Yearly ($99.99/year)'}
+                      </Text>
+                    </View>
+                    
+                    {currentUser.subscription.endDate && (
+                      <View style={styles.subscriptionDetailItem}>
+                        <Text style={styles.subscriptionDetailLabel}>
+                          {currentUser.subscription.autoRenew ? 'Renews:' : 'Expires:'}
+                        </Text>
+                        <Text style={styles.subscriptionDetailValue}>
+                          {new Date(currentUser.subscription.endDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    <View style={styles.subscriptionDetailItem}>
+                      <Text style={styles.subscriptionDetailLabel}>Status:</Text>
+                      <Text style={[
+                        styles.subscriptionDetailValue,
+                        { color: currentUser.subscription.autoRenew ? '#28a745' : '#ffc107' }
+                      ]}>
+                        {currentUser.subscription.autoRenew ? 'Active (Auto-renew)' : 'Active (Cancelled)'}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -506,7 +676,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.actionArrow}>›</Text>
                 </TouchableOpacity>
 
-                {currentUser?.subscription.status === 'free' ? (
+                {currentUser?.subscription?.status === 'free' ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={() => setShowSubscriptionModal(true)}
@@ -515,7 +685,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Upgrade</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : currentUser?.subscription.status === 'premium' && currentUser?.subscription.autoRenew ? (
+                ) : currentUser?.subscription?.status === 'premium' && currentUser?.subscription?.autoRenew ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={handleCancelSubscription}
@@ -524,7 +694,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Cancel</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : currentUser?.subscription.status === 'premium' && !currentUser?.subscription.autoRenew ? (
+                ) : currentUser?.subscription?.status === 'premium' && !currentUser?.subscription?.autoRenew ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={handleReactivateSubscription}
@@ -533,7 +703,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <Text style={styles.actionText}>Reactivate</Text>
                     <Text style={styles.actionArrow}>›</Text>
                   </TouchableOpacity>
-                ) : currentUser?.subscription.status === 'expired' ? (
+                ) : currentUser?.subscription?.status === 'expired' ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
                     onPress={() => setShowSubscriptionModal(true)}
@@ -555,7 +725,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
               </View>
 
               {/* Free User Limitations */}
-              {currentUser?.subscription.status === 'free' && (
+              {currentUser?.subscription?.status === 'free' && (
                 <View style={styles.limitationsSection}>
                   <Text style={styles.sectionTitle}>Free Plan Limitations</Text>
                   <View style={styles.limitationsList}>
@@ -574,7 +744,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
               )}
 
               {/* Premium Features */}
-              {currentUser?.subscription.status === 'premium' && currentUser?.subscription.autoRenew && (
+              {currentUser?.subscription?.status === 'premium' && currentUser?.subscription?.autoRenew && (
                 <View style={styles.premiumSection}>
                   <Text style={styles.sectionTitle}>Premium Features</Text>
                   <View style={styles.featuresList}>
@@ -908,6 +1078,32 @@ const styles = StyleSheet.create({
   upgradeButtonText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  subscriptionSection: {
+    marginBottom: 30,
+  },
+  subscriptionDetails: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 15,
+  },
+  subscriptionDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  subscriptionDetailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  subscriptionDetailValue: {
+    fontSize: 14,
+    color: '#333',
     fontWeight: '600',
   },
 })

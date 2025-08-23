@@ -466,6 +466,8 @@ class UserService {
   // Sign in user
   async signIn(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
+      console.log('🔐 Attempting sign in for:', email)
+      
       const response = await fetch(`${API_BASE_URL}/auth/signin`, {
         method: 'POST',
         headers: {
@@ -475,18 +477,17 @@ class UserService {
       })
 
       const result = await response.json()
+      console.log('📡 Sign in response status:', response.status)
+      console.log('📄 Sign in response:', JSON.stringify(result, null, 2))
 
       if (result.success) {
-        this.currentUser = result.user
-        this.authToken = result.token
-        this.refreshToken = result.refreshToken
+        console.log('✅ Sign in successful')
+        this.currentUser = result.data.user
+        this.authToken = result.data.accessToken
+        this.refreshToken = result.data.refreshToken
 
-        // Set user group based on subscription status
-        if (result.user.subscription.status === 'premium') {
-          this.currentUser!.userGroup = 'premium'
-        } else {
-          this.currentUser!.userGroup = 'registered'
-        }
+        // Set user group based on subscription status (default to registered for new users)
+        this.currentUser!.userGroup = 'registered'
 
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
@@ -494,9 +495,11 @@ class UserService {
 
         return { success: true, user: this.currentUser || undefined }
       } else {
+        console.log('❌ Sign in failed:', result.error)
         return { success: false, error: result.error || 'Sign in failed' }
       }
     } catch (error) {
+      console.log('❌ Sign in network error:', error)
       return { success: false, error: 'Network error' }
     }
   }
@@ -504,6 +507,8 @@ class UserService {
   // Sign up user
   async signUp(email: string, password: string, name: string): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
+      console.log('🔐 Attempting sign up for:', email)
+      
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: {
@@ -513,11 +518,14 @@ class UserService {
       })
 
       const result = await response.json()
+      console.log('📡 Sign up response status:', response.status)
+      console.log('📄 Sign up response:', JSON.stringify(result, null, 2))
 
       if (result.success) {
-        this.currentUser = result.user
-        this.authToken = result.token
-        this.refreshToken = result.refreshToken
+        console.log('✅ Sign up successful')
+        this.currentUser = result.data.user
+        this.authToken = result.data.accessToken
+        this.refreshToken = result.data.refreshToken
 
         // Set user group to registered for new users
         this.currentUser!.userGroup = 'registered'
@@ -528,9 +536,11 @@ class UserService {
 
         return { success: true, user: this.currentUser || undefined }
       } else {
+        console.log('❌ Sign up failed:', result.error)
         return { success: false, error: result.error || 'Sign up failed' }
       }
     } catch (error) {
+      console.log('❌ Sign up network error:', error)
       return { success: false, error: 'Network error' }
     }
   }
@@ -571,6 +581,136 @@ class UserService {
     }
 
     return false
+  }
+
+  // Subscription management methods
+  async upgradeSubscription(plan: 'monthly' | 'yearly', autoRenew: boolean = true): Promise<{ success: boolean; error?: string; data?: any }> {
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.currentUser) {
+        return { success: false, error: 'User not authenticated' }
+      }
+
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/upgrade`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ plan, autoRenew })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Update local user data
+        this.currentUser.subscription = {
+          status: result.data.status,
+          plan: result.data.plan,
+          startDate: result.data.startDate,
+          endDate: result.data.endDate,
+          autoRenew: result.data.autoRenew,
+          features: result.data.features
+        }
+
+        // Update user group to premium
+        this.currentUser.userGroup = 'premium'
+
+        // Save to storage
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+
+        return { success: true, data: result.data }
+      }
+
+      return { success: false, error: result.error || 'Failed to upgrade subscription' }
+    } catch (error) {
+      console.error('Upgrade subscription error:', error)
+      return { success: false, error: 'Network error occurred' }
+    }
+  }
+
+  async cancelSubscription(): Promise<{ success: boolean; error?: string; data?: any }> {
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.currentUser) {
+        return { success: false, error: 'User not authenticated' }
+      }
+
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/cancel`, {
+        method: 'POST',
+        headers
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Update local user data
+        this.currentUser.subscription.status = 'expired'
+        this.currentUser.subscription.autoRenew = false
+        this.currentUser.userGroup = 'registered'
+
+        // Save to storage
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+
+        return { success: true, data: result.data }
+      }
+
+      return { success: false, error: result.error || 'Failed to cancel subscription' }
+    } catch (error) {
+      console.error('Cancel subscription error:', error)
+      return { success: false, error: 'Network error occurred' }
+    }
+  }
+
+  async reactivateSubscription(plan: 'monthly' | 'yearly', autoRenew: boolean = true): Promise<{ success: boolean; error?: string; data?: any }> {
+    try {
+      await this.ensureInitialized()
+      
+      if (!this.currentUser) {
+        return { success: false, error: 'User not authenticated' }
+      }
+
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/subscription/reactivate`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ plan, autoRenew })
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Update local user data
+        this.currentUser.subscription = {
+          status: result.data.status,
+          plan: result.data.plan,
+          startDate: result.data.startDate,
+          endDate: result.data.endDate,
+          autoRenew: result.data.autoRenew,
+          features: result.data.features
+        }
+
+        // Update user group to premium
+        this.currentUser.userGroup = 'premium'
+
+        // Save to storage
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+
+        return { success: true, data: result.data }
+      }
+
+      return { success: false, error: result.error || 'Failed to reactivate subscription' }
+    } catch (error) {
+      console.error('Reactivate subscription error:', error)
+      return { success: false, error: 'Network error occurred' }
+    }
   }
 }
 

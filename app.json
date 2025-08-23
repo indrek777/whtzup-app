@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "icon": "assets/icon_assets/Expo/icon.png",
     "userInterfaceStyle": "light",
+    "statusBar": {
+      "style": "light",
+      "backgroundColor": "#000000",
+      "translucent": true
+    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -24,7 +29,8 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to show events near you",
         "NSCameraUsageDescription": "This app uses camera to take photos for events",
         "NSPhotoLibraryUsageDescription": "This app uses photo library to select images for events",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIStatusBarHidden": true
       }
     },
     "android": {
