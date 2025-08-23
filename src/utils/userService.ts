@@ -471,10 +471,48 @@ class UserService {
       return {}
     }
     
+    // Check if token is expired and try to refresh it
+    if (this.isTokenExpired()) {
+      console.log('🔄 Token expired, attempting refresh...')
+      const refreshed = await this.refreshAuthToken()
+      if (!refreshed) {
+        console.log('❌ Token refresh failed, clearing auth data')
+        await this.signOut()
+        return {}
+      }
+      console.log('✅ Token refreshed successfully')
+    }
+    
     return {
       'Authorization': `Bearer ${this.authToken}`,
       'Content-Type': 'application/json'
     }
+  }
+
+  // Check if token is expired (simple check - can be enhanced with JWT decode)
+  private isTokenExpired(): boolean {
+    if (!this.authToken) return true
+    
+    try {
+      // Simple check - if token exists, assume it's valid for now
+      // In a real app, you'd decode the JWT and check the exp claim
+      // For now, we'll rely on the backend to return 401 for expired tokens
+      return false
+    } catch (error) {
+      return true
+    }
+  }
+
+  // Handle 401 responses by attempting token refresh
+  async handleUnauthorizedResponse(): Promise<boolean> {
+    console.log('🔄 Handling 401 response, attempting token refresh...')
+    const refreshed = await this.refreshAuthToken()
+    if (!refreshed) {
+      console.log('❌ Token refresh failed, user needs to sign in again')
+      await this.signOut()
+      return false
+    }
+    return true
   }
 
   // Sign in user
@@ -572,9 +610,13 @@ class UserService {
 
   // Refresh authentication token
   async refreshAuthToken(): Promise<boolean> {
-    if (!this.refreshToken) return false
+    if (!this.refreshToken) {
+      console.log('❌ No refresh token available')
+      return false
+    }
 
     try {
+      console.log('🔄 Attempting to refresh token...')
       const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
@@ -584,17 +626,26 @@ class UserService {
       })
 
       const result = await response.json()
+      console.log('📡 Token refresh response status:', response.status)
+      console.log('📄 Token refresh response:', JSON.stringify(result, null, 2))
 
-      if (result.success) {
-        this.authToken = result.token
+      if (result.success && result.data) {
+        this.authToken = result.data.accessToken
+        if (result.data.refreshToken) {
+          this.refreshToken = result.data.refreshToken
+          await AsyncStorage.setItem('refresh_token', this.refreshToken)
+        }
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
+        console.log('✅ Token refreshed successfully')
         return true
+      } else {
+        console.log('❌ Token refresh failed:', result.error || 'Unknown error')
+        return false
       }
     } catch (error) {
-      console.error('Error refreshing token:', error)
+      console.error('❌ Token refresh network error:', error)
+      return false
     }
-
-    return false
   }
 
   // Subscription management methods
@@ -752,7 +803,23 @@ class UserService {
           return result.data
         }
       } else if (response.status === 401) {
-        console.log('Token expired, using local data')
+        console.log('🔄 Token expired, attempting refresh...')
+        const refreshed = await this.handleUnauthorizedResponse()
+        if (refreshed) {
+          // Retry the request with new token
+          const newHeaders = await this.getAuthHeaders()
+          const retryResponse = await fetch(`${API_BASE_URL}/subscription/usage`, {
+            method: 'GET',
+            headers: newHeaders
+          })
+          if (retryResponse.ok) {
+            const retryResult = await retryResponse.json()
+            if (retryResult.success) {
+              return retryResult.data
+            }
+          }
+        }
+        console.log('Using default usage data after token refresh failure')
         return this.getDefaultUsageData()
       }
     } catch (error) {
@@ -815,7 +882,23 @@ class UserService {
           return result.data
         }
       } else if (response.status === 401) {
-        console.log('Token expired, no billing history available')
+        console.log('🔄 Token expired, attempting refresh...')
+        const refreshed = await this.handleUnauthorizedResponse()
+        if (refreshed) {
+          // Retry the request with new token
+          const newHeaders = await this.getAuthHeaders()
+          const retryResponse = await fetch(`${API_BASE_URL}/subscription/billing`, {
+            method: 'GET',
+            headers: newHeaders
+          })
+          if (retryResponse.ok) {
+            const retryResult = await retryResponse.json()
+            if (retryResult.success) {
+              return retryResult.data
+            }
+          }
+        }
+        console.log('No billing history available after token refresh failure')
         return []
       }
     } catch (error) {
@@ -893,7 +976,23 @@ class UserService {
           return result.data
         }
       } else if (response.status === 401) {
-        console.log('Token expired, using default features')
+        console.log('🔄 Token expired, attempting refresh...')
+        const refreshed = await this.handleUnauthorizedResponse()
+        if (refreshed) {
+          // Retry the request with new token
+          const newHeaders = await this.getAuthHeaders()
+          const retryResponse = await fetch(`${API_BASE_URL}/subscription/features`, {
+            method: 'GET',
+            headers: newHeaders
+          })
+          if (retryResponse.ok) {
+            const retryResult = await retryResponse.json()
+            if (retryResult.success) {
+              return retryResult.data
+            }
+          }
+        }
+        console.log('Using default features after token refresh failure')
         return this.getDefaultFeatures()
       }
     } catch (error) {

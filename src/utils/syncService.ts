@@ -249,6 +249,14 @@ class SyncService {
           errorMessage = 'Server error. Please try again later.';
         }
         
+        // For DELETE requests with 404, return a response object instead of throwing
+        if (options.method === 'DELETE' && response.status === 404) {
+          return {
+            success: false,
+            error: errorMessage
+          };
+        }
+        
         throw new Error(errorMessage);
       }
 
@@ -442,6 +450,16 @@ class SyncService {
             deviceId: this.deviceId
           });
         } else {
+          // Check if it's a 404 error (event not found on backend)
+          if (response.error === 'Event not found' || response.error === 'The requested item was not found.') {
+            console.log('⚠️ Event not found on backend, treating as successful deletion (data sync issue)');
+            // Still emit the delete event for consistency
+            this.socket?.emit('event-deleted', {
+              eventId,
+              deviceId: this.deviceId
+            });
+            return; // Don't throw error, treat as successful deletion
+          }
           throw new Error(response.error);
         }
       } else {
