@@ -27,7 +27,7 @@ interface Conflict {
 }
 
 // Configuration
-const API_BASE_URL = __DEV__ ? 'http://localhost:4000' : 'https://olympio.ee';
+const API_BASE_URL = 'http://olympio.ee:4000';
 const SYNC_INTERVAL = 30000; // 30 seconds
 const MAX_RETRY_COUNT = 3;
 

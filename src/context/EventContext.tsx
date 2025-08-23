@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
 import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
+import { syncService } from '../utils/syncService'
 import { Event } from '../data/events'
 
 // Helper function to determine category - comprehensive version
@@ -275,6 +276,13 @@ interface EventContextType {
   events: Event[]
   selectedEvent: Event | null
   userLocation: [number, number] | null
+  isLoading: boolean
+  syncStatus: {
+    isOnline: boolean
+    lastSyncAt: string | null
+    pendingOperations: number
+    errors: string[]
+  }
   setSelectedEvent: (event: Event | null) => void
   setUserLocation: (location: [number, number]) => void
   setEvents: (events: Event[]) => void
@@ -303,55 +311,72 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [syncStatus, setSyncStatus] = useState({
+    isOnline: false,
+    lastSyncAt: null as string | null,
+    pendingOperations: 0,
+    errors: [] as string[]
+  })
 
-  // Load events from imported data and storage
+  // Load events with sync service integration
   useEffect(() => {
     const loadEvents = async () => {
       try {
-        // First try to load from server API
-        const response = await fetch('http://localhost:4000/api/events')
-        if (response.ok) {
-          const serverEvents = await response.json()
-          if (Array.isArray(serverEvents) && serverEvents.length > 0) {
-            // Convert server format to Event format
-            const events: Event[] = serverEvents.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              description: item.description,
-              category: item.category || determineCategory(item.name, item.description),
-              venue: item.venue || item.address || 'Various locations',
-              address: item.address || item.venue || 'Location TBD',
-              latitude: Number(item.latitude) || 0,
-              longitude: Number(item.longitude) || 0,
-              startsAt: item.startsAt || new Date().toISOString(),
-              createdBy: item.createdBy || (item.source === 'csv' ? 'Local Organizer' : 'Event Organizer'),
-              createdAt: item.createdAt || new Date().toISOString(),
-              updatedAt: item.updatedAt || new Date().toISOString(),
-              source: item.source || 'app',
-              url: item.url || 'https://example.com/event'
-            }))
-            
+        setIsLoading(true)
+        console.log('🔄 Loading events with sync service...')
+        
+        // Get sync status
+        const status = await syncService.getSyncStatusAsync()
+        setSyncStatus(status)
+        
+        // Try to fetch events from backend via sync service
+        try {
+          const serverEvents = await syncService.fetchEvents()
+          console.log(`✅ Loaded ${serverEvents.length} events from backend`)
+          
+          if (serverEvents.length > 0) {
             // Process events with venue storage to auto-fix coordinates
-            const processedEvents = await processEventsWithVenueStorage(events)
+            const processedEvents = await processEventsWithVenueStorage(serverEvents)
             setEvents(processedEvents)
+            setIsLoading(false)
             return
           }
+        } catch (syncError) {
+          console.log('⚠️ Sync service failed, falling back to cached events:', syncError)
+        }
+        
+        // Fallback to cached events from sync service
+        try {
+          const cachedEvents = await syncService.getCachedEventsImmediate()
+          console.log(`📦 Loaded ${cachedEvents.length} cached events`)
+          
+          if (cachedEvents.length > 0) {
+            const processedEvents = await processEventsWithVenueStorage(cachedEvents)
+            setEvents(processedEvents)
+            setIsLoading(false)
+            return
+          }
+        } catch (cacheError) {
+          console.log('⚠️ Cache failed, falling back to local storage:', cacheError)
         }
         
         // Fallback to localStorage
         const storedEvents = await loadEventsFromStorage()
         if (storedEvents.length > 0) {
+          console.log(`💾 Loaded ${storedEvents.length} events from local storage`)
           const processedEvents = await processEventsWithVenueStorage(storedEvents)
           setEvents(processedEvents)
         } else {
-          // Fallback to JSON file if no stored events
+          // Final fallback to JSON file if no stored events
           const importedEvents = await loadAllEvents()
+          console.log(`📄 Loaded ${importedEvents.length} events from JSON file`)
           const processedEvents = await processEventsWithVenueStorage(importedEvents)
           setEvents(processedEvents)
         }
       } catch (error) {
-        console.error('Error loading events:', error)
-        // Fallback to mock data if import fails
+        console.error('❌ Error loading events:', error)
+        // Fallback to mock data if everything fails
         const mockEvents: Event[] = [
           {
             id: '1',
@@ -387,54 +412,158 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
           }
         ]
         setEvents(mockEvents)
+      } finally {
+        setIsLoading(false)
       }
     }
     
     loadEvents()
   }, [])
 
-  const addEvent = async (event: Event) => {
-    // Process the new event with venue storage
-    const processedEvents = await processEventsWithVenueStorage([event])
-    const processedEvent = processedEvents[0]
-    
-    setEvents(prev => {
-      const updatedEvents = [...prev, processedEvent]
-      
-      // Save to storage
-      saveEventsToFile(updatedEvents).catch(error => {
-        console.error('Error saving events:', error)
+  // Setup sync service listeners
+  useEffect(() => {
+    // Listen for real-time updates
+    const handleEventCreated = (newEvent: Event) => {
+      console.log('🆕 Received event created via sync:', newEvent.name)
+      setEvents(prev => {
+        const updatedEvents = [...prev, newEvent]
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
       })
-      return updatedEvents
+    }
+
+    const handleEventUpdated = (updatedEvent: Event) => {
+      console.log('🔄 Received event updated via sync:', updatedEvent.name)
+      setEvents(prev => {
+        const updatedEvents = prev.map(event => 
+          event.id === updatedEvent.id ? updatedEvent : event
+        )
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
+      })
+    }
+
+    const handleEventDeleted = (data: { eventId: string }) => {
+      console.log('🗑️ Received event deleted via sync:', data.eventId)
+      setEvents(prev => {
+        const updatedEvents = prev.filter(event => event.id !== data.eventId)
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
+      })
+    }
+
+    const handleSyncStatus = (status: any) => {
+      setSyncStatus(prev => ({ ...prev, ...status }))
+    }
+
+    // Add listeners
+    syncService.addListener('eventCreated', handleEventCreated)
+    syncService.addListener('eventUpdated', handleEventUpdated)
+    syncService.addListener('eventDeleted', handleEventDeleted)
+    syncService.addListener('networkStatus', handleSyncStatus)
+    syncService.addListener('pendingOperations', (operations: any[]) => {
+      setSyncStatus(prev => ({ ...prev, pendingOperations: operations.length }))
     })
+
+    // Cleanup listeners on unmount
+    return () => {
+      syncService.removeListener('eventCreated', handleEventCreated)
+      syncService.removeListener('eventUpdated', handleEventUpdated)
+      syncService.removeListener('eventDeleted', handleEventDeleted)
+      syncService.removeListener('networkStatus', handleSyncStatus)
+      syncService.removeListener('pendingOperations', () => {})
+    }
+  }, [])
+
+  const addEvent = async (event: Event) => {
+    try {
+      console.log('➕ Adding event via sync service:', event.name)
+      
+      // Process the new event with venue storage
+      const processedEvents = await processEventsWithVenueStorage([event])
+      const processedEvent = processedEvents[0]
+      
+      // Use sync service to create event
+      const createdEvent = await syncService.createEvent(processedEvent)
+      
+      // Update local state
+      setEvents(prev => {
+        const updatedEvents = [...prev, createdEvent]
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
+      })
+      
+      console.log('✅ Event created successfully:', createdEvent.name)
+    } catch (error) {
+      console.error('❌ Error creating event:', error)
+      throw error
+    }
   }
 
   const updateEvent = async (eventId: string, updatedEvent: Event) => {
-    // Process the updated event with venue storage
-    const processedEvents = await processEventsWithVenueStorage([updatedEvent])
-    const processedEvent = processedEvents[0]
-    
-    setEvents(prev => {
-      const updatedEvents = prev.map(event => 
-        event.id === eventId ? processedEvent : event
-      )
-      // Save to storage
-      saveEventsToFile(updatedEvents).catch(error => {
-        console.error('Error saving events:', error)
+    try {
+      console.log('🔄 Updating event via sync service:', updatedEvent.name)
+      
+      // Process the updated event with venue storage
+      const processedEvents = await processEventsWithVenueStorage([updatedEvent])
+      const processedEvent = processedEvents[0]
+      
+      // Use sync service to update event
+      const result = await syncService.updateEvent(processedEvent)
+      
+      // Update local state
+      setEvents(prev => {
+        const updatedEvents = prev.map(event => 
+          event.id === eventId ? result : event
+        )
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
       })
-      return updatedEvents
-    })
+      
+      console.log('✅ Event updated successfully:', result.name)
+    } catch (error) {
+      console.error('❌ Error updating event:', error)
+      throw error
+    }
   }
 
-  const deleteEvent = (eventId: string) => {
-    setEvents(prev => {
-      const updatedEvents = prev.filter(event => event.id !== eventId)
-      // Save to storage
-      saveEventsToFile(updatedEvents).catch(error => {
-        console.error('Error saving events:', error)
+  const deleteEvent = async (eventId: string) => {
+    try {
+      console.log('🗑️ Deleting event via sync service:', eventId)
+      
+      // Use sync service to delete event
+      await syncService.deleteEvent(eventId)
+      
+      // Update local state
+      setEvents(prev => {
+        const updatedEvents = prev.filter(event => event.id !== eventId)
+        // Save to local storage as backup
+        saveEventsToFile(updatedEvents).catch(error => {
+          console.error('Error saving events:', error)
+        })
+        return updatedEvents
       })
-      return updatedEvents
-    })
+      
+      console.log('✅ Event deleted successfully:', eventId)
+    } catch (error) {
+      console.error('❌ Error deleting event:', error)
+      throw error
+    }
   }
 
   // Rating functionality removed as it's not part of the Event interface from data/events.ts
@@ -515,6 +644,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     events,
     selectedEvent,
     userLocation,
+    isLoading,
+    syncStatus,
     setSelectedEvent,
     setUserLocation,
     setEvents,
