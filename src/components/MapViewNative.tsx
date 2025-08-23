@@ -8,7 +8,10 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  SafeAreaView,
+  StatusBar,
+  Platform
 } from 'react-native'
 import MapView, { Marker, Region } from 'react-native-maps'
 import * as Location from 'expo-location'
@@ -16,6 +19,10 @@ import { loadEventsPartially } from '../utils/eventLoader'
 import { Event } from '../data/events'
 import EventEditor from './EventEditor'
 import { useEvents } from '../context/EventContext'
+import UserGroupBanner from './UserGroupBanner'
+import UserGroupManager from './UserGroupManager'
+import UserProfile from './UserProfile'
+import { userService } from '../utils/userService'
 
 // Clustering interfaces
 interface EventCluster {
@@ -534,6 +541,8 @@ const MapViewNative: React.FC = () => {
   const [selectedCluster, setSelectedCluster] = useState<EventCluster | null>(null)
   const [clusterSearchQuery, setClusterSearchQuery] = useState('')
   const [clusterPageIndex, setClusterPageIndex] = useState(0)
+  const [showUserGroupManager, setShowUserGroupManager] = useState(false)
+  const [showUserProfile, setShowUserProfile] = useState(false)
   
   // Map reference
   const mapRef = useRef<MapView>(null)
@@ -692,7 +701,8 @@ const MapViewNative: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       {/* Map */}
       <MapView
         ref={mapRef}
@@ -721,6 +731,20 @@ const MapViewNative: React.FC = () => {
         {/* Render simple markers */}
         {markers}
       </MapView>
+
+      {/* Profile Button */}
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() => setShowUserProfile(true)}
+      >
+        <Text style={styles.profileButtonText}>👤</Text>
+      </TouchableOpacity>
+
+             {/* User Group Banner */}
+             <UserGroupBanner 
+               onUpgradePress={() => setShowUserGroupManager(true)}
+               showUpgradeButton={true}
+             />
 
              {/* Location and Radius Info */}
        {userLocation && (
@@ -1091,7 +1115,19 @@ const MapViewNative: React.FC = () => {
             })()}
           </View>
         </Modal>
-    </View>
+
+        {/* User Group Manager Modal */}
+        <UserGroupManager
+          visible={showUserGroupManager}
+          onClose={() => setShowUserGroupManager(false)}
+        />
+
+        {/* User Profile Modal */}
+        <UserProfile
+          visible={showUserProfile}
+          onClose={() => setShowUserProfile(false)}
+        />
+    </SafeAreaView>
   )
 }
 
@@ -1274,20 +1310,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  createEventButton: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
+      createEventButton: {
+      position: 'absolute',
+      bottom: Platform.OS === 'ios' ? 40 : 30,
+      right: 20,
+      backgroundColor: '#007AFF',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 25,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    },
   createEventButtonText: {
     color: 'white',
     fontSize: 16,
@@ -1405,46 +1441,46 @@ const styles = StyleSheet.create({
      fontWeight: 'bold',
      color: '#333',
    },
-   backgroundLoadingContainer: {
-     position: 'absolute',
-     top: 20,
-     left: 20,
-     right: 20,
-     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-     padding: 10,
-     borderRadius: 8,
-     flexDirection: 'row',
-     alignItems: 'center',
-     justifyContent: 'center',
-     shadowColor: '#000',
-     shadowOffset: { width: 0, height: 2 },
-     shadowOpacity: 0.1,
-     shadowRadius: 4,
-     elevation: 3,
-   },
+       backgroundLoadingContainer: {
+      position: 'absolute',
+      top: Platform.OS === 'ios' ? 10 : 20,
+      left: 20,
+      right: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      padding: 10,
+      borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
    backgroundLoadingText: {
      marginLeft: 8,
      fontSize: 14,
      color: '#666',
      fontWeight: '500',
    },
-   locationInfoContainer: {
-     position: 'absolute',
-     top: 60,
-     left: 20,
-     right: 20,
-     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-     padding: 12,
-     borderRadius: 8,
-     flexDirection: 'row',
-     alignItems: 'center',
-     justifyContent: 'space-between',
-     shadowColor: '#000',
-     shadowOffset: { width: 0, height: 2 },
-     shadowOpacity: 0.1,
-     shadowRadius: 4,
-     elevation: 3,
-   },
+       locationInfoContainer: {
+      position: 'absolute',
+      top: Platform.OS === 'ios' ? 70 : 60,
+      left: 20,
+      right: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      padding: 12,
+      borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
    locationInfoText: {
      fontSize: 14,
      color: '#333',
@@ -1474,6 +1510,25 @@ const styles = StyleSheet.create({
     dateFilterButtonText: {
       fontSize: 16,
       color: 'white',
+    },
+    profileButton: {
+      position: 'absolute',
+      top: Platform.OS === 'ios' ? 10 : 50,
+      right: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      borderRadius: 25,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+      zIndex: 1000,
+    },
+    profileButtonText: {
+      fontSize: 20,
+      color: '#007AFF',
     },
   })
 

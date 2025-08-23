@@ -959,9 +959,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
                       <Text style={styles.sectionTitle}>
                         {groupByCoordinates ? 'Events by Coordinates' : 'Events by Venue'}
                       </Text>
-                                            {bulkEditGroups.map((group, index) => {
-                        const typedGroup = group as BulkEditGroup
-                        const isSelected = selectedBulkGroup && selectedBulkGroup.venue === typedGroup.venue
+                                            {bulkEditGroups.map((group: BulkEditGroup, index) => {
+                        const isSelected = selectedBulkGroup && selectedBulkGroup.venue === group.venue
                         return (
                           <TouchableOpacity
                             key={index}
@@ -969,11 +968,11 @@ const EventEditor: React.FC<EventEditorProps> = ({
                               styles.venueGroup,
                               isSelected ? styles.selectedVenueGroup : undefined
                             ]}
-                            onPress={() => populateBulkForm(typedGroup)}
+                            onPress={() => populateBulkForm(group)}
                           >
-                            <Text style={styles.venueName}>{typedGroup.venue}</Text>
+                            <Text style={styles.venueName}>{group.venue}</Text>
                             <Text style={styles.eventCount}>
-                              {typedGroup.events.length} events
+                              {group.events.length} events
                             </Text>
                           </TouchableOpacity>
                         )

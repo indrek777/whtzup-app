@@ -350,7 +350,7 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
         id: item.id || `imported-${index}`,
         name: item.name,
         description: item.description || `Event at ${item.address || item.venue || 'various locations'}`,
-        category: item.category || determineCategory(item.name, item.description),
+        category: (item as any).category || determineCategory(item.name, item.description),
         venue: item.venue || item.address || 'Various locations',
         address: item.address || item.venue || 'Location TBD',
         latitude: Number(item.latitude) || 0,

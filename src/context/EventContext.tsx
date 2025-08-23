@@ -4,6 +4,7 @@ import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
 import { autoFixVenueCoordinates, addVenue } from '../utils/venueStorage'
 import { syncService } from '../utils/syncService'
+import { userService } from '../utils/userService'
 import { Event } from '../data/events'
 
 // Helper function to determine category - comprehensive version
@@ -385,17 +386,17 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         try {
           let result: { initial: Event[], total: number }
           
-          // Check if we have location permission and user location
-          if (locationPermissionGranted === true && userLocation) {
-            // Use user's preferred radius or calculate smart radius
-            const radiusToUse = currentRadius !== 150 ? currentRadius : calculateSmartRadius(userLocation)
-            console.log(`🎯 Loading events: Using ${radiusToUse}km radius for user at ${userLocation[0]}, ${userLocation[1]}`)
-            
-            result = await syncService.fetchEventsProgressive(
-              { latitude: userLocation[0], longitude: userLocation[1] }, 
-              radiusToUse,
-              dateFilter
-            )
+                     // Check if we have location permission and user location
+           if (locationPermissionGranted === true && userLocation) {
+             // Use user's preferred radius or calculate smart radius
+             const radiusToUse = currentRadius !== 150 ? currentRadius : await calculateSmartRadius(userLocation)
+             console.log(`🎯 Loading events: Using ${radiusToUse}km radius for user at ${userLocation[0]}, ${userLocation[1]}`)
+             
+             result = await syncService.fetchEventsProgressive(
+               { latitude: userLocation[0], longitude: userLocation[1] }, 
+               radiusToUse,
+               dateFilter
+             )
           } else if (locationPermissionGranted === false) {
             // Location permission was explicitly denied, load events around Estonia center
             console.log('📍 Location permission denied, loading events around Estonia center')
@@ -554,11 +555,15 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   }, [locationPermissionGranted, userLocation, currentRadius, dateFilter])
 
   // Smart radius calculation based on user location and preferences
-  const calculateSmartRadius = (userLocation: [number, number]): number => {
+  const calculateSmartRadius = async (userLocation: [number, number]): Promise<number> => {
+    // Get user's maximum allowed radius
+    const maxRadius = await userService.getMaxRadius()
+    
     // Use user's preferred radius if set, otherwise calculate smart radius
     if (currentRadius !== 150) {
-      console.log(`🎯 Using user's preferred radius: ${currentRadius}km`)
-      return currentRadius
+      const limitedRadius = Math.min(currentRadius, maxRadius)
+      console.log(`🎯 Using user's preferred radius: ${limitedRadius}km (max allowed: ${maxRadius}km)`)
+      return limitedRadius
     }
     
     // Adjust radius based on location (urban vs rural areas)
@@ -578,18 +583,19 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     for (const city of majorCities) {
       const distance = calculateDistance(lat, lng, city.lat, city.lng)
       if (distance < 50) { // Within 50km of a major city
-        console.log(`🏙️ User near ${city.name}, using ${city.radius}km radius`)
+        const limitedRadius = Math.min(city.radius, maxRadius)
+        console.log(`🏙️ User near ${city.name}, using ${limitedRadius}km radius (max allowed: ${maxRadius}km)`)
         // Only set currentRadius if it's still the default (150)
         if (currentRadius === 150) {
-          setCurrentRadius(city.radius)
+          setCurrentRadius(limitedRadius)
         }
-        return city.radius
+        return limitedRadius
       }
     }
     
     // Rural areas - larger radius to find more events
-    const ruralRadius = 150
-    console.log(`🌲 User in rural area, using ${ruralRadius}km radius`)
+    const ruralRadius = Math.min(150, maxRadius)
+    console.log(`🌲 User in rural area, using ${ruralRadius}km radius (max allowed: ${maxRadius}km)`)
     // Only set currentRadius if it's still the default (150)
     if (currentRadius === 150) {
       setCurrentRadius(ruralRadius)
@@ -708,12 +714,27 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     try {
       console.log('➕ Adding event via sync service:', event.name)
       
+      // Check if user can create events based on their group
+      const canCreate = await userService.canPerformAction('canCreateEvents')
+      if (!canCreate) {
+        throw new Error('You need to sign up to create events')
+      }
+      
+      // Check daily event creation limit
+      const canCreateToday = await userService.canCreateEventToday()
+      if (!canCreateToday.canCreate) {
+        throw new Error(`Daily event limit reached. You can create ${canCreateToday.remaining} more events today.`)
+      }
+      
       // Process the new event with venue storage
       const processedEvents = await processEventsWithVenueStorage([event])
       const processedEvent = processedEvents[0]
       
       // Use sync service to create event
       const createdEvent = await syncService.createEvent(processedEvent)
+      
+      // Track event creation for daily limits
+      await userService.trackEventCreation()
       
       // Normalize the created event
       const normalizedEvent = normalizeEventData(createdEvent)

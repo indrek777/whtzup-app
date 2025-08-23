@@ -652,7 +652,7 @@ class SyncService {
 
       // Get the latest update timestamp from cached events
       const latestCachedUpdate = cachedEvents.reduce((latest, event) => {
-        const eventUpdate = event.updatedAt || event.updated_at || event.createdAt || event.created_at;
+        const eventUpdate = event.updatedAt || event.createdAt;
         return eventUpdate && eventUpdate > latest ? eventUpdate : latest;
       }, this.lastUpdateCheck || '1970-01-01T00:00:00.000Z');
 
@@ -737,9 +737,9 @@ class SyncService {
           // Event exists in cache, check if it needs updating
           const cachedEvent = cachedEvents[cachedIndex];
           const serverUpdatedAt = serverEvent.updated_at || serverEvent.updatedAt;
-          const cachedUpdatedAt = cachedEvent.updatedAt || cachedEvent.updated_at;
+          const cachedUpdatedAt = cachedEvent.updatedAt;
           
-          if (serverUpdatedAt > cachedUpdatedAt) {
+          if (serverUpdatedAt > (cachedUpdatedAt || '1970-01-01T00:00:00.000Z')) {
             console.log(`🔄 Updating cached event: ${serverEvent.name}`);
             
             // Transform server event to match frontend format
@@ -1069,12 +1069,12 @@ class SyncService {
             };
           }
         } catch (serverError) {
-          console.log('⚠️ Server sync status unavailable, using local status:', serverError.message);
+          console.log('⚠️ Server sync status unavailable, using local status:', serverError instanceof Error ? serverError.message : String(serverError));
           // Don't throw, fall back to local status
         }
       }
     } catch (error) {
-      console.log('⚠️ Error getting sync status, using local status:', error.message);
+      console.log('⚠️ Error getting sync status, using local status:', error instanceof Error ? error.message : String(error));
     }
 
     // Return local sync status as fallback

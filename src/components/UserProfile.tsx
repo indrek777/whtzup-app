@@ -8,7 +8,10 @@ import {
   ScrollView, 
   Alert, 
   Modal,
-  Switch
+  Switch,
+  SafeAreaView,
+  StatusBar,
+  Platform
 } from 'react-native'
 import { userService, User, Subscription, UserPreferences } from '../utils/userService'
 
@@ -63,7 +66,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   }, [visible])
 
   const loadUserData = async () => {
-    const user = await userService.getFullUserProfile()
+    const user = await userService.getCurrentUser()
     const authenticated = await userService.isAuthenticated()
     
     setCurrentUser(user)
@@ -83,7 +86,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
       setUserFeatures({
         hasAdvancedSearch,
         hasPremium,
-        canCreateEventToday
+        canCreateEventToday: canCreateEventToday.canCreate
       })
     }
   }
@@ -104,13 +107,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
     try {
       let success = false
       
+      let result
       if (authMode === 'signup') {
-        success = await userService.signUp(authEmail, authPassword, authName)
+        result = await userService.signUp(authEmail, authPassword, authName)
       } else {
-        success = await userService.signIn(authEmail, authPassword)
+        result = await userService.signIn(authEmail, authPassword)
       }
 
-      if (success) {
+      if (result.success) {
         Alert.alert(
           'Success', 
           authMode === 'signup' ? 'Account created successfully!' : 'Welcome back!',
@@ -157,27 +161,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
       return
     }
 
-    const price = userService.getSubscriptionPrice(selectedPlan)
-    const savings = userService.getSubscriptionSavings()
-    
     Alert.alert(
       'Subscribe to Premium',
-      `Subscribe to ${selectedPlan} plan for $${price}${selectedPlan === 'yearly' ? ` (Save $${savings})` : ''}?`,
+      'Premium subscription features are coming soon!',
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Subscribe', 
-          onPress: async () => {
-            const success = await userService.subscribeToPremium(selectedPlan)
-            if (success) {
-              Alert.alert('Success', 'Welcome to Premium! 🎉')
-              loadUserData()
-              setShowSubscriptionModal(false)
-            } else {
-              Alert.alert('Error', 'Failed to subscribe. Please try again.')
-            }
-          }
-        }
+        { text: 'OK', style: 'default' }
       ]
     )
   }
@@ -185,22 +173,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const handleCancelSubscription = async () => {
     Alert.alert(
       'Cancel Subscription',
-      'Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing period.',
+      'Subscription management features are coming soon!',
       [
-        { text: 'Keep Subscription', style: 'cancel' },
-        { 
-          text: 'Cancel Subscription', 
-          style: 'destructive',
-          onPress: async () => {
-            const success = await userService.cancelSubscription()
-            if (success) {
-              Alert.alert('Success', 'Subscription cancelled successfully')
-              loadUserData()
-            } else {
-              Alert.alert('Error', 'Failed to cancel subscription')
-            }
-          }
-        }
+        { text: 'OK', style: 'default' }
       ]
     )
   }
@@ -208,34 +183,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const handleReactivateSubscription = async () => {
     Alert.alert(
       'Reactivate Subscription',
-      'Would you like to reactivate your subscription?',
+      'Subscription management features are coming soon!',
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Reactivate', 
-          onPress: async () => {
-            const success = await userService.reactivateSubscription()
-            if (success) {
-              Alert.alert('Success', 'Subscription reactivated successfully')
-              loadUserData()
-            } else {
-              Alert.alert('Error', 'Failed to reactivate subscription')
-            }
-          }
-        }
+        { text: 'OK', style: 'default' }
       ]
     )
   }
 
   const handleUpdatePreferences = async () => {
-    const success = await userService.updatePreferences(preferences)
-    if (success) {
-      Alert.alert('Success', 'Preferences updated successfully')
-      setShowPreferencesModal(false)
-      loadUserData()
-    } else {
-      Alert.alert('Error', 'Failed to update preferences')
-    }
+    Alert.alert(
+      'Update Preferences',
+      'Preference management features are coming soon!',
+      [
+        { text: 'OK', style: 'default' }
+      ]
+    )
   }
 
   const resetAuthForm = () => {
@@ -461,7 +423,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -628,7 +591,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         {renderAuthModal()}
         {renderSubscriptionModal()}
         {renderPreferencesModal()}
-      </View>
+      </SafeAreaView>
     </Modal>
   )
 }
@@ -645,7 +608,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 10 : 60,
   },
   headerTitle: {
     fontSize: 20,
@@ -822,7 +785,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 10 : 60,
   },
   modalTitle: {
     fontSize: 20,
@@ -949,4 +912,4 @@ const styles = StyleSheet.create({
   },
 })
 
-module.exports = UserProfile
+export default UserProfile

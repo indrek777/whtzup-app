@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+// User Group Types
+export type UserGroup = 'unregistered' | 'registered' | 'premium'
+
 export interface User {
   id: string
   email: string
@@ -10,6 +13,7 @@ export interface User {
   subscription: Subscription
   preferences: UserPreferences
   stats: UserStats
+  userGroup: UserGroup
 }
 
 export interface Subscription {
@@ -42,20 +46,96 @@ export interface UserStats {
   eventsCreatedToday?: number
 }
 
+// User Group Features and Permissions
+export interface UserGroupFeatures {
+  canCreateEvents: boolean
+  canEditEvents: boolean
+  canDeleteEvents: boolean
+  canRateEvents: boolean
+  canWriteReviews: boolean
+  maxEventsPerDay: number
+  maxRadiusKm: number
+  canAccessPremiumCategories: boolean
+  canUseAdvancedFilters: boolean
+  canExportEvents: boolean
+  canAccessAnalytics: boolean
+  canInviteFriends: boolean
+  canCreateGroups: boolean
+  canAccessPrioritySupport: boolean
+  features: string[]
+}
+
+// User Group Configuration
+export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
+  unregistered: {
+    canCreateEvents: false,
+    canEditEvents: false,
+    canDeleteEvents: false,
+    canRateEvents: false,
+    canWriteReviews: false,
+    maxEventsPerDay: 0,
+    maxRadiusKm: 50,
+    canAccessPremiumCategories: false,
+    canUseAdvancedFilters: false,
+    canExportEvents: false,
+    canAccessAnalytics: false,
+    canInviteFriends: false,
+    canCreateGroups: false,
+    canAccessPrioritySupport: false,
+    features: ['basic_search', 'basic_filtering', 'view_events']
+  },
+  registered: {
+    canCreateEvents: true,
+    canEditEvents: true,
+    canDeleteEvents: true,
+    canRateEvents: true,
+    canWriteReviews: true,
+    maxEventsPerDay: 5,
+    maxRadiusKm: 150,
+    canAccessPremiumCategories: false,
+    canUseAdvancedFilters: true,
+    canExportEvents: false,
+    canAccessAnalytics: false,
+    canInviteFriends: true,
+    canCreateGroups: false,
+    canAccessPrioritySupport: false,
+    features: ['basic_search', 'advanced_filtering', 'create_events', 'rate_events', 'write_reviews', 'invite_friends']
+  },
+  premium: {
+    canCreateEvents: true,
+    canEditEvents: true,
+    canDeleteEvents: true,
+    canRateEvents: true,
+    canWriteReviews: true,
+    maxEventsPerDay: 50,
+    maxRadiusKm: 500,
+    canAccessPremiumCategories: true,
+    canUseAdvancedFilters: true,
+    canExportEvents: true,
+    canAccessAnalytics: true,
+    canInviteFriends: true,
+    canCreateGroups: true,
+    canAccessPrioritySupport: true,
+    features: ['basic_search', 'advanced_filtering', 'create_events', 'rate_events', 'write_reviews', 'invite_friends', 'premium_categories', 'export_events', 'analytics', 'create_groups', 'priority_support', 'unlimited_radius']
+  }
+}
+
 // Backend API URL - update this to match your backend server
 const API_BASE_URL = 'http://olympio.ee:4000/api' // Update this to your actual backend URL
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',
   subscription: '/subscription',
-  stats: '/stats'
+  stats: '/stats',
+  userGroup: '/user-group'
 }
 
 const STORAGE_KEYS = {
   user: 'user_profile',
   authToken: 'auth_token',
   preferences: 'user_preferences',
-  subscription: 'user_subscription'
+  subscription: 'user_subscription',
+  userGroup: 'user_group'
 }
 
 class UserService {
@@ -101,6 +181,42 @@ class UserService {
   async getCurrentUser(): Promise<User | null> {
     await this.ensureInitialized()
     return this.currentUser
+  }
+
+  // Get current user group
+  async getUserGroup(): Promise<UserGroup> {
+    await this.ensureInitialized()
+    
+    if (!this.currentUser) {
+      return 'unregistered'
+    }
+    
+    // Check if user has premium subscription
+    if (await this.hasPremiumSubscription()) {
+      return 'premium'
+    }
+    
+    // If user is authenticated but not premium, they are registered
+    return 'registered'
+  }
+
+  // Get features for current user group
+  async getUserGroupFeatures(): Promise<UserGroupFeatures> {
+    const userGroup = await this.getUserGroup()
+    return USER_GROUP_CONFIG[userGroup]
+  }
+
+  // Check if user can perform a specific action
+  async canPerformAction(action: keyof UserGroupFeatures): Promise<boolean> {
+    const features = await this.getUserGroupFeatures()
+    const feature = features[action]
+    return typeof feature === 'boolean' ? feature : false
+  }
+
+  // Check if user has a specific feature
+  async hasFeature(feature: string): Promise<boolean> {
+    const features = await this.getUserGroupFeatures()
+    return features.features.includes(feature)
   }
 
   // Check if user is authenticated
@@ -153,13 +269,18 @@ class UserService {
   async canEditEvent(event: { createdBy?: string; source?: string }): Promise<boolean> {
     await this.ensureInitialized()
     
+    // Check if user can edit events based on their group
+    if (!(await this.canPerformAction('canEditEvents'))) {
+      return false
+    }
+    
     // If not authenticated, cannot edit any events
     if (!this.currentUser) return false
     
     // If user has premium subscription, they can edit any event
     if (await this.hasPremiumSubscription()) return true
     
-    // For free users, they can only edit events they created
+    // For registered users, they can only edit events they created
     // Check if the event was created by the current user
     if (event.createdBy === this.currentUser.id) return true
     
@@ -168,6 +289,39 @@ class UserService {
     if (event.source === 'user' && !event.createdBy) return true
     
     return false
+  }
+
+  // Check if user can create events today
+  async canCreateEventToday(): Promise<{ canCreate: boolean; remaining: number }> {
+    const features = await this.getUserGroupFeatures()
+    
+    if (!features.canCreateEvents) {
+      return { canCreate: false, remaining: 0 }
+    }
+    
+    // Check daily limit
+    const today = new Date().toISOString().split('T')[0]
+    const lastCreatedDate = this.currentUser?.stats.lastEventCreatedDate
+    
+    if (lastCreatedDate === today) {
+      const createdToday = this.currentUser?.stats.eventsCreatedToday || 0
+      const remaining = Math.max(0, features.maxEventsPerDay - createdToday)
+      return { canCreate: remaining > 0, remaining }
+    }
+    
+    return { canCreate: true, remaining: features.maxEventsPerDay }
+  }
+
+  // Check if user can use a specific radius
+  async canUseRadius(radius: number): Promise<boolean> {
+    const features = await this.getUserGroupFeatures()
+    return radius <= features.maxRadiusKm
+  }
+
+  // Get maximum allowed radius for current user
+  async getMaxRadius(): Promise<number> {
+    const features = await this.getUserGroupFeatures()
+    return features.maxRadiusKm
   }
 
   // Check if subscription is cancelled (auto-renew disabled)
@@ -198,676 +352,228 @@ class UserService {
     await this.ensureInitialized()
     const subscription = await this.getSubscriptionStatus()
     if (subscription.status === 'premium') {
-      return [
-        'unlimited_events',
-        'advanced_search',
-        'priority_support',
-        'analytics',
-        'custom_categories',
-        'export_data',
-        'no_ads',
-        'early_access',
-        'extended_event_radius'
-      ]
+      return subscription.features
     }
-    return ['basic_search', 'basic_filtering', 'local_ratings']
+    return []
   }
 
-  // Sign up new user
-  async signUp(email: string, password: string, name: string): Promise<boolean> {
-    try {
-      if (!API_BASE_URL) {
-        // Create local user for demo
-        const newUser: User = {
-          id: `user_${Date.now()}`,
-          email,
-          name,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          subscription: {
-            status: 'free',
-            plan: null,
-            startDate: null,
-            endDate: null,
-            autoRenew: false,
-            features: ['basic_search', 'basic_filtering', 'local_ratings']
-          },
-          preferences: {
-            notifications: true,
-            emailUpdates: true,
-            defaultRadius: 10,
-            favoriteCategories: [],
-            language: 'en',
-            theme: 'auto'
-          },
-          stats: {
-            eventsCreated: 0,
-            eventsAttended: 0,
-            ratingsGiven: 0,
-            reviewsWritten: 0,
-            totalEvents: 0,
-            favoriteVenues: []
-          }
-        }
+  // Get user group upgrade benefits
+  async getUpgradeBenefits(): Promise<{ current: UserGroup; benefits: string[] }> {
+    const currentGroup = await this.getUserGroup()
+    
+    const benefits: string[] = []
+    
+    switch (currentGroup) {
+      case 'unregistered':
+        benefits.push(
+          'Create and manage your own events',
+          'Rate and review events',
+          'Advanced filtering options',
+          'Invite friends to events',
+          'Larger search radius (150km)',
+          'Up to 5 events per day'
+        )
+        break
+      case 'registered':
+        benefits.push(
+          'Unlimited event creation (50/day)',
+          'Premium event categories',
+          'Export events to calendar',
+          'Advanced analytics',
+          'Create event groups',
+          'Priority customer support',
+          'Largest search radius (500km)'
+        )
+        break
+      case 'premium':
+        benefits.push('You already have all premium features!')
+        break
+    }
+    
+    return { current: currentGroup, benefits }
+  }
 
-        this.currentUser = newUser
-        this.authToken = `token_${Date.now()}`
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser))
-        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
-        
-        return true
-      }
-
-      // Backend implementation
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, name }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          this.currentUser = data.data.user
-          this.authToken = data.data.accessToken
-          this.refreshToken = data.data.refreshToken
-          
-          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data.user))
-          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
-          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
-          
-          return true
-        }
-      }
-      
-      return false
-    } catch (error) {
-      console.error('Error signing up:', error)
-      return false
+  // Get user group comparison
+  async getUserGroupComparison(): Promise<{
+    unregistered: UserGroupFeatures
+    registered: UserGroupFeatures
+    premium: UserGroupFeatures
+  }> {
+    return {
+      unregistered: USER_GROUP_CONFIG.unregistered,
+      registered: USER_GROUP_CONFIG.registered,
+      premium: USER_GROUP_CONFIG.premium
     }
   }
 
-    // Sign in user
-  async signIn(email: string, password: string): Promise<boolean> {
+  // Update user group (for admin purposes)
+  async updateUserGroup(userGroup: UserGroup): Promise<boolean> {
     try {
-      if (!API_BASE_URL) {
-        // Check if user exists locally
-        const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
-        
-        if (userData) {
-          const user = JSON.parse(userData)
-          if (user.email === email) {
-            this.currentUser = user
-            this.authToken = `token_${Date.now()}`
-            await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
-            
-            // Update last login
-            if (this.currentUser) {
-              this.currentUser.lastLogin = new Date().toISOString()
-            }
-            await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-            
-            return true
-          }
-        }
-        
-        // If no user data found or email doesn't match, create a new user
-        // This handles the case where a user signs out and then tries to sign in again
-        
-        // Create a new user for this email
-        const newUser: User = {
-          id: `user_${Date.now()}`,
-          email,
-          name: email.split('@')[0], // Use email prefix as name
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          subscription: {
-            status: 'free',
-            plan: null,
-            startDate: null,
-            endDate: null,
-            autoRenew: false,
-            features: ['basic_search', 'basic_filtering', 'local_ratings']
-          },
-          preferences: {
-            notifications: true,
-            emailUpdates: true,
-            defaultRadius: 10,
-            favoriteCategories: [],
-            language: 'en',
-            theme: 'auto'
-          },
-          stats: {
-            eventsCreated: 0,
-            eventsAttended: 0,
-            ratingsGiven: 0,
-            reviewsWritten: 0,
-            totalEvents: 0,
-            favoriteVenues: []
-          }
-        }
-
-        this.currentUser = newUser
-        this.authToken = `token_${Date.now()}`
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(newUser))
-        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
-        
-        return true
-      }
-
-      // Backend implementation
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const headers = await this.getAuthHeaders()
+      const response = await fetch(`${API_BASE_URL}/user-group`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ userGroup })
       })
 
       if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          this.currentUser = data.data.user
-          this.authToken = data.data.accessToken
-          this.refreshToken = data.data.refreshToken
-          
-          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.data.user))
-          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
-          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
-          
+        const result = await response.json()
+        if (result.success && this.currentUser) {
+          this.currentUser.userGroup = userGroup
+          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
           return true
         }
       }
-      
-      return false
     } catch (error) {
-      console.error('Error signing in:', error)
-      return false
+      console.error('Error updating user group:', error)
+    }
+    return false
+  }
+
+  // Track event creation for daily limits
+  async trackEventCreation(): Promise<void> {
+    if (!this.currentUser) return
+    
+    const today = new Date().toISOString().split('T')[0]
+    const lastCreatedDate = this.currentUser.stats.lastEventCreatedDate
+    
+    if (lastCreatedDate === today) {
+      this.currentUser.stats.eventsCreatedToday = (this.currentUser.stats.eventsCreatedToday || 0) + 1
+    } else {
+      this.currentUser.stats.eventsCreatedToday = 1
+    }
+    
+    this.currentUser.stats.lastEventCreatedDate = today
+    this.currentUser.stats.eventsCreated += 1
+    
+    await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+  }
+
+  // Get authentication headers
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    await this.ensureInitialized()
+    
+    if (!this.authToken) {
+      return {}
+    }
+    
+    return {
+      'Authorization': `Bearer ${this.authToken}`,
+      'Content-Type': 'application/json'
+    }
+  }
+
+  // Sign in user
+  async signIn(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        this.currentUser = result.user
+        this.authToken = result.token
+        this.refreshToken = result.refreshToken
+
+        // Set user group based on subscription status
+        if (result.user.subscription.status === 'premium') {
+          this.currentUser!.userGroup = 'premium'
+        } else {
+          this.currentUser!.userGroup = 'registered'
+        }
+
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
+        await AsyncStorage.setItem('refresh_token', this.refreshToken!)
+
+        return { success: true, user: this.currentUser || undefined }
+      } else {
+        return { success: false, error: result.error || 'Sign in failed' }
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error' }
+    }
+  }
+
+  // Sign up user
+  async signUp(email: string, password: string, name: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password, name })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        this.currentUser = result.user
+        this.authToken = result.token
+        this.refreshToken = result.refreshToken
+
+        // Set user group to registered for new users
+        this.currentUser!.userGroup = 'registered'
+
+        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
+        await AsyncStorage.setItem('refresh_token', this.refreshToken!)
+
+        return { success: true, user: this.currentUser || undefined }
+      } else {
+        return { success: false, error: result.error || 'Sign up failed' }
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error' }
     }
   }
 
   // Sign out user
   async signOut(): Promise<void> {
-    try {
-      // Revoke refresh token on backend if available
-      if (API_BASE_URL && this.refreshToken) {
-        try {
-          await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/signout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ refreshToken: this.refreshToken }),
-          })
-        } catch (error) {
-          console.error('Error revoking token on backend:', error)
-        }
-      }
+    this.currentUser = null
+    this.authToken = null
+    this.refreshToken = null
 
-      this.currentUser = null
-      this.authToken = null
-      this.refreshToken = null
-      
-      await AsyncStorage.removeItem(STORAGE_KEYS.user)
-      await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
-      await AsyncStorage.removeItem('refresh_token')
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
+    await AsyncStorage.removeItem(STORAGE_KEYS.user)
+    await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
+    await AsyncStorage.removeItem('refresh_token')
   }
 
-  // Refresh access token
-  async refreshAccessToken(): Promise<boolean> {
-    try {
-      if (!API_BASE_URL || !this.refreshToken) {
-        return false
-      }
+  // Refresh authentication token
+  async refreshAuthToken(): Promise<boolean> {
+    if (!this.refreshToken) return false
 
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/refresh`, {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ refreshToken: this.refreshToken }),
+        body: JSON.stringify({ refreshToken: this.refreshToken })
       })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          this.authToken = data.data.accessToken
-          this.refreshToken = data.data.refreshToken
-          
-          await AsyncStorage.setItem(STORAGE_KEYS.authToken, data.data.accessToken)
-          await AsyncStorage.setItem('refresh_token', data.data.refreshToken)
-          
-          return true
-        }
-      }
-      
-      return false
-    } catch (error) {
-      console.error('Error refreshing token:', error)
-      return false
-    }
-  }
-
-  // Get authenticated headers for API requests
-  async getAuthHeaders(): Promise<Record<string, string>> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`
-    }
-    
-    return headers
-  }
-
-  // Update user profile
-  async updateProfile(updates: Partial<User>): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      const updatedUser = { ...this.currentUser, ...updates }
-      this.currentUser = updatedUser
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(updatedUser))
-      
-      if (API_BASE_URL) {
-        // Backend sync would go here
-        const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.profile}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.authToken}`,
-          },
-          body: JSON.stringify(updates),
-        })
-        
-        return response.ok
-      }
-      
-      return true
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      return false
-    }
-  }
-
-  // Update user preferences
-  async updatePreferences(preferences: Partial<UserPreferences>): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      const updatedPreferences = { ...this.currentUser.preferences, ...preferences }
-      this.currentUser.preferences = updatedPreferences
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      return true
-    } catch (error) {
-      console.error('Error updating preferences:', error)
-      return false
-    }
-  }
-
-  // Subscribe to premium plan
-  async subscribeToPremium(plan: 'monthly' | 'yearly'): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      const headers = await this.getAuthHeaders()
-      const response = await fetch(`${API_BASE_URL}/subscription/upgrade`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ plan, autoRenew: true })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Subscription upgrade failed:', errorData)
-        return false
-      }
 
       const result = await response.json()
-      
+
       if (result.success) {
-        // Update local user data with new subscription
-        this.currentUser.subscription = result.data
-        await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
+        this.authToken = result.token
+        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
         return true
       }
-      
-      return false
     } catch (error) {
-      console.error('Error subscribing to premium:', error)
-      return false
+      console.error('Error refreshing token:', error)
     }
-  }
 
-  // Cancel subscription
-  async cancelSubscription(): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) {
-        return false
-      }
-
-      // Set auto-renew to false
-      this.currentUser.subscription.autoRenew = false
-      
-      // Check if subscription has already expired
-      if (this.currentUser.subscription.endDate) {
-        const endDate = new Date(this.currentUser.subscription.endDate)
-        const now = new Date()
-        
-        if (endDate <= now) {
-          // Subscription has already expired, downgrade to free immediately
-          this.currentUser.subscription.status = 'expired'
-          this.currentUser.subscription.features = ['basic_search', 'basic_filtering', 'local_ratings']
-        }
-        // If subscription hasn't expired yet, keep premium status but disable auto-renew
-        // User will lose access when endDate is reached
-      }
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      return true
-    } catch (error) {
-      console.error('Error cancelling subscription:', error)
-      return false
-    }
-  }
-
-  // Reactivate subscription
-  async reactivateSubscription(): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      // Re-enable auto-renew
-      this.currentUser.subscription.autoRenew = true
-      
-      // If subscription was expired, reactivate it
-      if (this.currentUser.subscription.status === 'expired') {
-        const now = new Date()
-        const endDate = new Date()
-        
-        // Set new end date based on current plan
-        if (this.currentUser.subscription.plan === 'monthly') {
-          endDate.setMonth(endDate.getMonth() + 1)
-        } else if (this.currentUser.subscription.plan === 'yearly') {
-          endDate.setFullYear(endDate.getFullYear() + 1)
-        }
-        
-        this.currentUser.subscription.status = 'premium'
-        this.currentUser.subscription.startDate = now.toISOString()
-        this.currentUser.subscription.endDate = endDate.toISOString()
-        this.currentUser.subscription.features = [
-          'unlimited_events',
-          'advanced_search',
-          'priority_support',
-          'analytics',
-          'custom_categories',
-          'export_data',
-          'no_ads',
-          'early_access',
-          'extended_event_radius'
-        ]
-      }
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      return true
-    } catch (error) {
-      console.error('Error reactivating subscription:', error)
-      return false
-    }
-  }
-
-  // Update user stats
-  async updateStats(updates: Partial<UserStats>): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      const updatedStats = { ...this.currentUser.stats, ...updates }
-      this.currentUser.stats = updatedStats
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-      
-      return true
-    } catch (error) {
-      console.error('Error updating stats:', error)
-      return false
-    }
-  }
-
-  // Get user stats
-  async getUserStats(): Promise<UserStats | null> {
-    await this.ensureInitialized()
-    return this.currentUser?.stats || null
-  }
-
-  // Check if feature is available
-  async hasFeature(feature: string): Promise<boolean> {
-    await this.ensureInitialized()
-    const subscription = await this.getSubscriptionStatus()
-    return subscription.features.includes(feature)
-  }
-
-  // Get subscription price
-  async getSubscriptionPrice(plan: 'monthly' | 'yearly'): Promise<number> {
-    await this.ensureInitialized()
-    const prices = {
-      monthly: 9.99,
-      yearly: 99.99
-    }
-    return prices[plan]
-  }
-
-  // Get subscription savings
-  async getSubscriptionSavings(): Promise<number> {
-    await this.ensureInitialized()
-    const monthlyPrice = await this.getSubscriptionPrice('monthly')
-    const yearlyPrice = await this.getSubscriptionPrice('yearly')
-    const yearlyMonthlyEquivalent = monthlyPrice * 12
-    
-    return Math.round((yearlyMonthlyEquivalent - yearlyPrice) * 100) / 100
-  }
-
-  // Helper method for testing - create a subscription that expires soon
-  async createTestSubscription(plan: 'monthly' | 'yearly' = 'monthly'): Promise<boolean> {
-    try {
-      await this.ensureInitialized()
-      if (!this.currentUser) return false
-
-      const now = new Date()
-      const endDate = new Date()
-      
-      // Set end date to 1 minute from now for testing
-      endDate.setMinutes(endDate.getMinutes() + 1)
-
-      const subscription: Subscription = {
-        status: 'premium',
-        plan,
-        startDate: now.toISOString(),
-        endDate: endDate.toISOString(),
-        autoRenew: true,
-        features: [
-          'unlimited_events',
-          'advanced_search',
-          'priority_support',
-          'analytics',
-          'custom_categories',
-          'export_data',
-          'no_ads',
-          'early_access',
-          'extended_event_radius'
-        ]
-      }
-
-      this.currentUser.subscription = subscription
-              await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-        
-        return true
-    } catch (error) {
-      console.error('Error creating test subscription:', error)
-      return false
-    }
-  }
-
-  // Check if user can create an event today (free users limited to 1 per day)
-  async canCreateEventToday(): Promise<boolean> {
-    await this.ensureInitialized()
-    if (!this.currentUser) return false
-    
-    // Premium users have unlimited events
-    if (await this.hasPremiumSubscription()) return true
-    
-    // Free users limited to 1 event per day
-    const stats = await this.getUserStats()
-    if (!stats) return false
-    
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-    const lastEventDate = stats.lastEventCreatedDate
-    
-    // If no events created today or last event was on a different day
-    if (!lastEventDate || lastEventDate !== today) {
-      return true
-    }
-    
-    // Check if already created an event today
-    return (stats.eventsCreatedToday || 0) < 1
-  }
-
-  // Increment daily event count
-  async incrementDailyEventCount(): Promise<void> {
-    await this.ensureInitialized()
-    if (!this.currentUser) return
-    
-    const stats = await this.getUserStats()
-    if (!stats) return
-    
-    const today = new Date().toISOString().split('T')[0]
-    const lastEventDate = stats.lastEventCreatedDate
-    
-    let newEventsCreatedToday = 1
-    
-    // If last event was today, increment counter
-    if (lastEventDate === today) {
-      newEventsCreatedToday = (stats.eventsCreatedToday || 0) + 1
-    }
-    
-    // Update stats
-    await this.updateStats({
-      eventsCreated: stats.eventsCreated + 1,
-      totalEvents: stats.totalEvents + 1,
-      lastEventCreatedDate: today,
-      eventsCreatedToday: newEventsCreatedToday
-    })
-  }
-
-  // Test function to verify authentication persistence
-  async testAuthenticationPersistence(): Promise<{
-    userLoaded: boolean
-    tokenLoaded: boolean
-    isAuthenticated: boolean
-    userEmail?: string
-  }> {
-    await this.ensureInitialized()
-    
-    return {
-      userLoaded: this.currentUser !== null,
-      tokenLoaded: this.authToken !== null,
-      isAuthenticated: await this.isAuthenticated(),
-      userEmail: this.currentUser?.email
-    }
-  }
-
-  // Check if a user exists by email (for demo purposes, always returns true)
-  async userExists(email: string): Promise<boolean> {
-    // In a real app, this would check against a backend or local user database
-    // For demo purposes, we'll assume any email can be used to sign in
-    return true
-  }
-
-  // Get user by email (for demo purposes, creates a new user if not found)
-  async getUserByEmail(email: string): Promise<User | null> {
-    try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
-      if (userData) {
-        const user = JSON.parse(userData)
-        if (user.email === email) {
-          return user
-        }
-      }
-      return null
-    } catch (error) {
-      return null
-    }
-  }
-
-  // Get full user profile from backend
-  async getFullUserProfile(): Promise<User | null> {
-    try {
-      if (!API_BASE_URL || !this.authToken) {
-        return this.currentUser
-      }
-
-      const headers = await this.getAuthHeaders()
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.auth}/profile`, {
-        method: 'GET',
-        headers,
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          this.currentUser = data.data
-          
-          // Also refresh subscription status
-          try {
-            const subscriptionResponse = await fetch(`${API_BASE_URL}/subscription/status`, {
-              method: 'GET',
-              headers
-            })
-            
-            if (subscriptionResponse.ok) {
-              const subscriptionResult = await subscriptionResponse.json()
-              if (subscriptionResult.success && this.currentUser) {
-                this.currentUser.subscription = subscriptionResult.data
-              }
-            }
-          } catch (subscriptionError) {
-            console.log('Failed to refresh subscription status:', subscriptionError)
-          }
-          
-          await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
-          return this.currentUser
-        }
-      } else if (response.status === 401) {
-        // Token might be expired, try to refresh
-        const refreshed = await this.refreshAccessToken()
-        if (refreshed) {
-          return this.getFullUserProfile() // Retry with new token
-        }
-      }
-      
-      return this.currentUser
-    } catch (error) {
-      console.error('Error getting full user profile:', error)
-      return this.currentUser
-    }
+    return false
   }
 }
 
+// Export singleton instance
 export const userService = new UserService()
+export default userService
