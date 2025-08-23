@@ -26,7 +26,7 @@ function transformEventFields(event) {
 const eventValidation = [
   body('name').trim().isLength({ min: 1, max: 500 }).withMessage('Name is required and must be less than 500 characters'),
   body('description').optional().isLength({ max: 2000 }).withMessage('Description must be less than 2000 characters'),
-  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'other']).withMessage('Invalid category'),
+  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'health & wellness', 'theater', 'cultural', 'nature & environment', 'family & kids', 'nightlife', 'charity & community', 'comedy', 'other']).withMessage('Invalid category'),
   body('venue').trim().isLength({ min: 1, max: 500 }).withMessage('Venue is required and must be less than 500 characters'),
   body('address').optional().isLength({ max: 1000 }).withMessage('Address must be less than 1000 characters'),
   body('latitude').isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
@@ -39,7 +39,7 @@ const eventValidation = [
 const eventUpdateValidation = [
   body('name').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Name must be less than 500 characters'),
   body('description').optional().isLength({ max: 2000 }).withMessage('Description must be less than 2000 characters'),
-  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'other']).withMessage('Invalid category'),
+  body('category').optional().isIn(['music', 'food', 'sports', 'art', 'business', 'entertainment', 'education', 'technology', 'health', 'health & wellness', 'theater', 'cultural', 'nature & environment', 'family & kids', 'nightlife', 'charity & community', 'comedy', 'other']).withMessage('Invalid category'),
   body('venue').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Venue must be less than 500 characters'),
   body('address').optional().isLength({ max: 1000 }).withMessage('Address must be less than 1000 characters'),
   body('latitude').optional().isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
