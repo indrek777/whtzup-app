@@ -524,7 +524,7 @@ const SimpleMarker = React.memo(({
 })
 
 const MapViewNative: React.FC = () => {
-  const { events, updateEvent, deleteEvent, isLoading, syncStatus, userLocation, locationPermissionGranted } = useEvents()
+  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
@@ -617,15 +617,15 @@ const MapViewNative: React.FC = () => {
     setShowClusterModal(true)
   }, [])
 
-  // Create clusters and markers
+  // Create clusters and markers with performance optimization
   const markers = useMemo(() => {
     console.log('🎯 Creating markers from', filteredEvents.length, 'events')
     
-    // Limit events for performance
-    const maxEvents = 1000
+    // Limit events for performance - start with smaller limit for faster initial render
+    const maxEvents = Math.min(filteredEvents.length, 500) // Reduced from 1000 to 500
     const eventsToShow = filteredEvents.slice(0, maxEvents)
     
-    console.log('🎯 Processing', eventsToShow.length, 'events for markers')
+    console.log('🎯 Processing', eventsToShow.length, 'events for markers (limited for performance)')
     
     // Filter out events with invalid coordinates
     const validEvents = eventsToShow.filter(event => {
@@ -643,49 +643,29 @@ const MapViewNative: React.FC = () => {
     // Create clusters
     const clusters = createClusters(validEvents, 0.01) // 0.01 degrees ≈ 1km
     
-    // Debug clustering results
-    const singleEventClusters = clusters.filter(c => c.count === 1)
-    const multiEventClusters = clusters.filter(c => c.count > 1)
-    const largeEventClusters = clusters.filter(c => c.count >= 20)
-    const veryLargeEventClusters = clusters.filter(c => c.count >= 100)
-    
-    console.log(`🎯 Created ${clusters.length} clusters from ${eventsToShow.length} events`)
-    console.log(`🎯 Single-event clusters: ${singleEventClusters.length}`)
-    console.log(`🎯 Multi-event clusters: ${multiEventClusters.length}`)
-    console.log(`🎯 Large clusters (20+): ${largeEventClusters.length}`)
-    console.log(`🎯 Very large clusters (100+): ${veryLargeEventClusters.length}`)
-    
-    if (multiEventClusters.length > 0) {
-      // Sort by count to show largest first
-      const sortedClusters = multiEventClusters.sort((a, b) => b.count - a.count)
-      console.log(`🎯 Largest cluster: ${sortedClusters[0].count} events at ${sortedClusters[0].latitude}, ${sortedClusters[0].longitude}`)
-      console.log(`🎯 Largest cluster events:`, sortedClusters[0].events.slice(0, 5).map(e => e.name.substring(0, 30)))
-      if (sortedClusters[0].events.length > 5) {
-        console.log(`🎯 ... and ${sortedClusters[0].events.length - 5} more events`)
+    // Debug clustering results (only log if there are many events)
+    if (validEvents.length > 100) {
+      const singleEventClusters = clusters.filter(c => c.count === 1)
+      const multiEventClusters = clusters.filter(c => c.count > 1)
+      const largeEventClusters = clusters.filter(c => c.count >= 20)
+      const veryLargeEventClusters = clusters.filter(c => c.count >= 100)
+      
+      console.log(`🎯 Created ${clusters.length} clusters from ${eventsToShow.length} events`)
+      console.log(`🎯 Single-event clusters: ${singleEventClusters.length}`)
+      console.log(`🎯 Multi-event clusters: ${multiEventClusters.length}`)
+      console.log(`🎯 Large clusters (20+): ${largeEventClusters.length}`)
+      console.log(`🎯 Very large clusters (100+): ${veryLargeEventClusters.length}`)
+      
+      if (multiEventClusters.length > 0) {
+        // Sort by count to show largest first
+        const sortedClusters = multiEventClusters.sort((a, b) => b.count - a.count)
+        console.log(`🎯 Largest cluster: ${sortedClusters[0].count} events at ${sortedClusters[0].latitude}, ${sortedClusters[0].longitude}`)
       }
-    }
-    
-    // Verify no duplicate locations (should be 0 now)
-    const locationCounts = new Map<string, number>()
-    clusters.forEach(cluster => {
-      const locationKey = `${cluster.latitude.toFixed(6)},${cluster.longitude.toFixed(6)}`
-      locationCounts.set(locationKey, (locationCounts.get(locationKey) || 0) + 1)
-    })
-    
-    const duplicateLocations = Array.from(locationCounts.entries()).filter(([_, count]) => count > 1)
-    if (duplicateLocations.length > 0) {
-      console.log(`🎯 ❌ ERROR: Found ${duplicateLocations.length} locations with multiple clusters`)
-      duplicateLocations.forEach(([location, count]) => {
-        console.log(`🎯 ❌ Location ${location} has ${count} clusters`)
-      })
-    } else {
-      console.log(`🎯 ✅ Perfect clustering: Each location has exactly one cluster`)
     }
     
     console.log('🎯 Rendering', clusters.length, 'cluster markers')
     
     return clusters.map(cluster => {
-      console.log('🎯 Rendering cluster:', cluster.id, 'with', cluster.count, 'events at', cluster.latitude, cluster.longitude)
       return (
         <ClusterMarker
           key={cluster.id}
@@ -742,16 +722,118 @@ const MapViewNative: React.FC = () => {
         {markers}
       </MapView>
 
-      {/* Create New Event Button */}
-      <TouchableOpacity
-        style={styles.createEventButton}
-        onPress={() => {
-          setSelectedEvent(null)
-          setShowEventEditor(true)
-        }}
-      >
-        <Text style={styles.createEventButtonText}>+ Create Event</Text>
-      </TouchableOpacity>
+             {/* Location and Radius Info */}
+       {userLocation && (
+         <View style={styles.locationInfoContainer}>
+                       <Text style={styles.locationInfoText}>
+              📍 {currentRadius}km radius • 📅 {dateFilter.from} to {dateFilter.to} • {events.length} events
+              {isLoading && ' • Loading...'}
+            </Text>
+                       <View style={styles.filterButtonsContainer}>
+              <TouchableOpacity
+                style={styles.radiusAdjustButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Adjust Search Radius',
+                    'Choose your search radius:',
+                    [
+                      { text: '50km (Local)', onPress: () => {
+                        console.log('🎯 User changed radius to 50km')
+                        setCurrentRadius(50)
+                      }},
+                      { text: '100km (Regional)', onPress: () => {
+                        console.log('🎯 User changed radius to 100km')
+                        setCurrentRadius(100)
+                      }},
+                      { text: '200km (Wide)', onPress: () => {
+                        console.log('🎯 User changed radius to 200km')
+                        setCurrentRadius(200)
+                      }},
+                      { text: '300km (Very Wide)', onPress: () => {
+                        console.log('🎯 User changed radius to 300km')
+                        setCurrentRadius(300)
+                      }},
+                      { text: 'Cancel', style: 'cancel' }
+                    ]
+                  )
+                }}
+              >
+                <Text style={styles.radiusAdjustButtonText}>⚙️</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.dateFilterButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Adjust Date Range',
+                    'Choose your date range:',
+                    [
+                      { text: 'Today', onPress: () => {
+                        const today = new Date().toISOString().split('T')[0]
+                        console.log('📅 User changed date filter to today')
+                        setDateFilter({ from: today, to: today })
+                      }},
+                      { text: 'This Week', onPress: () => {
+                        const now = new Date()
+                        const endOfWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+                        console.log('📅 User changed date filter to this week')
+                        setDateFilter({ 
+                          from: now.toISOString().split('T')[0], 
+                          to: endOfWeek.toISOString().split('T')[0] 
+                        })
+                      }},
+                      { text: 'Next 2 Weeks', onPress: () => {
+                        const now = new Date()
+                        const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+                        console.log('📅 User changed date filter to next 2 weeks')
+                        setDateFilter({ 
+                          from: now.toISOString().split('T')[0], 
+                          to: twoWeeksFromNow.toISOString().split('T')[0] 
+                        })
+                      }},
+                      { text: 'This Month', onPress: () => {
+                        const now = new Date()
+                        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                        console.log('📅 User changed date filter to this month')
+                        setDateFilter({ 
+                          from: now.toISOString().split('T')[0], 
+                          to: endOfMonth.toISOString().split('T')[0] 
+                        })
+                      }},
+                      { text: 'All Events', onPress: () => {
+                        const today = new Date().toISOString().split('T')[0]
+                        console.log('📅 User changed date filter to all events (from today onwards)')
+                        setDateFilter({ from: today, to: '' })
+                      }},
+                      { text: 'Cancel', style: 'cancel' }
+                    ]
+                  )
+                }}
+              >
+                <Text style={styles.dateFilterButtonText}>📅</Text>
+              </TouchableOpacity>
+            </View>
+         </View>
+       )}
+
+       {/* Background Loading Indicator */}
+       {isBackgroundLoading && (
+         <View style={styles.backgroundLoadingContainer}>
+           <ActivityIndicator size="small" color="#007AFF" />
+           <Text style={styles.backgroundLoadingText}>Loading more events...</Text>
+         </View>
+       )}
+
+       {/* Create New Event Button */}
+       <TouchableOpacity
+         style={styles.createEventButton}
+         onPress={() => {
+           setSelectedEvent(null)
+           setShowEventEditor(true)
+         }}
+       >
+         <Text style={styles.createEventButtonText}>+ Create Event</Text>
+       </TouchableOpacity>
 
       {/* Event Details Modal */}
        <Modal
@@ -1280,11 +1362,81 @@ const styles = StyleSheet.create({
   paginationButtonTextDisabled: {
     color: '#999',
   },
-  paginationInfo: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-})
+     paginationInfo: {
+     fontSize: 16,
+     fontWeight: 'bold',
+     color: '#333',
+   },
+   backgroundLoadingContainer: {
+     position: 'absolute',
+     top: 20,
+     left: 20,
+     right: 20,
+     backgroundColor: 'rgba(255, 255, 255, 0.9)',
+     padding: 10,
+     borderRadius: 8,
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'center',
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+   },
+   backgroundLoadingText: {
+     marginLeft: 8,
+     fontSize: 14,
+     color: '#666',
+     fontWeight: '500',
+   },
+   locationInfoContainer: {
+     position: 'absolute',
+     top: 60,
+     left: 20,
+     right: 20,
+     backgroundColor: 'rgba(255, 255, 255, 0.95)',
+     padding: 12,
+     borderRadius: 8,
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'space-between',
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 3,
+   },
+   locationInfoText: {
+     fontSize: 14,
+     color: '#333',
+     fontWeight: '500',
+     flex: 1,
+   },
+   radiusAdjustButton: {
+     padding: 8,
+     backgroundColor: '#007AFF',
+     borderRadius: 6,
+     marginLeft: 10,
+   },
+       radiusAdjustButtonText: {
+      fontSize: 16,
+      color: 'white',
+    },
+    filterButtonsContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    dateFilterButton: {
+      padding: 8,
+      backgroundColor: '#28a745',
+      borderRadius: 6,
+      marginLeft: 8,
+    },
+    dateFilterButtonText: {
+      fontSize: 16,
+      color: 'white',
+    },
+  })
 
 export default MapViewNative

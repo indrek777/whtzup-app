@@ -247,9 +247,25 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setAddress(event.address)
     // Safely handle startsAt which might be undefined
     if (event.startsAt) {
-      const parts = event.startsAt.split(' ')
-      setDate(parts[0] || '')
-      setTime(parts[1] || '12:00')
+      try {
+        const eventDate = new Date(event.startsAt)
+        if (!isNaN(eventDate.getTime())) {
+          // Extract date in YYYY-MM-DD format
+          const dateStr = eventDate.toISOString().split('T')[0]
+          setDate(dateStr)
+          
+          // Extract time in HH:MM format
+          const timeStr = eventDate.toTimeString().split(' ')[0].substring(0, 5)
+          setTime(timeStr)
+        } else {
+          setDate('')
+          setTime('12:00')
+        }
+      } catch (error) {
+        console.error('Error parsing startsAt:', error)
+        setDate('')
+        setTime('12:00')
+      }
     } else {
       setDate('')
       setTime('12:00')
@@ -257,7 +273,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setOrganizer(event.createdBy || 'Event Organizer')
     setAttendees('0') // Default value since this field doesn't exist in the Event type
     setMaxAttendees('')
-            setCoordinates([event.latitude, event.longitude])
+    setCoordinates([event.latitude, event.longitude])
   }
 
   // Populate bulk edit form
@@ -426,9 +442,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
 
   // Save single event
   const saveEvent = async () => {
-    if (!editingEvent) return
+    console.log('💾 Save event called')
+    console.log('💾 Editing event:', editingEvent?.name)
+    console.log('💾 Form data:', { title, venue, category, date, time })
+    
+    if (!editingEvent) {
+      console.log('❌ No editing event found')
+      return
+    }
     
     if (!title.trim() || !venue.trim()) {
+      console.log('❌ Validation failed: title or venue is empty')
       Alert.alert('Validation Error', 'Title and venue are required')
       return
     }
@@ -447,11 +471,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
       updatedAt: new Date().toISOString()
     }
 
+    console.log('💾 Updated event data:', updatedEvent)
+
     try {
       setIsLoading(true)
+      console.log('💾 Calling syncService.updateEvent...')
       // Save to backend via sync service
       const savedEvent = await syncService.updateEvent(updatedEvent)
+      console.log('💾 Event saved successfully:', savedEvent)
+      
       // Update local state
+      console.log('💾 Updating local state...')
       onUpdateEvent(editingEvent.id, savedEvent)
       onEventUpdated?.(savedEvent)
       
@@ -465,7 +495,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
       }
     } catch (error) {
-      console.error('Error saving event:', error)
+      console.error('❌ Error saving event:', error)
       Alert.alert('Error', 'Failed to save event. Please try again.')
     } finally {
       setIsLoading(false)
@@ -815,7 +845,55 @@ const EventEditor: React.FC<EventEditorProps> = ({
     }
   }
 
-  const categories: string[] = ['music', 'food', 'sports', 'art', 'business', 'other']
+  // Marker icon function (same as in MapViewNative)
+  const getMarkerIcon = (category: string): string => {
+    const icons: { [key: string]: string } = {
+      'music': '🎵',
+      'sports': '⚽',
+      'art': '🎨',
+      'food': '🍽️',
+      'business': '💼',
+      'technology': '💻',
+      'health & wellness': '🏥',
+      'entertainment': '🎭',
+      'education': '📚',
+      'cultural': '🏛️',
+      'nightlife': '🌙',
+      'family & kids': '👨‍👩‍👧‍👦',
+      'nature & environment': '🌿',
+      'theater': '🎭',
+      'comedy': '😄',
+      'charity & community': '🤝',
+      'fashion & beauty': '👗',
+      'science & education': '🔬',
+      'gaming & entertainment': '🎮',
+      'other': '⭐'
+    }
+    return icons[category.toLowerCase()] || '📍'
+  }
+
+  const categories: string[] = [
+    'music',
+    'sports', 
+    'health & wellness',
+    'entertainment',
+    'nature & environment',
+    'theater',
+    'art',
+    'comedy',
+    'food',
+    'education',
+    'business',
+    'technology',
+    'family & kids',
+    'cultural',
+    'nightlife',
+    'charity & community',
+    'fashion & beauty',
+    'science & education',
+    'gaming & entertainment',
+    'other'
+  ]
 
   if (!visible) return null
 
@@ -1087,7 +1165,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                       styles.categoryButtonText,
                       category === cat && styles.selectedCategoryText
                     ]}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      {getMarkerIcon(cat)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1319,7 +1397,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                         styles.categoryButtonText,
                         category === cat && styles.selectedCategoryText
                       ]}>
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        {getMarkerIcon(cat)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1761,17 +1839,19 @@ const styles = StyleSheet.create({
   },
   categoryButton: {
     backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     marginRight: 8,
     marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectedCategory: {
     backgroundColor: '#007AFF',
   },
   categoryButtonText: {
-    fontSize: 14,
+    fontSize: 20,
     color: '#333',
   },
   selectedCategoryText: {

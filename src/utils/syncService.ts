@@ -427,7 +427,7 @@ class SyncService {
     }
   }
 
-  public async fetchEvents(userLocation?: { latitude: number; longitude: number }, radius?: number): Promise<Event[]> {
+  public async fetchEvents(userLocation?: { latitude: number; longitude: number }, radius?: number, limit?: number, dateFilter?: { from?: string; to?: string }): Promise<Event[]> {
     console.log('🔄 Fetching events from:', `${API_BASE_URL}/api/events`);
     console.log('📱 Device ID:', this.deviceId);
     console.log('🌐 Online status:', this.isOnline);
@@ -441,8 +441,30 @@ class SyncService {
         params.append('latitude', userLocation.latitude.toString());
         params.append('longitude', userLocation.longitude.toString());
         params.append('radius', radius.toString());
-        url += `?${params.toString()}`;
         console.log(`🎯 Fetching events within ${radius}km of user location`);
+      }
+      
+      // Add date filtering if provided
+      if (dateFilter) {
+        if (dateFilter.from) {
+          params.append('from', dateFilter.from);
+          console.log(`📅 Date filter from: ${dateFilter.from}`);
+        }
+        if (dateFilter.to) {
+          params.append('to', dateFilter.to);
+          console.log(`📅 Date filter to: ${dateFilter.to}`);
+        }
+      }
+      
+      // Add limit for progressive loading
+      if (limit) {
+        params.append('limit', limit.toString());
+        console.log(`📦 Limiting to ${limit} events for faster loading`);
+      }
+      
+      // Build URL with all parameters
+      if (params.toString()) {
+        url += `?${params.toString()}`;
       }
       
       const response = await this.makeApiCall(url);
@@ -473,6 +495,37 @@ class SyncService {
       const cachedEvents = await this.getCachedEvents();
       console.log(`📦 Returning ${cachedEvents.length} cached events for offline use`);
       return cachedEvents;
+    }
+  }
+
+  // New method for progressive loading - fetch initial batch quickly
+  public async fetchEventsProgressive(userLocation?: { latitude: number; longitude: number }, radius?: number, dateFilter?: { from?: string; to?: string }): Promise<{ initial: Event[], total: number }> {
+    console.log('🚀 Starting progressive event loading...');
+    
+    try {
+      // First, try to get cached events immediately for instant display
+      const cachedEvents = await this.getCachedEvents();
+      let initialEvents: Event[] = [];
+      
+      if (cachedEvents.length > 0) {
+        console.log(`📦 Using ${cachedEvents.length} cached events for instant display`);
+        initialEvents = cachedEvents;
+      }
+      
+      // Then fetch fresh data in background (limited to 100 events initially)
+      const freshEvents = await this.fetchEvents(userLocation, radius, 100, dateFilter);
+      
+      return {
+        initial: initialEvents.length > 0 ? initialEvents : freshEvents,
+        total: freshEvents.length
+      };
+    } catch (error) {
+      console.error('❌ Progressive loading failed:', error);
+      const cachedEvents = await this.getCachedEvents();
+      return {
+        initial: cachedEvents,
+        total: cachedEvents.length
+      };
     }
   }
 

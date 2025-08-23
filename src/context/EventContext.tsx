@@ -278,7 +278,10 @@ interface EventContextType {
   selectedEvent: Event | null
   userLocation: [number, number] | null
   isLoading: boolean
+  isBackgroundLoading: boolean
   locationPermissionGranted: boolean | undefined
+  currentRadius: number
+  dateFilter: { from: string; to: string }
   syncStatus: {
     isOnline: boolean
     lastSyncAt: string | null
@@ -288,6 +291,8 @@ interface EventContextType {
   setSelectedEvent: (event: Event | null) => void
   setUserLocation: (location: [number, number]) => void
   setEvents: (events: Event[]) => void
+  setCurrentRadius: (radius: number) => void
+  setDateFilter: (filter: { from: string; to: string }) => void
   addEvent: (event: Event) => void
   updateEvent: (eventId: string, updatedEvent: Event) => void
   deleteEvent: (eventId: string) => void
@@ -314,7 +319,21 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
+  const [currentRadius, setCurrentRadius] = useState(150) // Default radius
+  
+  // Default date filter: 1 week ahead from now
+  const getDefaultDateFilter = () => {
+    const now = new Date()
+    const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    return {
+      from: now.toISOString().split('T')[0], // Today
+      to: oneWeekFromNow.toISOString().split('T')[0] // 1 week from now
+    }
+  }
+  
+  const [dateFilter, setDateFilter] = useState(getDefaultDateFilter())
   const [syncStatus, setSyncStatus] = useState({
     isOnline: false,
     lastSyncAt: null as string | null,
@@ -349,34 +368,37 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     getUserLocation()
   }, [])
 
-  // Load events with sync service integration and location-based filtering
+  // Load events with smart location-based progressive loading
   useEffect(() => {
     const loadEvents = async () => {
       try {
         setIsLoading(true)
-        console.log('🔄 Loading events with sync service...')
+        console.log('🚀 Starting smart location-based event loading...')
         
         // Get sync status
         const status = await syncService.getSyncStatusAsync()
         setSyncStatus(status)
         
-        // Try to fetch events from backend via sync service with location filtering
+        // Use smart progressive loading for better performance
         try {
-          let serverEvents: Event[]
+          let result: { initial: Event[], total: number }
           
           // Check if we have location permission and user location
           if (locationPermissionGranted === true && userLocation) {
-            // Use 500km radius filtering
-            const radiusKm = 500
-            console.log(`🎯 Fetching events within ${radiusKm}km of user location`)
-            serverEvents = await syncService.fetchEvents(
+            // Use user's preferred radius or calculate smart radius
+            const radiusToUse = currentRadius !== 150 ? currentRadius : calculateSmartRadius(userLocation)
+            console.log(`🎯 Loading events: Using ${radiusToUse}km radius for user at ${userLocation[0]}, ${userLocation[1]}`)
+            
+            result = await syncService.fetchEventsProgressive(
               { latitude: userLocation[0], longitude: userLocation[1] }, 
-              radiusKm
+              radiusToUse,
+              dateFilter
             )
           } else if (locationPermissionGranted === false) {
-            // Location permission was explicitly denied, load all events
-            console.log('📍 Location permission denied, fetching all events')
-            serverEvents = await syncService.fetchEvents()
+            // Location permission was explicitly denied, load events around Estonia center
+            console.log('📍 Location permission denied, loading events around Estonia center')
+            const estoniaCenter = { latitude: 58.3776252, longitude: 26.7290063 }
+            result = await syncService.fetchEventsProgressive(estoniaCenter, 100, dateFilter)
           } else {
             // Location permission check is still pending, wait for it to complete
             console.log('⏳ Location permission check pending, skipping event load')
@@ -384,17 +406,44 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             return
           }
           
-          console.log(`✅ Loaded ${serverEvents.length} events from backend`)
+          console.log(`✅ Smart loading: ${result.initial.length} initial events, ${result.total} total available`)
           
-          if (serverEvents.length > 0) {
+          if (result.initial.length > 0) {
             // Process events with venue storage to auto-fix coordinates
-            const processedEvents = await processEventsWithVenueStorage(serverEvents)
+            const processedEvents = await processEventsWithVenueStorage(result.initial)
             setEvents(processedEvents)
             setIsLoading(false)
+            
+            // Smart background loading based on event density
+            if (result.total > result.initial.length) {
+              const loadMoreRadius = calculateLoadMoreRadius(result.initial.length, result.total)
+              console.log(`🔄 Smart background loading: ${result.total - result.initial.length} more events with ${loadMoreRadius}km radius`)
+              setIsBackgroundLoading(true)
+              
+              setTimeout(async () => {
+                try {
+                  const additionalEvents = await syncService.fetchEvents(
+                    locationPermissionGranted === true && userLocation 
+                      ? { latitude: userLocation[0], longitude: userLocation[1] }
+                      : { latitude: 58.3776252, longitude: 26.7290063 },
+                    loadMoreRadius,
+                    undefined,
+                    dateFilter
+                  )
+                  const processedAdditional = await processEventsWithVenueStorage(additionalEvents)
+                  setEvents(processedAdditional)
+                  console.log(`✅ Smart background loading complete: ${processedAdditional.length} total events`)
+                } catch (error) {
+                  console.log('⚠️ Smart background loading failed:', error)
+                } finally {
+                  setIsBackgroundLoading(false)
+                }
+              }, 1500) // Reduced wait time for better UX
+            }
             return
           }
         } catch (syncError) {
-          console.log('⚠️ Sync service failed, falling back to cached events:', syncError)
+          console.log('⚠️ Smart loading failed, falling back to cached events:', syncError)
         }
         
         // Fallback to cached events from sync service
@@ -472,7 +521,63 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     if (locationPermissionGranted !== undefined) {
       loadEvents()
     }
-  }, [locationPermissionGranted, userLocation])
+  }, [locationPermissionGranted, userLocation, currentRadius, dateFilter])
+
+  // Smart radius calculation based on user location and preferences
+  const calculateSmartRadius = (userLocation: [number, number]): number => {
+    // Use user's preferred radius if set, otherwise calculate smart radius
+    if (currentRadius !== 150) {
+      console.log(`🎯 Using user's preferred radius: ${currentRadius}km`)
+      return currentRadius
+    }
+    
+    // Adjust radius based on location (urban vs rural areas)
+    const [lat, lng] = userLocation
+    
+    // Major cities in Estonia - smaller radius for dense areas
+    const majorCities = [
+      { lat: 59.436962, lng: 24.753574, name: 'Tallinn', radius: 80 },
+      { lat: 58.3776252, lng: 26.7290063, name: 'Tartu', radius: 60 },
+      { lat: 58.385807, lng: 24.496577, name: 'Pärnu', radius: 70 },
+      { lat: 59.377222, lng: 28.190278, name: 'Narva', radius: 80 },
+      { lat: 58.924444, lng: 25.318889, name: 'Võru', radius: 90 },
+      { lat: 58.363889, lng: 26.722778, name: 'Viljandi', radius: 85 }
+    ]
+    
+    // Check if user is near a major city
+    for (const city of majorCities) {
+      const distance = calculateDistance(lat, lng, city.lat, city.lng)
+      if (distance < 50) { // Within 50km of a major city
+        console.log(`🏙️ User near ${city.name}, using ${city.radius}km radius`)
+        // Only set currentRadius if it's still the default (150)
+        if (currentRadius === 150) {
+          setCurrentRadius(city.radius)
+        }
+        return city.radius
+      }
+    }
+    
+    // Rural areas - larger radius to find more events
+    const ruralRadius = 150
+    console.log(`🌲 User in rural area, using ${ruralRadius}km radius`)
+    // Only set currentRadius if it's still the default (150)
+    if (currentRadius === 150) {
+      setCurrentRadius(ruralRadius)
+    }
+    return ruralRadius
+  }
+
+  // Calculate radius for loading more events based on current event density
+  const calculateLoadMoreRadius = (currentEvents: number, totalAvailable: number): number => {
+    // If we have few events, expand radius to find more
+    if (currentEvents < 50) {
+      return 300 // Larger radius to find more events
+    } else if (currentEvents < 100) {
+      return 250 // Medium expansion
+    } else {
+      return 200 // Standard radius
+    }
+  }
 
   // Setup sync service listeners
   useEffect(() => {
@@ -725,11 +830,16 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     selectedEvent,
     userLocation,
     isLoading,
+    isBackgroundLoading,
     locationPermissionGranted,
+    currentRadius,
+    dateFilter,
     syncStatus,
     setSelectedEvent,
     setUserLocation,
     setEvents,
+    setCurrentRadius,
+    setDateFilter,
     addEvent,
     updateEvent,
     deleteEvent,
