@@ -29,21 +29,29 @@ interface Conflict {
 // Configuration
 const API_BASE_URL = 'http://olympio.ee:4000';
 const SYNC_INTERVAL = 30000; // 30 seconds
+const UPDATE_CHECK_INTERVAL = 60000; // 60 seconds for checking updates (reduced frequency)
 const MAX_RETRY_COUNT = 3;
+const MAX_UPDATE_CHECK_FAILURES = 5; // Maximum consecutive failures before backing off
+const ENABLE_AUTOMATIC_UPDATES = true; // Set to false to disable automatic update checking
 
 class SyncService {
   private socket: Socket | null = null;
   private deviceId: string | null = null;
   private isOnline: boolean = false;
   private syncInterval: NodeJS.Timeout | null = null;
+  private updateCheckInterval: NodeJS.Timeout | null = null;
   private pendingOperations: SyncOperation[] = [];
   private listeners: Map<string, Function[]> = new Map();
+  private lastUpdateCheck: string | null = null;
+  private updateCheckFailures: number = 0;
+  private isUpdateCheckInProgress: boolean = false;
 
   constructor() {
     this.initializeDeviceId();
     this.setupNetworkListener();
     this.setupSocketConnection();
     this.loadPendingOperations();
+    this.loadLastUpdateCheck();
   }
 
   // Initialize device ID
@@ -65,6 +73,19 @@ class SyncService {
       const v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
+  }
+
+  // Load last update check timestamp
+  private async loadLastUpdateCheck(): Promise<void> {
+    try {
+      this.lastUpdateCheck = await AsyncStorage.getItem('lastUpdateCheck');
+      if (this.lastUpdateCheck) {
+        console.log('📅 Loaded last update check:', this.lastUpdateCheck);
+      }
+    } catch (error) {
+      console.error('Error loading last update check:', error);
+      this.lastUpdateCheck = null;
+    }
   }
 
   // Network status monitoring
@@ -235,9 +256,23 @@ class SyncService {
       console.log('📄 Response data received');
       return data;
     } catch (error) {
-      console.error('❌ API call failed:', error);
-      // Re-throw with original message if it's already user-friendly
-      throw error;
+      // Provide more specific error messages for different types of failures
+      let errorMessage = 'Unknown error';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Add context about the endpoint that failed
+      const endpointName = endpoint.split('/').pop() || 'unknown';
+      const contextMessage = `API call to ${endpointName} failed: ${errorMessage}`;
+      
+      console.log(`⚠️ ${contextMessage}`);
+      
+      // Re-throw with enhanced message
+      throw new Error(contextMessage);
     }
   }
 
@@ -584,6 +619,207 @@ class SyncService {
     }
   }
 
+  // Update checking methods
+  public async checkForUpdates(): Promise<void> {
+    // Prevent concurrent update checks
+    if (this.isUpdateCheckInProgress) {
+      console.log('🔄 Update check already in progress, skipping');
+      return;
+    }
+
+    // Check if we should back off due to too many failures
+    if (this.updateCheckFailures >= MAX_UPDATE_CHECK_FAILURES) {
+      console.log(`🔄 Too many update check failures (${this.updateCheckFailures}), backing off`);
+      return;
+    }
+
+    if (!this.isOnline) {
+      console.log('🔄 Offline - skipping update check');
+      return;
+    }
+
+    this.isUpdateCheckInProgress = true;
+
+    try {
+      console.log('🔄 Checking for updates from backend...');
+      const cachedEvents = await this.getCachedEvents();
+      
+      if (cachedEvents.length === 0) {
+        console.log('🔄 No cached events, skipping update check');
+        this.updateCheckFailures = 0; // Reset failures on successful check
+        return;
+      }
+
+      // Get the latest update timestamp from cached events
+      const latestCachedUpdate = cachedEvents.reduce((latest, event) => {
+        const eventUpdate = event.updatedAt || event.updated_at || event.createdAt || event.created_at;
+        return eventUpdate && eventUpdate > latest ? eventUpdate : latest;
+      }, this.lastUpdateCheck || '1970-01-01T00:00:00.000Z');
+
+      // Check for updates since the last check
+      const response = await this.makeApiCall(`/events/updates?since=${encodeURIComponent(latestCachedUpdate)}&deviceId=${this.deviceId}`);
+      
+      if (response.success && response.data) {
+        const { updates, deletions } = response.data;
+        console.log(`🔄 Found ${updates?.length || 0} updates and ${deletions?.length || 0} deletions`);
+        
+        if (updates && updates.length > 0) {
+          await this.processEventUpdates(updates);
+        }
+        
+        if (deletions && deletions.length > 0) {
+          await this.processEventDeletions(deletions);
+        }
+        
+        this.lastUpdateCheck = new Date().toISOString();
+        await AsyncStorage.setItem('lastUpdateCheck', this.lastUpdateCheck);
+        
+        // Reset failure count on success
+        this.updateCheckFailures = 0;
+        
+        // Notify listeners about the update check completion
+        this.notifyListeners('updateCheckCompleted', { 
+          updates: updates?.length || 0, 
+          deletions: deletions?.length || 0,
+          timestamp: this.lastUpdateCheck
+        });
+      } else {
+        throw new Error('Invalid response from update check');
+      }
+    } catch (error) {
+      // Provide more specific error messages
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      console.log(`⚠️ Update check failed (${this.updateCheckFailures + 1}/${MAX_UPDATE_CHECK_FAILURES}): ${errorMessage}`);
+      this.updateCheckFailures++;
+      
+      // Create a more informative error object
+      const syncError = {
+        message: `Update check failed: ${errorMessage}`,
+        failureCount: this.updateCheckFailures,
+        maxFailures: MAX_UPDATE_CHECK_FAILURES,
+        timestamp: new Date().toISOString()
+      };
+      
+      this.notifyListeners('updateCheckError', syncError);
+      
+      // If we have too many failures, increase the check interval temporarily
+      if (this.updateCheckFailures >= MAX_UPDATE_CHECK_FAILURES) {
+        console.log(`🔄 Too many failures (${this.updateCheckFailures}), temporarily disabling automatic update checks for 5 minutes`);
+        this.stopUpdateCheckInterval();
+        
+        // Restart with longer interval after 5 minutes
+        setTimeout(() => {
+          console.log('🔄 Re-enabling automatic update checks after backoff period');
+          this.updateCheckFailures = 0;
+          this.startUpdateCheckInterval();
+        }, 5 * 60 * 1000); // 5 minutes
+      }
+    } finally {
+      this.isUpdateCheckInProgress = false;
+    }
+  }
+
+  private async processEventUpdates(updates: any[]): Promise<void> {
+    try {
+      const cachedEvents = await this.getCachedEvents();
+      let hasChanges = false;
+
+      for (const serverEvent of updates) {
+        const cachedIndex = cachedEvents.findIndex(e => e.id === serverEvent.id);
+        
+        if (cachedIndex !== -1) {
+          // Event exists in cache, check if it needs updating
+          const cachedEvent = cachedEvents[cachedIndex];
+          const serverUpdatedAt = serverEvent.updated_at || serverEvent.updatedAt;
+          const cachedUpdatedAt = cachedEvent.updatedAt || cachedEvent.updated_at;
+          
+          if (serverUpdatedAt > cachedUpdatedAt) {
+            console.log(`🔄 Updating cached event: ${serverEvent.name}`);
+            
+            // Transform server event to match frontend format
+            const updatedEvent = {
+              ...serverEvent,
+              latitude: Number(serverEvent.latitude) || 0,
+              longitude: Number(serverEvent.longitude) || 0,
+              startsAt: serverEvent.starts_at || serverEvent.startsAt || '',
+              venue: serverEvent.venue || '',
+              address: serverEvent.address || '',
+              category: serverEvent.category || 'other',
+              createdBy: serverEvent.created_by || serverEvent.createdBy || 'Event Organizer',
+              updatedAt: serverEvent.updated_at || serverEvent.updatedAt || new Date().toISOString()
+            };
+            
+            cachedEvents[cachedIndex] = updatedEvent;
+            hasChanges = true;
+            
+            // Notify listeners about the specific event update
+            this.notifyListeners('eventUpdated', updatedEvent);
+          }
+        } else {
+          // New event from server
+          console.log(`🆕 Adding new event from server: ${serverEvent.name}`);
+          
+          const newEvent = {
+            ...serverEvent,
+            latitude: Number(serverEvent.latitude) || 0,
+            longitude: Number(serverEvent.longitude) || 0,
+            startsAt: serverEvent.starts_at || serverEvent.startsAt || '',
+            venue: serverEvent.venue || '',
+            address: serverEvent.address || '',
+            category: serverEvent.category || 'other',
+            createdBy: serverEvent.created_by || serverEvent.createdBy || 'Event Organizer',
+            updatedAt: serverEvent.updated_at || serverEvent.updatedAt || new Date().toISOString()
+          };
+          
+          cachedEvents.push(newEvent);
+          hasChanges = true;
+          
+          // Notify listeners about the new event
+          this.notifyListeners('eventCreated', newEvent);
+        }
+      }
+
+      if (hasChanges) {
+        await this.setCachedEvents(cachedEvents);
+        console.log(`✅ Updated cache with ${updates.length} events`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing event updates:', error);
+    }
+  }
+
+  private async processEventDeletions(deletions: string[]): Promise<void> {
+    try {
+      const cachedEvents = await this.getCachedEvents();
+      let hasChanges = false;
+
+      for (const eventId of deletions) {
+        const eventIndex = cachedEvents.findIndex(e => e.id === eventId);
+        if (eventIndex !== -1) {
+          console.log(`🗑️ Removing deleted event: ${cachedEvents[eventIndex].name}`);
+          cachedEvents.splice(eventIndex, 1);
+          hasChanges = true;
+          
+          // Notify listeners about the event deletion
+          this.notifyListeners('eventDeleted', { eventId });
+        }
+      }
+
+      if (hasChanges) {
+        await this.setCachedEvents(cachedEvents);
+        console.log(`✅ Removed ${deletions.length} deleted events from cache`);
+      }
+    } catch (error) {
+      console.error('❌ Error processing event deletions:', error);
+    }
+  }
+
   // Cache management
   private async getCachedEvents(): Promise<Event[]> {
     try {
@@ -705,6 +941,8 @@ class SyncService {
   // Connection event handlers
   private async onConnectionRestored(): Promise<void> {
     console.log('Connection restored, syncing...');
+    // Reset failure count when connection is restored
+    this.updateCheckFailures = 0;
     await this.loadPendingOperations();
     await this.syncPendingOperations();
     this.startSyncInterval();
@@ -720,10 +958,16 @@ class SyncService {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
-    // Use longer interval to reduce performance impact
+    
+    // Start pending operations sync interval
     this.syncInterval = setInterval(() => {
       this.syncPendingOperations();
     }, SYNC_INTERVAL * 2); // Double the interval (60 seconds instead of 30)
+    
+    // Start update checking interval
+    this.startUpdateCheckInterval();
+    
+    console.log('🔄 Started sync intervals - Pending ops: 60s, Update checks: 60s');
   }
 
   private stopSyncInterval(): void {
@@ -731,6 +975,33 @@ class SyncService {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
+    this.stopUpdateCheckInterval();
+    console.log('🔄 Stopped sync intervals');
+  }
+
+  private startUpdateCheckInterval(): void {
+    if (!ENABLE_AUTOMATIC_UPDATES) {
+      console.log('🔄 Automatic updates disabled, skipping update check interval');
+      return;
+    }
+
+    if (this.updateCheckInterval) {
+      clearInterval(this.updateCheckInterval);
+    }
+    
+    this.updateCheckInterval = setInterval(() => {
+      this.checkForUpdates();
+    }, UPDATE_CHECK_INTERVAL);
+    
+    console.log(`🔄 Started update check interval: ${UPDATE_CHECK_INTERVAL / 1000}s`);
+  }
+
+  private stopUpdateCheckInterval(): void {
+    if (this.updateCheckInterval) {
+      clearInterval(this.updateCheckInterval);
+      this.updateCheckInterval = null;
+    }
+    console.log('🔄 Stopped update check interval');
   }
 
   // Public status methods
@@ -751,22 +1022,68 @@ class SyncService {
     return cachedEvents;
   }
 
+  // Public method to manually trigger update check
+  public async forceUpdateCheck(): Promise<void> {
+    console.log('🔄 Manual update check triggered');
+    // Reset failure count for manual checks
+    this.updateCheckFailures = 0;
+    await this.checkForUpdates();
+  }
+
+  // Public method to clear sync errors and reset failure count
+  public clearSyncErrors(): void {
+    console.log('🔄 Clearing sync errors and resetting failure count');
+    this.updateCheckFailures = 0;
+    this.notifyListeners('syncErrorsCleared', { timestamp: new Date().toISOString() });
+  }
+
+  // Public method to get current sync health status
+  public getSyncHealth(): {
+    isHealthy: boolean;
+    failureCount: number;
+    maxFailures: number;
+    isBackingOff: boolean;
+    lastUpdateCheck: string | null;
+  } {
+    return {
+      isHealthy: this.updateCheckFailures < MAX_UPDATE_CHECK_FAILURES,
+      failureCount: this.updateCheckFailures,
+      maxFailures: MAX_UPDATE_CHECK_FAILURES,
+      isBackingOff: this.updateCheckFailures >= MAX_UPDATE_CHECK_FAILURES,
+      lastUpdateCheck: this.lastUpdateCheck
+    };
+  }
+
   public async getSyncStatusAsync(): Promise<SyncStatus> {
     try {
-      const response = await this.makeApiCall('/sync/status');
-      if (response.success) {
-        return {
-          isOnline: this.isOnline,
-          lastSyncAt: response.lastSync,
-          pendingOperations: response.queue.pending,
-          errors: response.queue.errors > 0 ? ['Some operations failed'] : []
-        };
+      // Only try to get server sync status if we're online
+      if (this.isOnline) {
+        try {
+          const response = await this.makeApiCall('/sync/status');
+          if (response.success) {
+            return {
+              isOnline: this.isOnline,
+              lastSyncAt: response.lastSync || this.lastUpdateCheck,
+              pendingOperations: response.queue?.pending || this.pendingOperations.length,
+              errors: response.queue?.errors > 0 ? ['Some operations failed'] : []
+            };
+          }
+        } catch (serverError) {
+          console.log('⚠️ Server sync status unavailable, using local status:', serverError.message);
+          // Don't throw, fall back to local status
+        }
       }
     } catch (error) {
-      console.error('Error getting sync status:', error);
+      console.log('⚠️ Error getting sync status, using local status:', error.message);
     }
 
-    return this.getSyncStatus();
+    // Return local sync status as fallback
+    return {
+      isOnline: this.isOnline,
+      lastSyncAt: this.lastUpdateCheck,
+      pendingOperations: this.pendingOperations.length,
+      errors: this.updateCheckFailures > 0 ? [`${this.updateCheckFailures} consecutive update failures`] : []
+    };
   }
 
   // Cleanup

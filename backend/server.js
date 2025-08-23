@@ -169,9 +169,24 @@ async function logSyncEvent(eventId, operation, oldData, newData, deviceId) {
 }
 
 // Graceful shutdown
+let isShuttingDown = false;
+
 process.on('SIGTERM', async () => {
+  if (isShuttingDown) {
+    logger.info('Shutdown already in progress, ignoring SIGTERM');
+    return;
+  }
+  
+  isShuttingDown = true;
   logger.info('SIGTERM received, shutting down gracefully');
-  await pool.end();
+  
+  try {
+    // Close the pool
+    await pool.end();
+    logger.info('Database pool closed gracefully');
+  } catch (error) {
+    logger.error('Error closing database pool:', error);
+  }
   
   try {
     if (redis.isReady) {
@@ -183,9 +198,52 @@ process.on('SIGTERM', async () => {
   }
   
   server.close(() => {
-    logger.info('Process terminated');
+    logger.info('Server closed, process terminated');
     process.exit(0);
   });
+  
+  // Force exit after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+});
+
+// Handle SIGINT as well
+process.on('SIGINT', async () => {
+  if (isShuttingDown) {
+    logger.info('Shutdown already in progress, ignoring SIGINT');
+    return;
+  }
+  
+  isShuttingDown = true;
+  logger.info('SIGINT received, shutting down gracefully');
+  
+  try {
+    await pool.end();
+    logger.info('Database pool closed gracefully');
+  } catch (error) {
+    logger.error('Error closing database pool:', error);
+  }
+  
+  try {
+    if (redis.isReady) {
+      await redis.quit();
+      logger.info('Redis connection closed gracefully');
+    }
+  } catch (error) {
+    logger.error('Error closing Redis connection:', error);
+  }
+  
+  server.close(() => {
+    logger.info('Server closed, process terminated');
+    process.exit(0);
+  });
+  
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
 });
 
 // Start server

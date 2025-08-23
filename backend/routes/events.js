@@ -111,6 +111,62 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/events/updates - Check for updates since timestamp
+router.get('/updates', async (req, res) => {
+  try {
+    const { since, deviceId } = req.query;
+    
+    if (!since) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameter: since' 
+      });
+    }
+
+    console.log(`🔄 Checking for updates since: ${since} for device: ${deviceId}`);
+
+    // Get updated events
+    const updatesQuery = `
+      SELECT * FROM events 
+      WHERE updated_at > $1 
+      AND deleted_at IS NULL
+      ORDER BY updated_at ASC
+    `;
+    const updatesResult = await pool.query(updatesQuery, [since]);
+    
+    // Get deleted events (events that were deleted since the timestamp)
+    const deletionsQuery = `
+      SELECT id FROM events 
+      WHERE deleted_at > $1 
+      AND deleted_at IS NOT NULL
+      ORDER BY deleted_at ASC
+    `;
+    const deletionsResult = await pool.query(deletionsQuery, [since]);
+    
+    const updates = updatesResult.rows.map(transformEventFields);
+    const deletions = deletionsResult.rows.map(row => row.id);
+    
+    console.log(`🔄 Found ${updates.length} updates and ${deletions.length} deletions`);
+    
+    res.json({
+      success: true,
+      data: {
+        updates,
+        deletions,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error checking for updates:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check for updates',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // GET /api/events/:id - Get single event
 router.get('/:id', async (req, res) => {
   try {

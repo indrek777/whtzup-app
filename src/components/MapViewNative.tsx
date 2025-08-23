@@ -524,7 +524,7 @@ const SimpleMarker = React.memo(({
 })
 
 const MapViewNative: React.FC = () => {
-  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter } = useEvents()
+  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
@@ -908,11 +908,30 @@ const MapViewNative: React.FC = () => {
                  <Text style={styles.syncStatusText}>
                    Status: {syncStatus.isOnline ? '🟢 Online' : '🔴 Offline'}
                  </Text>
+                 {syncStatus.lastSyncAt && (
+                   <Text style={styles.syncStatusText}>
+                     Last sync: {new Date(syncStatus.lastSyncAt).toLocaleTimeString()}
+                   </Text>
+                 )}
                  {syncStatus.pendingOperations > 0 && (
                    <Text style={styles.syncStatusText}>
                      Pending: {syncStatus.pendingOperations} operations
                    </Text>
                  )}
+                 {syncStatus.errors.length > 0 && (
+                   <Text style={styles.syncErrorText}>
+                     Errors: {syncStatus.errors.length}
+                   </Text>
+                 )}
+                 <TouchableOpacity
+                   style={styles.forceUpdateButton}
+                   onPress={() => {
+                     console.log('🔄 Manual update check requested from UI')
+                     forceUpdateCheck()
+                   }}
+                 >
+                   <Text style={styles.forceUpdateButtonText}>🔄 Check Updates</Text>
+                 </TouchableOpacity>
                </View>
              </ScrollView>
            )}
@@ -1235,6 +1254,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 5,
+  },
+  syncErrorText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    marginBottom: 5,
+    fontWeight: '600',
+  },
+  forceUpdateButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  forceUpdateButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   createEventButton: {
     position: 'absolute',

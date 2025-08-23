@@ -298,6 +298,8 @@ interface EventContextType {
   deleteEvent: (eventId: string) => void
   getEventsNearby: (radius: number) => Event[]
   rateEvent: (eventId: string, rating: number) => void
+  forceUpdateCheck: () => Promise<void>
+  clearSyncErrors: () => void
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined)
@@ -409,8 +411,15 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
           console.log(`✅ Smart loading: ${result.initial.length} initial events, ${result.total} total available`)
           
           if (result.initial.length > 0) {
-            // Process events with venue storage to auto-fix coordinates
-            const processedEvents = await processEventsWithVenueStorage(result.initial)
+            // For initial load, skip venue processing if there are too many events to prevent crashes
+            let processedEvents: Event[]
+            if (result.initial.length > 500) {
+              console.log(`📦 Large dataset (${result.initial.length} events), skipping venue processing for initial load`)
+              processedEvents = result.initial.map(normalizeEventData)
+            } else {
+              // Process events with venue storage to auto-fix coordinates
+              processedEvents = await processEventsWithVenueStorage(result.initial)
+            }
             setEvents(processedEvents)
             setIsLoading(false)
             
@@ -452,7 +461,14 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
           console.log(`📦 Loaded ${cachedEvents.length} cached events`)
           
           if (cachedEvents.length > 0) {
-            const processedEvents = await processEventsWithVenueStorage(cachedEvents)
+            // For large cached datasets, skip venue processing to prevent crashes
+            let processedEvents: Event[]
+            if (cachedEvents.length > 500) {
+              console.log(`📦 Large cached dataset (${cachedEvents.length} events), skipping venue processing`)
+              processedEvents = cachedEvents.map(normalizeEventData)
+            } else {
+              processedEvents = await processEventsWithVenueStorage(cachedEvents)
+            }
             setEvents(processedEvents)
             setIsLoading(false)
             return
@@ -465,13 +481,27 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         const storedEvents = await loadEventsFromStorage()
         if (storedEvents.length > 0) {
           console.log(`💾 Loaded ${storedEvents.length} events from local storage`)
-          const processedEvents = await processEventsWithVenueStorage(storedEvents)
+          // For large stored datasets, skip venue processing to prevent crashes
+          let processedEvents: Event[]
+          if (storedEvents.length > 500) {
+            console.log(`💾 Large stored dataset (${storedEvents.length} events), skipping venue processing`)
+            processedEvents = storedEvents.map(normalizeEventData)
+          } else {
+            processedEvents = await processEventsWithVenueStorage(storedEvents)
+          }
           setEvents(processedEvents)
         } else {
           // Final fallback to JSON file if no stored events
           const importedEvents = await loadAllEvents()
           console.log(`📄 Loaded ${importedEvents.length} events from JSON file`)
-          const processedEvents = await processEventsWithVenueStorage(importedEvents)
+          // For large imported datasets, skip venue processing to prevent crashes
+          let processedEvents: Event[]
+          if (importedEvents.length > 500) {
+            console.log(`📄 Large imported dataset (${importedEvents.length} events), skipping venue processing`)
+            processedEvents = importedEvents.map(normalizeEventData)
+          } else {
+            processedEvents = await processEventsWithVenueStorage(importedEvents)
+          }
           setEvents(processedEvents)
         }
       } catch (error) {
@@ -626,11 +656,37 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       setSyncStatus(prev => ({ ...prev, ...status }))
     }
 
+    const handleUpdateCheckCompleted = (data: any) => {
+      console.log('📊 Update check completed:', data)
+      setSyncStatus(prev => ({ 
+        ...prev, 
+        lastSyncAt: data.timestamp,
+        errors: data.updates > 0 || data.deletions > 0 ? 
+          [...prev.errors, `Updated ${data.updates} events, deleted ${data.deletions} events`] : prev.errors
+      }))
+    }
+
+    const handleUpdateCheckError = (error: any) => {
+      console.error('❌ Update check error:', error)
+      setSyncStatus(prev => ({ 
+        ...prev, 
+        errors: [...prev.errors, `Update check failed: ${error.message || 'Unknown error'}`]
+      }))
+    }
+
+    const handleSyncErrorsCleared = (data: any) => {
+      console.log('✅ Sync errors cleared:', data)
+      setSyncStatus(prev => ({ ...prev, errors: [] }))
+    }
+
     // Add listeners
     syncService.addListener('eventCreated', handleEventCreated)
     syncService.addListener('eventUpdated', handleEventUpdated)
     syncService.addListener('eventDeleted', handleEventDeleted)
     syncService.addListener('networkStatus', handleSyncStatus)
+    syncService.addListener('updateCheckCompleted', handleUpdateCheckCompleted)
+    syncService.addListener('updateCheckError', handleUpdateCheckError)
+    syncService.addListener('syncErrorsCleared', handleSyncErrorsCleared)
     syncService.addListener('pendingOperations', (operations: any[]) => {
       setSyncStatus(prev => ({ ...prev, pendingOperations: operations.length }))
     })
@@ -641,6 +697,9 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       syncService.removeListener('eventUpdated', handleEventUpdated)
       syncService.removeListener('eventDeleted', handleEventDeleted)
       syncService.removeListener('networkStatus', handleSyncStatus)
+      syncService.removeListener('updateCheckCompleted', handleUpdateCheckCompleted)
+      syncService.removeListener('updateCheckError', handleUpdateCheckError)
+      syncService.removeListener('syncErrorsCleared', handleSyncErrorsCleared)
       syncService.removeListener('pendingOperations', () => {})
     }
   }, [])
@@ -780,49 +839,107 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   }
 
-  // Process events to auto-fix venue coordinates
+  // Process events to auto-fix venue coordinates (optimized for performance)
   const processEventsWithVenueStorage = async (eventsToProcess: Event[]): Promise<Event[]> => {
+    console.log(`🔄 Processing ${eventsToProcess.length} events with venue storage...`)
+    
+    // Limit processing to prevent crashes on large datasets
+    const maxEventsToProcess = 1000
+    const eventsToProcessLimited = eventsToProcess.slice(0, maxEventsToProcess)
+    
+    if (eventsToProcess.length > maxEventsToProcess) {
+      console.log(`⚠️ Limiting processing to ${maxEventsToProcess} events to prevent crashes`)
+    }
+    
     const processedEvents: Event[] = []
     
-    for (const event of eventsToProcess) {
-      // First normalize the event data
-      const normalizedEvent = normalizeEventData(event)
+    // Process events in batches to prevent memory issues
+    const batchSize = 50
+    for (let i = 0; i < eventsToProcessLimited.length; i += batchSize) {
+      const batch = eventsToProcessLimited.slice(i, i + batchSize)
       
-      // Auto-fix coordinates if they're default/unknown
-      const fixedCoordinates = await autoFixVenueCoordinates(
-        normalizedEvent.venue,
-        [normalizedEvent.latitude, normalizedEvent.longitude]
-      )
-      
-      // If coordinates were fixed, update the event
-      if (fixedCoordinates[0] !== normalizedEvent.latitude || fixedCoordinates[1] !== normalizedEvent.longitude) {
-        const updatedEvent = {
-          ...normalizedEvent,
-          latitude: fixedCoordinates[0],
-          longitude: fixedCoordinates[1]
+      // Process batch in parallel for better performance
+      const batchPromises = batch.map(async (event) => {
+        try {
+          // First normalize the event data
+          const normalizedEvent = normalizeEventData(event)
+          
+          // Only auto-fix coordinates if they're default/unknown (0,0 or null)
+          const needsFixing = normalizedEvent.latitude === 0 || normalizedEvent.longitude === 0 || 
+                             normalizedEvent.latitude === null || normalizedEvent.longitude === null
+          
+          if (needsFixing) {
+            const fixedCoordinates = await autoFixVenueCoordinates(
+              normalizedEvent.venue,
+              [normalizedEvent.latitude, normalizedEvent.longitude]
+            )
+            
+            // If coordinates were fixed, update the event
+            if (fixedCoordinates[0] !== normalizedEvent.latitude || fixedCoordinates[1] !== normalizedEvent.longitude) {
+              const updatedEvent = {
+                ...normalizedEvent,
+                latitude: fixedCoordinates[0],
+                longitude: fixedCoordinates[1]
+              }
+              
+              // Also save the venue to storage for future use
+              addVenue(
+                normalizedEvent.venue,
+                normalizedEvent.address,
+                fixedCoordinates
+              )
+              
+              return updatedEvent
+            }
+          }
+          
+          // Always save venue to storage for tracking
+          addVenue(
+            normalizedEvent.venue,
+            normalizedEvent.address,
+            [normalizedEvent.latitude, normalizedEvent.longitude]
+          )
+          
+          return normalizedEvent
+        } catch (error) {
+          console.error('❌ Error processing event:', error)
+          // Return the original event if processing fails
+          return normalizeEventData(event)
         }
-        
-        // Also save the venue to storage for future use
-        addVenue(
-          normalizedEvent.venue,
-          normalizedEvent.address,
-          fixedCoordinates
-        )
-        
-        processedEvents.push(updatedEvent)
-      } else {
-        // Always save venue to storage for tracking
-        addVenue(
-          normalizedEvent.venue,
-          normalizedEvent.address,
-          [normalizedEvent.latitude, normalizedEvent.longitude]
-        )
-        
-        processedEvents.push(normalizedEvent)
+      })
+      
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises)
+      processedEvents.push(...batchResults)
+      
+      // Small delay between batches to prevent UI freezing
+      if (i + batchSize < eventsToProcessLimited.length) {
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
     }
     
+    console.log(`✅ Processed ${processedEvents.length} events successfully`)
     return processedEvents
+  }
+
+  const forceUpdateCheck = async () => {
+    try {
+      console.log('🔄 Manual update check requested from EventContext')
+      await syncService.forceUpdateCheck()
+    } catch (error) {
+      console.error('❌ Error in manual update check:', error)
+    }
+  }
+
+  const clearSyncErrors = () => {
+    try {
+      console.log('🔄 Clearing sync errors requested from EventContext')
+      syncService.clearSyncErrors()
+      // Clear errors from local state
+      setSyncStatus(prev => ({ ...prev, errors: [] }))
+    } catch (error) {
+      console.error('❌ Error clearing sync errors:', error)
+    }
   }
 
   const value: EventContextType = {
@@ -844,7 +961,9 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     updateEvent,
     deleteEvent,
     getEventsNearby,
-    rateEvent
+    rateEvent,
+    forceUpdateCheck,
+    clearSyncErrors
   }
 
   return (
