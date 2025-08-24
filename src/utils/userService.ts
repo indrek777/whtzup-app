@@ -269,25 +269,46 @@ class UserService {
   async canEditEvent(event: { createdBy?: string; source?: string }): Promise<boolean> {
     await this.ensureInitialized()
     
+    console.log('🔐 canEditEvent check:', {
+      eventCreatedBy: event.createdBy,
+      currentUserId: this.currentUser?.id,
+      currentUserName: this.currentUser?.name,
+      eventSource: event.source
+    })
+    
     // Check if user can edit events based on their group
     if (!(await this.canPerformAction('canEditEvents'))) {
+      console.log('🔐 User cannot edit events based on group')
       return false
     }
     
     // If not authenticated, cannot edit any events
-    if (!this.currentUser) return false
+    if (!this.currentUser) {
+      console.log('🔐 No current user')
+      return false
+    }
     
-    // If user has premium subscription, they can edit any event
-    if (await this.hasPremiumSubscription()) return true
+    // Note: Premium users can edit any event - if you want to restrict this, comment out this block
+    // if (await this.hasPremiumSubscription()) {
+    //   console.log('🔐 User has premium subscription, can edit any event')
+    //   return true
+    // }
     
     // For registered users, they can only edit events they created
     // Check if the event was created by the current user
-    if (event.createdBy === this.currentUser.id) return true
+    if (event.createdBy === this.currentUser.id) {
+      console.log('🔐 Event created by current user, can edit')
+      return true
+    }
     
     // Legacy check: if event has source 'user' but no createdBy, allow edit
     // This is for backward compatibility with old events
-    if (event.source === 'user' && !event.createdBy) return true
+    if (event.source === 'user' && !event.createdBy) {
+      console.log('🔐 Legacy event with user source, can edit')
+      return true
+    }
     
+    console.log('🔐 User cannot edit this event')
     return false
   }
 

@@ -176,7 +176,7 @@ const requirePremium = async (req, res, next) => {
   }
 };
 
-// Middleware to check if user can edit/delete an event
+// Middleware to check if user can edit/delete an event (only own events)
 const canEditEvent = async (req, res, next) => {
   try {
     if (!req.user) {
@@ -207,28 +207,10 @@ const canEditEvent = async (req, res, next) => {
       return next(); // User can edit their own events
     }
     
-    // Check if user has premium subscription (premium users can edit any event)
-    const subscriptionResult = await pool.query(`
-      SELECT status, end_date
-      FROM user_subscriptions
-      WHERE user_id = $1
-    `, [req.user.id]);
-    
-    if (subscriptionResult.rows.length > 0) {
-      const subscription = subscriptionResult.rows[0];
-      
-      if (subscription.status === 'premium') {
-        // Check if subscription is not expired
-        if (!subscription.end_date || new Date() <= new Date(subscription.end_date)) {
-          return next(); // Premium user can edit any event
-        }
-      }
-    }
-    
-    // Free user trying to edit someone else's event
+    // User trying to edit someone else's event
     return res.status(403).json({
       success: false,
-      error: 'You can only edit events you created. Upgrade to premium to edit any event.'
+      error: 'You can only edit events you created.'
     });
     
   } catch (error) {

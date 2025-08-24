@@ -180,6 +180,49 @@ router.get('/updates', async (req, res) => {
   }
 });
 
+// GET /api/events/my-events - Get events created by the current user
+router.get('/my-events', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const userId = req.user.id;
+    
+    const query = `
+      SELECT * FROM events 
+      WHERE created_by = $1 AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+    
+    const result = await pool.query(query, [userId, limit, offset]);
+    
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(*) FROM events 
+      WHERE created_by = $1 AND deleted_at IS NULL
+    `;
+    const countResult = await pool.query(countQuery, [userId]);
+    const totalEvents = parseInt(countResult.rows[0].count);
+    
+    res.json({
+      success: true,
+      data: result.rows.map(transformEventFields),
+      pagination: {
+        page: Math.floor(offset / limit) + 1,
+        limit: parseInt(limit),
+        total: totalEvents,
+        pages: Math.ceil(totalEvents / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user events:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch user events',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // GET /api/events/:id - Get single event
 router.get('/:id', async (req, res) => {
   try {
@@ -240,16 +283,16 @@ router.post('/', authenticateToken, eventValidation, async (req, res) => {
     const existingResult = await pool.query(existingQuery, [name, venue]);
     
     if (existingResult.rows.length > 0) {
-      // Event already exists, return the existing event
+      // Event already exists, return conflict error
       const existingEvent = existingResult.rows[0];
-      console.log(`Event already exists: ${name} at ${venue}, returning existing event`);
+      console.log(`Event already exists: ${name} at ${venue}, returning conflict error`);
       
-      return res.status(200).json({
-        success: true,
+      return res.status(409).json({
+        success: false,
+        error: 'Event already exists',
+        details: 'An event with this name and venue already exists',
         data: transformEventFields(existingEvent),
-        message: 'Event already exists',
-        deviceId,
-        isDuplicate: true
+        deviceId
       });
     }
 
@@ -308,8 +351,8 @@ router.post('/', authenticateToken, eventValidation, async (req, res) => {
   }
 });
 
-// PUT /api/events/:id - Update event (no authentication required for now)
-router.put('/:id', eventUpdateValidation, async (req, res) => {
+// PUT /api/events/:id - Update event (requires authentication and ownership)
+router.put('/:id', authenticateToken, canEditEvent, eventUpdateValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -421,8 +464,8 @@ router.put('/:id', eventUpdateValidation, async (req, res) => {
   }
 });
 
-// DELETE /api/events/:id - Soft delete event (no authentication required for now)
-router.delete('/:id', async (req, res) => {
+// DELETE /api/events/:id - Soft delete event (requires authentication and ownership)
+router.delete('/:id', authenticateToken, canEditEvent, async (req, res) => {
   try {
     const { id } = req.params;
     const deviceId = req.headers['x-device-id'];
@@ -466,6 +509,45 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete event',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET /api/events/:id/can-edit - Check if current user can edit an event
+router.get('/:id/can-edit', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    // Check if event exists and get creator info
+    const eventResult = await pool.query(`
+      SELECT created_by FROM events WHERE id = $1 AND deleted_at IS NULL
+    `, [id]);
+    
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+    
+    const event = eventResult.rows[0];
+    const canEdit = event.created_by === userId;
+    
+    res.json({
+      success: true,
+      data: {
+        canEdit,
+        isOwner: canEdit,
+        eventId: id
+      }
+    });
+  } catch (error) {
+    console.error('Error checking edit permissions:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check edit permissions',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

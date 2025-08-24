@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { io, Socket } from 'socket.io-client';
 import { Event } from '../data/events';
+import { errorHandler, ErrorType } from './errorHandler';
 
 // Types
 interface SyncStatus {
@@ -250,6 +251,8 @@ class SyncService {
           errorMessage = errorMessage || 'You do not have permission to perform this action.';
         } else if (response.status === 404) {
           errorMessage = 'The requested item was not found.';
+        } else if (response.status === 409) {
+          errorMessage = 'An event with this name and venue already exists.';
         } else if (response.status >= 500) {
           errorMessage = 'Server error. Please try again later.';
         }
@@ -269,23 +272,18 @@ class SyncService {
       console.log('📄 Response data received');
       return data;
     } catch (error) {
-      // Provide more specific error messages for different types of failures
-      let errorMessage = 'Unknown error';
+      // Use the new error handler for better error management
+      const appError = errorHandler.handleApiError(error, {
+        action: endpoint.split('/').pop() || 'api_call',
+        entity: 'api',
+        timestamp: new Date().toISOString()
+      });
       
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
+      // Log the error with context
+      console.log(`⚠️ API Error (${endpoint}):`, appError.message);
       
-      // Add context about the endpoint that failed
-      const endpointName = endpoint.split('/').pop() || 'unknown';
-      const contextMessage = `API call to ${endpointName} failed: ${errorMessage}`;
-      
-      console.log(`⚠️ ${contextMessage}`);
-      
-      // Re-throw with enhanced message
-      throw new Error(contextMessage);
+      // Re-throw the enhanced error
+      throw appError;
     }
   }
 
@@ -299,17 +297,6 @@ class SyncService {
         });
 
         if (response.success) {
-          // Handle duplicate event response
-          if (response.isDuplicate) {
-            console.log('Event already exists, returning existing event');
-            const existingEvent = {
-              ...response.data,
-              latitude: Number(response.data.latitude) || 0,
-              longitude: Number(response.data.longitude) || 0
-            };
-            return existingEvent;
-          }
-
           this.socket?.emit('event-created', {
             eventId: response.data.id,
             eventData: response.data,

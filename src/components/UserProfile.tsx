@@ -15,6 +15,7 @@ import {
   ActivityIndicator
 } from 'react-native'
 import { userService, User, Subscription, UserPreferences } from '../utils/userService'
+import { errorHandler, ErrorType } from '../utils/errorHandler'
 
 interface UserProfileProps {
   visible: boolean
@@ -176,8 +177,11 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         Alert.alert('Authentication Error', errorMessage)
       }
     } catch (error) {
-      console.error('Authentication error:', error)
-      Alert.alert('Error', 'Network error. Please check your internet connection and try again.')
+      const appError = errorHandler.handleApiError(error, {
+        action: authMode === 'signup' ? 'sign_up' : 'sign_in',
+        entity: 'user'
+      });
+      errorHandler.showError(appError);
     } finally {
       setIsAuthLoading(false)
     }

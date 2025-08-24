@@ -24,6 +24,8 @@ import { userService } from '../utils/userService'
 // import EventRating from './EventRating' // Removed - using Alert-based rating instead
 import RatingDisplay from './RatingDisplay'
 import { ratingService } from '../utils/ratingService'
+import { errorHandler, ErrorType } from '../utils/errorHandler'
+import ErrorDisplay from './ErrorDisplay'
 
 // Clustering interfaces
 interface EventCluster {
@@ -540,6 +542,7 @@ const SimpleMarker = React.memo(({
 const MapViewNative: React.FC = () => {
   const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [currentError, setCurrentError] = useState<any>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false)
@@ -554,6 +557,11 @@ const MapViewNative: React.FC = () => {
   // Rating state
   // const [showRatingModal, setShowRatingModal] = useState(false) // Removed - using Alert-based rating instead
   const [eventRatingStats, setEventRatingStats] = useState<any>(null)
+  
+  // Permission states
+  const [canEditSelectedEvent, setCanEditSelectedEvent] = useState(false)
+  const [eventPermissions, setEventPermissions] = useState<{[key: string]: boolean}>({})
+  const [permissionLoading, setPermissionLoading] = useState(false)
   
   // Location picker state
   const [isLocationPickerMode, setIsLocationPickerMode] = useState(false)
@@ -654,6 +662,48 @@ const MapViewNative: React.FC = () => {
     }
   }, [showEventDetailsModal, selectedEvent, loadEventRatingStats])
 
+  // Check permissions for selected event
+  useEffect(() => {
+    const checkSelectedEventPermissions = async () => {
+      console.log('🔐 Checking permissions for selected event:', selectedEvent?.name, selectedEvent?.id);
+      setPermissionLoading(true);
+      try {
+        if (selectedEvent) {
+          const canEdit = await userService.canEditEvent(selectedEvent);
+          console.log('🔐 Can edit event:', canEdit, 'Event created by:', selectedEvent.createdBy);
+          setCanEditSelectedEvent(canEdit);
+        } else {
+          console.log('🔐 No selected event, setting canEdit to false');
+          setCanEditSelectedEvent(false);
+        }
+      } catch (error) {
+        console.error('🔐 Error checking permissions:', error);
+        setCanEditSelectedEvent(false);
+      } finally {
+        setPermissionLoading(false);
+      }
+    };
+    checkSelectedEventPermissions();
+  }, [selectedEvent]);
+
+  // Check permissions for cluster events
+  useEffect(() => {
+    const checkClusterEventPermissions = async () => {
+      console.log('🔐 Checking cluster event permissions for cluster with', selectedCluster?.count, 'events');
+      if (selectedCluster) {
+        const permissions: {[key: string]: boolean} = {};
+        for (const event of selectedCluster.events) {
+          const canEdit = await userService.canEditEvent(event);
+          permissions[event.id] = canEdit;
+          console.log('🔐 Cluster event permission:', event.name, 'canEdit:', canEdit);
+        }
+        console.log('🔐 Setting cluster permissions:', permissions);
+        setEventPermissions(permissions);
+      }
+    };
+    checkClusterEventPermissions();
+  }, [selectedCluster]);
+
   // Submit rating function
   const submitRating = async (rating: number) => {
     if (!selectedEvent) return;
@@ -670,12 +720,12 @@ const MapViewNative: React.FC = () => {
         [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Error submitting rating:', error);
-      Alert.alert(
-        'Error',
-        'Failed to submit rating. Please try again.',
-        [{ text: 'OK' }]
-      );
+      const appError = errorHandler.handleApiError(error, {
+        action: 'rate_event',
+        entity: 'event',
+        value: selectedEvent.id
+      });
+      setCurrentError(appError);
     }
   };
 
@@ -728,8 +778,33 @@ const MapViewNative: React.FC = () => {
       console.log('🎯 Event fields:', Object.keys(events[0]))
       console.log('🎯 Sample coordinates:', events[0].latitude, events[0].longitude)
     }
-    setFilteredEvents(events)
-  }, [events])
+    
+    // Apply radius filtering if user location is available
+    let filtered = events;
+    if (userLocation && currentRadius) {
+      const radiusInDegrees = currentRadius / 111; // Approximate conversion from km to degrees
+      filtered = events.filter(event => {
+        if (!event.latitude || !event.longitude) return false;
+        
+        const latDiff = Math.abs(event.latitude - userLocation[0]);
+        const lngDiff = Math.abs(event.longitude - userLocation[1]);
+        
+        // Simple distance check (approximate)
+        const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+        const isWithinRadius = distance <= radiusInDegrees;
+        
+        if (!isWithinRadius) {
+          console.log(`🎯 Event filtered out by radius: ${event.name} (distance: ${(distance * 111).toFixed(1)}km)`);
+        }
+        
+        return isWithinRadius;
+      });
+      
+      console.log(`🎯 Radius filtering: ${events.length} total events, ${filtered.length} within ${currentRadius}km radius`);
+    }
+    
+    setFilteredEvents(filtered)
+  }, [events, userLocation, currentRadius])
 
   // Event press handler
   const handleEventPress = useCallback((event: Event) => {
@@ -1146,50 +1221,66 @@ const MapViewNative: React.FC = () => {
                <Text style={styles.eventVenue}>Venue: {selectedEvent.venue}</Text>
                <Text style={styles.eventAddress}>Address: {selectedEvent.address}</Text>
                
-               {/* Edit and Delete Buttons */}
-               <View style={styles.actionButtons}>
-                 <TouchableOpacity 
-                   style={[styles.actionButton, styles.editButton]}
-                   onPress={() => {
-                     setShowEventDetailsModal(false)
-                     setShowEventEditor(true)
-                     setSelectedEvent(null)
-                   }}
-                 >
-                   <Text style={styles.actionButtonText}>Edit Event</Text>
-                 </TouchableOpacity>
-                 
-                 <TouchableOpacity 
-                   style={[styles.actionButton, styles.deleteButton]}
-                   onPress={() => {
-                     Alert.alert(
-                       'Delete Event',
-                       `Are you sure you want to delete "${selectedEvent.name}"?`,
-                       [
-                         { text: 'Cancel', style: 'cancel' },
-                         {
-                           text: 'Delete',
-                           style: 'destructive',
-                           onPress: async () => {
-                             try {
-                               await deleteEvent(selectedEvent.id)
-                               setShowEventDetailsModal(false)
-                               // Rating modal removed - using Alert-based rating instead
-                               setSelectedEvent(null)
-                               Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
-                             } catch (error) {
-                               console.error('Error deleting event:', error)
-                               Alert.alert('Error', 'Failed to delete event. Please try again.')
-                             }
-                           }
-                         }
-                       ]
-                     )
-                   }}
-                 >
-                   <Text style={styles.actionButtonText}>Delete Event</Text>
-                 </TouchableOpacity>
-               </View>
+               {/* Permission loading indicator */}
+               {permissionLoading && (
+                 <View style={styles.permissionLoadingContainer}>
+                   <ActivityIndicator size="small" color="#007AFF" />
+                   <Text style={styles.permissionLoadingText}>Checking permissions...</Text>
+                 </View>
+               )}
+               
+                                               {/* Edit and Delete Buttons - Only show if user can edit this event */}
+                {(() => {
+                  console.log('🔐 Rendering action buttons - selectedEvent:', !!selectedEvent, 'canEditSelectedEvent:', canEditSelectedEvent, 'permissionLoading:', permissionLoading);
+                  return selectedEvent && canEditSelectedEvent && !permissionLoading;
+                })() && (
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity 
+                      style={[styles.actionButton, styles.editButton]}
+                      onPress={() => {
+                        setShowEventDetailsModal(false)
+                        setShowEventEditor(true)
+                        setSelectedEvent(null)
+                      }}
+                    >
+                      <Text style={styles.actionButtonText}>Edit Event</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Delete Event',
+                          `Are you sure you want to delete "${selectedEvent.name}"?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  await deleteEvent(selectedEvent.id)
+                                  setShowEventDetailsModal(false)
+                                  setSelectedEvent(null)
+                                  Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
+                                } catch (error) {
+                                  const appError = errorHandler.handleApiError(error, {
+                                    action: 'delete_event',
+                                    entity: 'event',
+                                    value: selectedEvent.id
+                                  });
+                                  setCurrentError(appError);
+                                }
+                              }
+                            }
+                          ]
+                        )
+                      }}
+                    >
+                      <Text style={styles.actionButtonText}>Delete Event</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
                
                {/* Sync Status */}
                <View style={styles.syncStatus}>
@@ -1331,17 +1422,22 @@ const MapViewNative: React.FC = () => {
                             <Text style={styles.clusterEventCategory}>
                               {event.category || determineCategory(event.name, event.description)}
                             </Text>
-                            <TouchableOpacity
-                              style={styles.clusterEventEditButton}
-                              onPress={(e) => {
-                                e.stopPropagation()
-                                setSelectedEvent(event)
-                                setShowClusterModal(false)
-                                setShowEventEditor(true)
-                              }}
-                            >
-                              <Text style={styles.clusterEventEditButtonText}>✏️</Text>
-                            </TouchableOpacity>
+                                                         {(() => {
+                                                           console.log('🔐 Cluster event permission check:', event.name, 'permission:', eventPermissions[event.id]);
+                                                           return eventPermissions[event.id];
+                                                         })() && (
+                               <TouchableOpacity
+                                 style={styles.clusterEventEditButton}
+                                 onPress={(e) => {
+                                   e.stopPropagation()
+                                   setSelectedEvent(event)
+                                   setShowClusterModal(false)
+                                   setShowEventEditor(true)
+                                 }}
+                               >
+                                 <Text style={styles.clusterEventEditButtonText}>✏️</Text>
+                               </TouchableOpacity>
+                             )}
                           </View>
                         </View>
                         <Text style={styles.clusterEventDescription} numberOfLines={2}>
@@ -1401,6 +1497,18 @@ const MapViewNative: React.FC = () => {
         />
 
         {/* Event Rating Modal - Removed, using Alert-based rating instead */}
+
+        {/* Error Display */}
+        <ErrorDisplay
+          error={currentError}
+          onRetry={() => {
+            setCurrentError(null);
+            // Retry the last action - this could be enhanced to store the last action
+          }}
+          onDismiss={() => setCurrentError(null)}
+          autoHide={true}
+          autoHideDelay={5000}
+        />
     </View>
   )
 }
@@ -1915,10 +2023,25 @@ const styles = StyleSheet.create({
       fontSize: 14,
       fontWeight: '600',
     },
-    authIndicator: {
-      fontSize: 10,
-      marginLeft: 4,
-    },
-  })
+              authIndicator: {
+        fontSize: 10,
+        marginLeft: 4,
+      },
+     permissionLoadingContainer: {
+       flexDirection: 'row',
+       alignItems: 'center',
+       justifyContent: 'center',
+       padding: 15,
+       backgroundColor: '#f8f9fa',
+       borderRadius: 8,
+       marginTop: 10,
+     },
+     permissionLoadingText: {
+       fontSize: 14,
+       color: '#666',
+       marginLeft: 8,
+     },
+     
+   })
 
 export default MapViewNative
