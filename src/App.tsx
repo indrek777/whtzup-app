@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { EventProvider } from './context/EventContext'
+import { userService } from './utils/userService'
 const MapViewNative = require('./components/MapViewNative')
 
 // Error Boundary Component
@@ -51,6 +52,20 @@ class ErrorBoundary extends React.Component<
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize IAP service when app starts
+    const initializeIAP = async () => {
+      try {
+        console.log('🚀 Initializing IAP service on app start...');
+        await userService.initializeIAP();
+      } catch (error) {
+        console.error('❌ Failed to initialize IAP on app start:', error);
+      }
+    };
+
+    initializeIAP();
+  }, []);
+
   return (
     <ErrorBoundary>
       <EventProvider>

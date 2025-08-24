@@ -16,6 +16,7 @@ import {
 } from 'react-native'
 import { userService, User, Subscription, UserPreferences } from '../utils/userService'
 import { errorHandler, ErrorType } from '../utils/errorHandler'
+import { iapService, SUBSCRIPTION_PRODUCTS } from '../utils/iapServiceMock'
 
 interface UserProfileProps {
   visible: boolean
@@ -64,8 +65,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   useEffect(() => {
     if (visible) {
       loadUserData()
+      initializeIAP()
     }
   }, [visible])
+
+  const initializeIAP = async () => {
+    try {
+      console.log('🔌 Initializing IAP in UserProfile...');
+      await userService.initializeIAP();
+    } catch (error) {
+      console.error('❌ Failed to initialize IAP:', error);
+    }
+  }
 
   const loadUserData = async () => {
     setIsLoading(true)
@@ -219,7 +230,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 
     Alert.alert(
       'Confirm Subscription',
-      `Subscribe to ${planName} Premium plan for ${planPrice}?\n\nThis is a demo - no actual payment will be charged.`,
+      `Subscribe to ${planName} Premium plan for ${planPrice}?\n\nThis will use Apple's In-App Purchase system.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -251,6 +262,33 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         }
       ]
     )
+  }
+
+  const handleRestorePurchases = async () => {
+    try {
+      setIsAuthLoading(true)
+      console.log('🔄 Restoring purchases...')
+      
+      const result = await userService.restorePurchases()
+      
+      if (result.success) {
+        Alert.alert(
+          'Success!',
+          'Your purchases have been restored successfully!',
+          [{ text: 'OK', onPress: () => {
+            setShowSubscriptionModal(false)
+            loadUserData()
+          }}]
+        )
+      } else {
+        Alert.alert('Restore Failed', result.error || 'No purchases found to restore.')
+      }
+    } catch (error) {
+      console.error('Restore error:', error)
+      Alert.alert('Error', 'An unexpected error occurred while restoring purchases.')
+    } finally {
+      setIsAuthLoading(false)
+    }
   }
 
   const handleCancelSubscription = async () => {
@@ -527,6 +565,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
               <Text style={styles.submitButtonText}>
                 {isAuthLoading ? 'Processing...' : 'Subscribe'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.restoreButton} 
+              onPress={handleRestorePurchases}
+            >
+              <Text style={styles.restoreButtonText}>Restore Purchases</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -1552,6 +1597,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 3,
+  },
+  restoreButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  restoreButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   planChangeDescription: {
     fontSize: 14,

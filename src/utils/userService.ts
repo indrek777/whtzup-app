@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { iapService, SUBSCRIPTION_PRODUCTS } from './iapServiceMock'
 
 // User Group Types
 export type UserGroup = 'unregistered' | 'registered' | 'premium'
@@ -699,27 +700,48 @@ class UserService {
         return { success: false, error: 'User not authenticated' }
       }
 
-      const headers = await this.getAuthHeaders()
-      const response = await fetch(`${API_BASE_URL}/subscription/upgrade`, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ plan, autoRenew })
-      })
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        // Update local user data
+      // Determine product ID based on plan
+      const productId = plan === 'monthly' ? SUBSCRIPTION_PRODUCTS.MONTHLY : SUBSCRIPTION_PRODUCTS.YEARLY;
+      
+      console.log('🛒 Starting IAP purchase for:', productId);
+      
+      // Purchase through Apple IAP
+      const purchaseResult = await iapService.purchaseSubscription(productId);
+      
+      if (purchaseResult.success && purchaseResult.purchase) {
+        console.log('✅ IAP purchase successful');
+        
+        // Update local user data with IAP purchase info
+        const purchase = purchaseResult.purchase;
+        const startDate = new Date();
+        const endDate = new Date();
+        
+        if (plan === 'monthly') {
+          endDate.setMonth(endDate.getMonth() + 1);
+        } else {
+          endDate.setFullYear(endDate.getFullYear() + 1);
+        }
+        
         this.currentUser.subscription = {
-          status: result.data.status,
-          plan: result.data.plan,
-          startDate: result.data.startDate,
-          endDate: result.data.endDate,
-          autoRenew: result.data.autoRenew,
-          features: result.data.features
+          status: 'premium',
+          plan,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          autoRenew: true,
+          features: [
+            'unlimited_events',
+            'advanced_search',
+            'priority_support',
+            'analytics',
+            'custom_categories',
+            'export_data',
+            'no_ads',
+            'early_access',
+            'extended_event_radius',
+            'advanced_filtering',
+            'premium_categories',
+            'create_groups'
+          ]
         }
 
         // Update user group to premium
@@ -728,10 +750,41 @@ class UserService {
         // Save to storage
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
 
-        return { success: true, data: result.data }
+        // Also sync with backend (optional - for analytics)
+        try {
+          const headers = await this.getAuthHeaders()
+          await fetch(`${API_BASE_URL}/subscription/upgrade`, {
+            method: 'POST',
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+              plan, 
+              autoRenew,
+              transactionId: purchase.transactionId,
+              purchaseDate: purchase.purchaseDate
+            })
+          })
+        } catch (backendError) {
+          console.warn('⚠️ Backend sync failed, but IAP purchase was successful:', backendError)
+        }
+
+        return { 
+          success: true, 
+          data: {
+            status: 'premium',
+            plan,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            autoRenew: true,
+            features: this.currentUser.subscription.features,
+            transactionId: purchase.transactionId
+          }
+        }
       }
 
-      return { success: false, error: result.error || 'Failed to upgrade subscription' }
+      return { success: false, error: purchaseResult.error || 'Failed to complete purchase' }
     } catch (error) {
       console.error('Upgrade subscription error:', error)
       return { success: false, error: 'Network error occurred' }
@@ -1169,6 +1222,52 @@ class UserService {
         currency: 'USD',
         savings: 'Save $19.89 (17% off)'
       }
+    }
+  }
+
+  // Initialize IAP service
+  async initializeIAP(): Promise<boolean> {
+    try {
+      console.log('🔌 Initializing IAP service...');
+      const success = await iapService.initialize();
+      
+      if (success) {
+        // Try to restore any existing purchases
+        await this.restorePurchases();
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('❌ Failed to initialize IAP:', error);
+      return false;
+    }
+  }
+
+  // Restore purchases from Apple
+  async restorePurchases(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Restoring purchases...');
+      const result = await iapService.restorePurchases();
+      
+      if (result.success && result.restoredPurchases && result.restoredPurchases.length > 0) {
+        console.log('✅ Purchases restored successfully');
+        
+        // Update local user data if we have a current user
+        if (this.currentUser) {
+          const hasActiveSubscription = await iapService.hasActiveSubscription();
+          if (hasActiveSubscription) {
+            this.currentUser.userGroup = 'premium';
+            await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser));
+          }
+        }
+        
+        return { success: true };
+      }
+      
+      return { success: false, error: result.error };
+    } catch (error) {
+      console.error('❌ Error restoring purchases:', error);
+      return { success: false, error: 'Failed to restore purchases' };
     }
   }
 
