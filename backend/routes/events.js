@@ -49,7 +49,7 @@ const eventUpdateValidation = [
 ];
 
 // GET /api/events - Get all events
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const { category, venue, limit = 15000, offset = 0, latitude, longitude, radius, from, to } = req.query;
     const deviceId = req.headers['x-device-id'];
@@ -84,19 +84,50 @@ router.get('/', async (req, res) => {
     }
 
     // Add radius-based filtering if coordinates and radius are provided
+    // Always include events created by the current user, regardless of radius
     if (latitude && longitude && radius) {
       paramCount++;
-      query += ` AND (
-        6371 * acos(
-          cos(radians($${paramCount})) * 
-          cos(radians(latitude)) * 
-          cos(radians(longitude) - radians($${paramCount + 1})) + 
-          sin(radians($${paramCount})) * 
-          sin(radians(latitude))
-        )
-      ) <= $${paramCount + 2}`;
-      params.push(parseFloat(latitude), parseFloat(longitude), parseFloat(radius));
-      paramCount += 2; // Increment by 2 since we used 3 parameters
+      
+      // Get current user ID from the request (if authenticated)
+      const currentUserId = req.user?.id || null;
+      console.log('🔍 Radius filtering debug:');
+      console.log('  - Current user ID:', currentUserId);
+      console.log('  - Latitude:', latitude);
+      console.log('  - Longitude:', longitude);
+      console.log('  - Radius:', radius);
+      
+      if (currentUserId) {
+        // User is authenticated, include their events regardless of radius
+        query += ` AND (
+          created_by = $${paramCount} OR
+          (
+            6371 * acos(
+              cos(radians($${paramCount + 1})) * 
+              cos(radians(latitude)) * 
+              cos(radians(longitude) - radians($${paramCount + 2})) + 
+              sin(radians($${paramCount + 1})) * 
+              sin(radians(latitude))
+            )
+          ) <= $${paramCount + 3}
+        )`;
+        params.push(currentUserId, parseFloat(latitude), parseFloat(longitude), parseFloat(radius));
+        paramCount += 3; // Increment by 3 since we used 4 parameters
+        console.log('  - Including user events regardless of radius');
+      } else {
+        // No authentication, only include events within radius
+        query += ` AND (
+          6371 * acos(
+            cos(radians($${paramCount})) * 
+            cos(radians(latitude)) * 
+            cos(radians(longitude) - radians($${paramCount + 1})) + 
+            sin(radians($${paramCount})) * 
+            sin(radians(latitude))
+          )
+        ) <= $${paramCount + 2}`;
+        params.push(parseFloat(latitude), parseFloat(longitude), parseFloat(radius));
+        paramCount += 2; // Increment by 2 since we used 3 parameters
+        console.log('  - No authentication, only radius filtering');
+      }
     }
 
     query += ' ORDER BY starts_at DESC';

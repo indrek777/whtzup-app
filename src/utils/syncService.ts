@@ -308,6 +308,17 @@ class SyncService {
             latitude: Number(response.data.latitude) || 0,
             longitude: Number(response.data.longitude) || 0
           };
+          
+          // Immediately add the created event to cache
+          console.log('🔄 Adding newly created event to cache:', createdEvent.id);
+          const cachedEvents = await this.getCachedEvents();
+          cachedEvents.push(createdEvent);
+          await this.setCachedEvents(cachedEvents);
+          console.log('✅ Event added to cache successfully');
+          
+          // Notify listeners about the new event
+          this.notifyListeners('eventCreated', createdEvent);
+          
           return createdEvent;
         } else {
           throw new Error(response.error);

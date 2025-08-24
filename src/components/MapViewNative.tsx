@@ -540,7 +540,7 @@ const SimpleMarker = React.memo(({
 })
 
 const MapViewNative: React.FC = () => {
-  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck } = useEvents()
+  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck, refreshEvents } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [currentError, setCurrentError] = useState<any>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
@@ -1310,6 +1310,15 @@ const MapViewNative: React.FC = () => {
                    }}
                  >
                    <Text style={styles.forceUpdateButtonText}>🔄 Check Updates</Text>
+                 </TouchableOpacity>
+                 <TouchableOpacity
+                   style={styles.forceUpdateButton}
+                   onPress={() => {
+                     console.log('🔄 Manual refresh requested from UI')
+                     refreshEvents()
+                   }}
+                 >
+                   <Text style={styles.forceUpdateButtonText}>🔄 Refresh Events</Text>
                  </TouchableOpacity>
                </View>
              </ScrollView>

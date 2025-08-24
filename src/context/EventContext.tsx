@@ -300,6 +300,7 @@ interface EventContextType {
   getEventsNearby: (radius: number) => Event[]
   rateEvent: (eventId: string, rating: number) => void
   forceUpdateCheck: () => Promise<void>
+  refreshEvents: () => Promise<void>
   clearSyncErrors: () => void
 }
 
@@ -324,7 +325,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
-  const [currentRadius, setCurrentRadius] = useState(150) // Default radius
+  const [currentRadius, setCurrentRadius] = useState(200) // Default radius (increased to include user events)
   
   // Default date filter: 1 week ahead from now
   const getDefaultDateFilter = () => {
@@ -421,6 +422,17 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
               // Process events with venue storage to auto-fix coordinates
               processedEvents = await processEventsWithVenueStorage(result.initial)
             }
+            
+            // Debug: Check for user's events in loaded events
+            const currentUserId = 'bdfee28f-d26b-469c-b705-8267389071b0'; // From logs
+            const userEvents = processedEvents.filter(event => event.createdBy === currentUserId);
+            console.log(`🔍 Loaded ${processedEvents.length} events, found ${userEvents.length} events created by current user`);
+            if (userEvents.length > 0) {
+              userEvents.forEach((event, index) => {
+                console.log(`🔍 User event ${index + 1}: ${event.name} at ${event.venue}`);
+              });
+            }
+            
             setEvents(processedEvents)
             setIsLoading(false)
             
@@ -470,6 +482,17 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             } else {
               processedEvents = await processEventsWithVenueStorage(cachedEvents)
             }
+            
+            // Debug: Check for user's events in cached events
+            const currentUserId = 'bdfee28f-d26b-469c-b705-8267389071b0'; // From logs
+            const userEvents = processedEvents.filter(event => event.createdBy === currentUserId);
+            console.log(`🔍 Cached events: ${processedEvents.length} total, ${userEvents.length} user events`);
+            if (userEvents.length > 0) {
+              userEvents.forEach((event, index) => {
+                console.log(`🔍 Cached user event ${index + 1}: ${event.name} at ${event.venue}`);
+              });
+            }
+            
             setEvents(processedEvents)
             setIsLoading(false)
             return
@@ -620,9 +643,20 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     // Listen for real-time updates
     const handleEventCreated = (newEvent: Event) => {
       console.log('🆕 Received event created via sync:', newEvent.name)
+      console.log('🆕 Event details:', {
+        id: newEvent.id,
+        name: newEvent.name,
+        venue: newEvent.venue,
+        createdBy: newEvent.createdBy,
+        coordinates: [newEvent.latitude, newEvent.longitude]
+      })
+      
       const normalizedEvent = normalizeEventData(newEvent)
       setEvents(prev => {
+        console.log(`🆕 Adding event to state. Previous events: ${prev.length}`)
         const updatedEvents = [...prev, normalizedEvent]
+        console.log(`🆕 Updated events count: ${updatedEvents.length}`)
+        
         // Save to local storage as backup
         saveEventsToFile(updatedEvents).catch(error => {
           console.error('Error saving events:', error)
@@ -952,6 +986,44 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   }
 
+  const refreshEvents = async () => {
+    console.log('🔄 Manual refresh requested from EventContext')
+    setIsLoading(true)
+    try {
+      // Force a fresh load from the backend
+      const result = await syncService.fetchEventsProgressive(
+        locationPermissionGranted === true && userLocation 
+          ? { latitude: userLocation[0], longitude: userLocation[1] }
+          : { latitude: 58.3776252, longitude: 26.7290063 },
+        currentRadius || 150,
+        dateFilter
+      )
+      
+      if (result.initial.length > 0) {
+        const processedEvents = await processEventsWithVenueStorage(result.initial)
+        
+        // Debug: Check for user's events in refreshed events
+        const currentUserId = 'bdfee28f-d26b-469c-b705-8267389071b0'; // From logs
+        const userEvents = processedEvents.filter(event => event.createdBy === currentUserId);
+        console.log(`🔍 Manual refresh: ${processedEvents.length} total events, ${userEvents.length} user events`);
+        if (userEvents.length > 0) {
+          userEvents.forEach((event, index) => {
+            console.log(`🔍 Refreshed user event ${index + 1}: ${event.name} at ${event.venue}`);
+          });
+        }
+        
+        setEvents(processedEvents)
+        console.log(`✅ Manual refresh complete: ${processedEvents.length} events`)
+      } else {
+        console.log('⚠️ Manual refresh: No events found')
+      }
+    } catch (error) {
+      console.error('❌ Manual refresh failed:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const clearSyncErrors = () => {
     try {
       console.log('🔄 Clearing sync errors requested from EventContext')
@@ -984,6 +1056,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     getEventsNearby,
     rateEvent,
     forceUpdateCheck,
+    refreshEvents,
     clearSyncErrors
   }
 
