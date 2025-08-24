@@ -1,243 +1,238 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { userService } from './userService';
 
-// Rating interfaces
+const API_BASE_URL = 'https://olympio.ee/api';
+
 export interface EventRating {
-  eventId: string
-  rating: number
-  timestamp: number
-  review?: string
-  userId?: string // For backend tracking
+  id: number;
+  eventId: string;
+  userId: string;
+  rating: number;
+  review?: string;
+  createdAt: string;
+  updatedAt: string;
+  userName?: string;
+  userAvatar?: string;
 }
 
-export interface SharedRating {
-  eventId: string
-  averageRating: number
-  totalRatings: number
-  ratings: EventRating[]
+export interface EventRatingStats {
+  eventId: string;
+  averageRating: number;
+  totalRatings: number;
+  rating1Count: number;
+  rating2Count: number;
+  rating3Count: number;
+  rating4Count: number;
+  rating5Count: number;
+  lastUpdated: string;
 }
 
-// Backend API configuration
-// Set to null to disable backend connection for now
-const API_BASE_URL = null // 'https://your-backend-api.com/api' // Replace with your actual backend URL
-const API_ENDPOINTS = {
-  ratings: '/ratings',
-  events: '/events',
-  userRatings: '/user-ratings'
+export interface EventRatingsResponse {
+  stats: EventRatingStats;
+  ratings: EventRating[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
-// Local storage keys
-const STORAGE_KEYS = {
-  userRatings: 'userEventRatings',
-  sharedRatings: 'sharedEventRatings',
-  lastSync: 'lastRatingSync'
+export interface UserRating {
+  id: number;
+  rating: number;
+  review?: string;
+  createdAt: string;
+  updatedAt: string;
+  eventId: string;
+  eventName: string;
+  eventVenue: string;
+  eventStartsAt: string;
 }
 
 class RatingService {
-  // Save rating to both local storage and backend
-  async saveRating(eventId: string, rating: number, review?: string): Promise<boolean> {
+  // Rate an event
+  async rateEvent(eventId: string, rating: number, review?: string): Promise<{ rating: EventRating; stats: EventRatingStats }> {
     try {
-      const newRating: EventRating = {
-        eventId,
-        rating,
-        timestamp: Date.now(),
-        review,
-        userId: await this.getUserId()
+      const headers = await userService.getAuthHeaders();
+      
+      if (!headers.Authorization) {
+        throw new Error('Authentication required to rate events');
       }
 
-      // Save to local storage immediately
-      await this.saveToLocalStorage(eventId, newRating)
+      const response = await fetch(`${API_BASE_URL}/ratings`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          eventId,
+          rating,
+          review
+        })
+      });
 
-      // Try to save to backend (with fallback) - only if backend is configured
-      if (API_BASE_URL) {
-        try {
-          await this.saveToBackend(newRating)
-        } catch (backendError) {
-          // Store for later sync
-          await this.queueForSync(newRating)
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to submit rating');
       }
 
-      return true
+      const result = await response.json();
+      return result.data;
     } catch (error) {
-      console.error('Error saving rating:', error)
-      return false
+      console.error('Error rating event:', error);
+      throw error;
+    }
+  }
+
+  // Get ratings for an event
+  async getEventRatings(eventId: string, page: number = 1, limit: number = 10): Promise<EventRatingsResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ratings/event/${eventId}?page=${page}&limit=${limit}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch ratings');
+      }
+
+      const result = await response.json();
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching event ratings:', error);
+      throw error;
+    }
+  }
+
+  // Get user's ratings
+  async getUserRatings(userId: string, page: number = 1, limit: number = 10): Promise<{ ratings: UserRating[]; pagination: any }> {
+    try {
+      const headers = await userService.getAuthHeaders();
+      
+      if (!headers.Authorization) {
+        throw new Error('Authentication required to view user ratings');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/ratings/user/${userId}?page=${page}&limit=${limit}`, {
+        headers
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch user ratings');
+      }
+
+      const result = await response.json();
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching user ratings:', error);
+      throw error;
+    }
+  }
+
+  // Delete a rating
+  async deleteRating(ratingId: number): Promise<void> {
+    try {
+      const headers = await userService.getAuthHeaders();
+      
+      if (!headers.Authorization) {
+        throw new Error('Authentication required to delete ratings');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/ratings/${ratingId}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete rating');
+      }
+    } catch (error) {
+      console.error('Error deleting rating:', error);
+      throw error;
+    }
+  }
+
+  // Get top rated events
+  async getTopRatedEvents(limit: number = 10, minRatings: number = 1): Promise<any[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ratings/top-rated?limit=${limit}&minRatings=${minRatings}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch top rated events');
+      }
+
+      const result = await response.json();
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching top rated events:', error);
+      throw error;
     }
   }
 
   // Get user's rating for a specific event
-  async getUserRating(eventId: string): Promise<EventRating | null> {
+  async getUserRatingForEvent(eventId: string): Promise<EventRating | null> {
     try {
-      const ratings = await this.getLocalRatings()
-      return ratings[eventId] || null
-    } catch (error) {
-      console.error('Error getting user rating:', error)
-      return null
-    }
-  }
-
-  // Get shared ratings for an event (from backend)
-  async getSharedRatings(eventId: string): Promise<SharedRating | null> {
-    try {
-      // Try to get from backend first - only if backend is configured
-      if (API_BASE_URL) {
-        try {
-          const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.ratings}/${eventId}`)
-          if (response.ok) {
-            const data = await response.json()
-            // Cache the result locally
-            await this.cacheSharedRating(eventId, data)
-            return data
-          }
-        } catch (backendError) {
-          // Backend fetch failed, using cached data
-        }
+      const headers = await userService.getAuthHeaders();
+      
+      if (!headers.Authorization) {
+        return null; // User not authenticated
       }
 
-      // Fallback to cached data
-      return await this.getCachedSharedRating(eventId)
-    } catch (error) {
-      console.error('Error getting shared ratings:', error)
-      return null
-    }
-  }
-
-  // Get all shared ratings (for offline use)
-  async getAllSharedRatings(): Promise<{ [eventId: string]: SharedRating }> {
-    try {
-      const cachedData = await AsyncStorage.getItem(STORAGE_KEYS.sharedRatings)
-      return cachedData ? JSON.parse(cachedData) : {}
-    } catch (error) {
-      console.error('Error getting all shared ratings:', error)
-      return {}
-    }
-  }
-
-  // Sync local ratings with backend
-  async syncRatings(): Promise<void> {
-    // Skip sync if backend is not configured
-    if (!API_BASE_URL) {
-      return
-    }
-
-    try {
-      const pendingRatings = await this.getPendingSync()
-      if (pendingRatings.length === 0) return
-
-      for (const rating of pendingRatings) {
-        try {
-          await this.saveToBackend(rating)
-          await this.removeFromSyncQueue(rating)
-        } catch (error) {
-          console.error('Failed to sync rating:', error)
-        }
+      // Get all ratings for the event and find user's rating
+      const ratings = await this.getEventRatings(eventId, 1, 100);
+      const currentUser = await userService.getCurrentUser();
+      
+      if (!currentUser) {
+        return null;
       }
 
-      // Update last sync timestamp
-      await AsyncStorage.setItem(STORAGE_KEYS.lastSync, Date.now().toString())
+      // Find user's rating in the list
+      const userRating = ratings.ratings.find(rating => 
+        rating.userId === currentUser.id
+      );
+
+      return userRating || null;
     } catch (error) {
-      console.error('Error syncing ratings:', error)
+      console.error('Error getting user rating for event:', error);
+      return null;
     }
   }
 
-  // Private methods
-
-  private async saveToLocalStorage(eventId: string, rating: EventRating): Promise<void> {
-    const ratings = await this.getLocalRatings()
-    ratings[eventId] = rating
-    await AsyncStorage.setItem(STORAGE_KEYS.userRatings, JSON.stringify(ratings))
+  // Format rating display
+  formatRating(rating: number): string {
+    return rating.toFixed(1);
   }
 
-  private async saveToBackend(rating: EventRating): Promise<void> {
-    if (!API_BASE_URL) {
-      throw new Error('Backend not configured')
-    }
-
-    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.ratings}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(rating)
-    })
-
-    if (!response.ok) {
-      throw new Error(`Backend save failed: ${response.status}`)
-    }
+  // Get star display for rating
+  getStarDisplay(rating: number, size: 'small' | 'medium' | 'large' = 'medium'): string {
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+    
+    const starSize = {
+      small: '⭐',
+      medium: '⭐',
+      large: '⭐'
+    }[size];
+    
+    const halfStar = '⭐';
+    const emptyStar = '☆';
+    
+    return starSize.repeat(fullStars) + (hasHalfStar ? halfStar : '') + emptyStar.repeat(emptyStars);
   }
 
-  private async queueForSync(rating: EventRating): Promise<void> {
-    try {
-      const pending = await this.getPendingSync()
-      pending.push(rating)
-      await AsyncStorage.setItem('pendingRatingSync', JSON.stringify(pending))
-    } catch (error) {
-      console.error('Error queuing for sync:', error)
-    }
-  }
-
-  private async getPendingSync(): Promise<EventRating[]> {
-    try {
-      const pending = await AsyncStorage.getItem('pendingRatingSync')
-      return pending ? JSON.parse(pending) : []
-    } catch (error) {
-      return []
-    }
-  }
-
-  private async removeFromSyncQueue(rating: EventRating): Promise<void> {
-    try {
-      const pending = await this.getPendingSync()
-      const filtered = pending.filter(r => 
-        r.eventId !== rating.eventId || r.timestamp !== rating.timestamp
-      )
-      await AsyncStorage.setItem('pendingRatingSync', JSON.stringify(filtered))
-    } catch (error) {
-      console.error('Error removing from sync queue:', error)
-    }
-  }
-
-  private async getLocalRatings(): Promise<{ [eventId: string]: EventRating }> {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.userRatings)
-      return data ? JSON.parse(data) : {}
-    } catch (error) {
-      return {}
-    }
-  }
-
-  private async cacheSharedRating(eventId: string, data: SharedRating): Promise<void> {
-    try {
-      const cached = await this.getAllSharedRatings()
-      cached[eventId] = data
-      await AsyncStorage.setItem(STORAGE_KEYS.sharedRatings, JSON.stringify(cached))
-    } catch (error) {
-      console.error('Error caching shared rating:', error)
-    }
-  }
-
-  private async getCachedSharedRating(eventId: string): Promise<SharedRating | null> {
-    try {
-      const cached = await this.getAllSharedRatings()
-      return cached[eventId] || null
-    } catch (error) {
-      return null
-    }
-  }
-
-  private async getUserId(): Promise<string> {
-    // In a real app, this would come from authentication
-    // For now, generate a unique device ID
-    try {
-      let userId = await AsyncStorage.getItem('deviceUserId')
-      if (!userId) {
-        userId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        await AsyncStorage.setItem('deviceUserId', userId)
-      }
-      return userId
-    } catch (error) {
-      return `device_${Date.now()}`
-    }
+  // Get rating color based on rating value
+  getRatingColor(rating: number): string {
+    if (rating >= 4.5) return '#4CAF50'; // Green
+    if (rating >= 3.5) return '#8BC34A'; // Light green
+    if (rating >= 2.5) return '#FFC107'; // Yellow
+    if (rating >= 1.5) return '#FF9800'; // Orange
+    return '#F44336'; // Red
   }
 }
 
-export const ratingService = new RatingService()
+// Export singleton instance
+export const ratingService = new RatingService();
+export default ratingService;

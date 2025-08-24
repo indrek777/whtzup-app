@@ -21,6 +21,9 @@ import UserGroupManager from './UserGroupManager'
 import { reverseGeocode } from '../utils/geocoding'
 import UserProfile from './UserProfile'
 import { userService } from '../utils/userService'
+import EventRating from './EventRating'
+import RatingDisplay from './RatingDisplay'
+import { ratingService } from '../utils/ratingService'
 
 // Clustering interfaces
 interface EventCluster {
@@ -542,6 +545,10 @@ const MapViewNative: React.FC = () => {
   const [showUserGroupManager, setShowUserGroupManager] = useState(false)
   const [showUserProfile, setShowUserProfile] = useState(false)
   
+  // Rating state
+  const [showRatingModal, setShowRatingModal] = useState(false)
+  const [eventRatingStats, setEventRatingStats] = useState<any>(null)
+  
   // Location picker state
   const [isLocationPickerMode, setIsLocationPickerMode] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number; address?: string } | null>(null)
@@ -605,6 +612,17 @@ const MapViewNative: React.FC = () => {
     setSelectedLocation(null)
     setOnLocationSelected(null)
   }, [])
+
+  // Function to load event rating stats
+  const loadEventRatingStats = useCallback(async (eventId: string) => {
+    try {
+      const ratingsData = await ratingService.getEventRatings(eventId, 1, 1)
+      setEventRatingStats(ratingsData.stats)
+    } catch (error) {
+      console.error('Error loading event rating stats:', error)
+      setEventRatingStats(null)
+    }
+  }, [])
   
   // Map state - initialize with user location or default to Estonia
   const [mapRegion, setMapRegion] = useState<Region>({
@@ -622,6 +640,13 @@ const MapViewNative: React.FC = () => {
   useEffect(() => {
     console.log('🎯 showEventEditor state changed:', showEventEditor)
   }, [showEventEditor])
+
+  // Load rating stats when event details modal is shown
+  useEffect(() => {
+    if (showEventDetailsModal && selectedEvent) {
+      loadEventRatingStats(selectedEvent.id)
+    }
+  }, [showEventDetailsModal, selectedEvent, loadEventRatingStats])
 
   // Auto-fit map to user location or events when they load
   useEffect(() => {
@@ -1002,6 +1027,23 @@ const MapViewNative: React.FC = () => {
              <ScrollView style={styles.modalContent}>
                <Text style={styles.eventTitle}>{selectedEvent.name}</Text>
                <Text style={styles.eventCategory}>Category: {selectedEvent.category || 'other'}</Text>
+               
+               {/* Rating Display */}
+               <View style={styles.ratingContainer}>
+                 <RatingDisplay
+                   averageRating={eventRatingStats?.averageRating || 0}
+                   totalRatings={eventRatingStats?.totalRatings || 0}
+                   size="medium"
+                   onPress={() => setShowRatingModal(true)}
+                 />
+                 <TouchableOpacity
+                   style={styles.rateButton}
+                   onPress={() => setShowRatingModal(true)}
+                 >
+                   <Text style={styles.rateButtonText}>Rate Event</Text>
+                 </TouchableOpacity>
+               </View>
+               
                <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
                <Text style={styles.eventVenue}>Venue: {selectedEvent.venue}</Text>
                <Text style={styles.eventAddress}>Address: {selectedEvent.address}</Text>
@@ -1255,6 +1297,14 @@ const MapViewNative: React.FC = () => {
         <UserProfile
           visible={showUserProfile}
           onClose={() => setShowUserProfile(false)}
+        />
+
+        {/* Event Rating Modal */}
+        <EventRating
+          visible={showRatingModal}
+          eventId={selectedEvent?.id || ''}
+          eventName={selectedEvent?.name || ''}
+          onClose={() => setShowRatingModal(false)}
         />
     </View>
   )
@@ -1748,6 +1798,27 @@ const styles = StyleSheet.create({
     },
     locationPickerConfirmTextDisabled: {
       color: '#999',
+    },
+    ratingContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 15,
+      paddingVertical: 10,
+      paddingHorizontal: 15,
+      backgroundColor: '#f8f9fa',
+      borderRadius: 8,
+    },
+    rateButton: {
+      backgroundColor: '#FFD700',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    rateButtonText: {
+      color: '#333',
+      fontSize: 14,
+      fontWeight: '600',
     },
   })
 

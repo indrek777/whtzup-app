@@ -20,6 +20,7 @@ const syncRouter = require('./routes/sync');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const subscriptionRouter = require('./routes/subscription');
+const ratingsRouter = require('./routes/ratings');
 const { errorHandler } = require('./middleware/errorHandler');
 const { validateDeviceId } = require('./middleware/deviceValidation');
 
@@ -93,6 +94,7 @@ app.use('/api/events', validateDeviceId, (req, res, next) => {
   req.io = io;
   next();
 }, eventsRouter);
+app.use('/api/ratings', ratingsRouter);
 app.use('/api/sync', validateDeviceId, syncRouter);
 app.use('/api/health', healthRouter);
 

@@ -152,6 +152,41 @@ CREATE TABLE IF NOT EXISTS offline_queue (
 CREATE INDEX IF NOT EXISTS idx_offline_queue_device_id ON offline_queue(device_id);
 CREATE INDEX IF NOT EXISTS idx_offline_queue_processed ON offline_queue(processed);
 
+-- Create event_ratings table for user ratings
+CREATE TABLE IF NOT EXISTS event_ratings (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(event_id, user_id)
+);
+
+-- Create indexes for event_ratings
+CREATE INDEX IF NOT EXISTS idx_event_ratings_event_id ON event_ratings(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_ratings_user_id ON event_ratings(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_ratings_rating ON event_ratings(rating);
+CREATE INDEX IF NOT EXISTS idx_event_ratings_created_at ON event_ratings(created_at);
+
+-- Create event_rating_stats table for aggregated rating data
+CREATE TABLE IF NOT EXISTS event_rating_stats (
+    event_id VARCHAR(255) PRIMARY KEY,
+    average_rating DECIMAL(3,2) DEFAULT 0,
+    total_ratings INTEGER DEFAULT 0,
+    rating_1_count INTEGER DEFAULT 0,
+    rating_2_count INTEGER DEFAULT 0,
+    rating_3_count INTEGER DEFAULT 0,
+    rating_4_count INTEGER DEFAULT 0,
+    rating_5_count INTEGER DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for event_rating_stats
+CREATE INDEX IF NOT EXISTS idx_event_rating_stats_average ON event_rating_stats(average_rating);
+CREATE INDEX IF NOT EXISTS idx_event_rating_stats_total ON event_rating_stats(total_ratings);
+
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -191,6 +226,12 @@ CREATE TRIGGER update_user_stats_updated_at
 -- Create trigger to automatically update updated_at for events
 CREATE TRIGGER update_events_updated_at 
     BEFORE UPDATE ON events 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to automatically update updated_at for event_ratings
+CREATE TRIGGER update_event_ratings_updated_at 
+    BEFORE UPDATE ON event_ratings 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
