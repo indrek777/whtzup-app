@@ -50,6 +50,39 @@ export interface UserRating {
 }
 
 class RatingService {
+  // Helper function to convert snake_case to camelCase
+  private transformRatingData(data: any): any {
+    if (data.rating) {
+      data.rating = {
+        id: data.rating.id,
+        eventId: data.rating.event_id,
+        userId: data.rating.user_id,
+        rating: data.rating.rating,
+        review: data.rating.review,
+        createdAt: data.rating.created_at,
+        updatedAt: data.rating.updated_at,
+        userName: data.rating.user_name,
+        userAvatar: data.rating.user_avatar
+      };
+    }
+    
+    if (data.stats) {
+      data.stats = {
+        eventId: data.stats.event_id,
+        averageRating: parseFloat(data.stats.average_rating) || 0,
+        totalRatings: data.stats.total_ratings || 0,
+        rating1Count: data.stats.rating_1_count || 0,
+        rating2Count: data.stats.rating_2_count || 0,
+        rating3Count: data.stats.rating_3_count || 0,
+        rating4Count: data.stats.rating_4_count || 0,
+        rating5Count: data.stats.rating_5_count || 0,
+        lastUpdated: data.stats.last_updated
+      };
+    }
+    
+    return data;
+  }
+
   // Rate an event
   async rateEvent(eventId: string, rating: number, review?: string): Promise<{ rating: EventRating; stats: EventRatingStats }> {
     try {
@@ -78,7 +111,7 @@ class RatingService {
       }
 
       const result = await response.json();
-      return result.data;
+      return this.transformRatingData(result.data);
     } catch (error) {
       console.error('Error rating event:', error);
       throw error;
@@ -96,7 +129,32 @@ class RatingService {
       }
 
       const result = await response.json();
-      return result.data;
+      const transformedData = {
+        ...result.data,
+        stats: {
+          eventId: result.data.stats.event_id,
+          averageRating: parseFloat(result.data.stats.average_rating) || 0,
+          totalRatings: result.data.stats.total_ratings || 0,
+          rating1Count: result.data.stats.rating_1_count || 0,
+          rating2Count: result.data.stats.rating_2_count || 0,
+          rating3Count: result.data.stats.rating_3_count || 0,
+          rating4Count: result.data.stats.rating_4_count || 0,
+          rating5Count: result.data.stats.rating_5_count || 0,
+          lastUpdated: result.data.stats.last_updated
+        },
+        ratings: result.data.ratings.map((rating: any) => ({
+          id: rating.id,
+          eventId: rating.event_id,
+          userId: rating.user_id,
+          rating: rating.rating,
+          review: rating.review,
+          createdAt: rating.created_at,
+          updatedAt: rating.updated_at,
+          userName: rating.user_name,
+          userAvatar: rating.user_avatar
+        }))
+      };
+      return transformedData;
     } catch (error) {
       console.error('Error fetching event ratings:', error);
       throw error;
@@ -202,11 +260,17 @@ class RatingService {
 
   // Format rating display
   formatRating(rating: number): string {
+    if (typeof rating !== 'number' || isNaN(rating)) {
+      return '0.0';
+    }
     return rating.toFixed(1);
   }
 
   // Get star display for rating
   getStarDisplay(rating: number, size: 'small' | 'medium' | 'large' = 'medium'): string {
+    if (typeof rating !== 'number' || isNaN(rating)) {
+      rating = 0;
+    }
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 >= 0.5;
     const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
@@ -225,6 +289,9 @@ class RatingService {
 
   // Get rating color based on rating value
   getRatingColor(rating: number): string {
+    if (typeof rating !== 'number' || isNaN(rating)) {
+      rating = 0;
+    }
     if (rating >= 4.5) return '#4CAF50'; // Green
     if (rating >= 3.5) return '#8BC34A'; // Light green
     if (rating >= 2.5) return '#FFC107'; // Yellow

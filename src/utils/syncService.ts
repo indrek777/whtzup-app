@@ -502,16 +502,18 @@ class SyncService {
         console.log(`🎯 Fetching events within ${radius}km of user location`);
       }
       
-      // Add date filtering if provided
+      // Add date filtering if provided (temporarily disabled until backend supports it)
       if (dateFilter) {
-        if (dateFilter.from) {
-          params.append('from', dateFilter.from);
-          console.log(`📅 Date filter from: ${dateFilter.from}`);
-        }
-        if (dateFilter.to) {
-          params.append('to', dateFilter.to);
-          console.log(`📅 Date filter to: ${dateFilter.to}`);
-        }
+        console.log(`📅 Date filtering temporarily disabled - backend doesn't support date filters yet`);
+        // TODO: Re-enable when backend supports date filtering
+        // if (dateFilter.from) {
+        //   params.append('from', dateFilter.from);
+        //   console.log(`📅 Date filter from: ${dateFilter.from}`);
+        // }
+        // if (dateFilter.to) {
+        //   params.append('to', dateFilter.to);
+        //   console.log(`📅 Date filter to: ${dateFilter.to}`);
+        // }
       }
       
       // Add limit for progressive loading

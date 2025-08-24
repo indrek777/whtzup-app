@@ -21,7 +21,7 @@ import UserGroupManager from './UserGroupManager'
 import { reverseGeocode } from '../utils/geocoding'
 import UserProfile from './UserProfile'
 import { userService } from '../utils/userService'
-import EventRating from './EventRating'
+// import EventRating from './EventRating' // Removed - using Alert-based rating instead
 import RatingDisplay from './RatingDisplay'
 import { ratingService } from '../utils/ratingService'
 
@@ -110,6 +110,12 @@ const createClusters = (events: Event[], clusterRadius: number = 0.001): EventCl
   const locationGroups = new Map<string, Event[]>()
   
   events.forEach(event => {
+    // Skip events without valid coordinates
+    if (!event.latitude || !event.longitude || 
+        typeof event.latitude !== 'number' || typeof event.longitude !== 'number') {
+      return
+    }
+    
     // Create a location key with high precision for exact grouping
     const locationKey = `${event.latitude.toFixed(6)},${event.longitude.toFixed(6)}`
     
@@ -137,7 +143,7 @@ const createClusters = (events: Event[], clusterRadius: number = 0.001): EventCl
     
     // Create ONE cluster for ALL events at this location
     const cluster: EventCluster = {
-      id: `location-cluster-${centerEvent.latitude.toFixed(6)}-${centerEvent.longitude.toFixed(6)}-${locationEvents.length}`,
+      id: `location-cluster-${centerEvent.latitude?.toFixed(6) || '0.000000'}-${centerEvent.longitude?.toFixed(6) || '0.000000'}-${locationEvents.length}`,
       latitude: centerEvent.latitude,
       longitude: centerEvent.longitude,
       events: locationEvents,
@@ -546,7 +552,7 @@ const MapViewNative: React.FC = () => {
   const [showUserProfile, setShowUserProfile] = useState(false)
   
   // Rating state
-  const [showRatingModal, setShowRatingModal] = useState(false)
+  // const [showRatingModal, setShowRatingModal] = useState(false) // Removed - using Alert-based rating instead
   const [eventRatingStats, setEventRatingStats] = useState<any>(null)
   
   // Location picker state
@@ -647,6 +653,31 @@ const MapViewNative: React.FC = () => {
       loadEventRatingStats(selectedEvent.id)
     }
   }, [showEventDetailsModal, selectedEvent, loadEventRatingStats])
+
+  // Submit rating function
+  const submitRating = async (rating: number) => {
+    if (!selectedEvent) return;
+    
+    try {
+      const result = await ratingService.rateEvent(selectedEvent.id, rating);
+      
+      // Refresh rating stats
+      await loadEventRatingStats(selectedEvent.id);
+      
+      Alert.alert(
+        'Rating Submitted!',
+        `Thank you for rating "${selectedEvent.name}" with ${rating} star${rating > 1 ? 's' : ''}!`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      Alert.alert(
+        'Error',
+        'Failed to submit rating. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   // Auto-fit map to user location or events when they load
   useEffect(() => {
@@ -859,7 +890,7 @@ const MapViewNative: React.FC = () => {
             {selectedLocation && (
               <View style={styles.locationPickerInfo}>
                 <Text style={styles.locationPickerCoords}>
-                  📍 {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                  📍 {selectedLocation.latitude?.toFixed(6) || '0.000000'}, {selectedLocation.longitude?.toFixed(6) || '0.000000'}
                 </Text>
                 {selectedLocation.address && (
                   <Text style={styles.locationPickerAddress}>{selectedLocation.address}</Text>
@@ -1010,13 +1041,19 @@ const MapViewNative: React.FC = () => {
          visible={showEventDetailsModal}
          animationType="slide"
          presentationStyle="pageSheet"
-         onRequestClose={() => setShowEventDetailsModal(false)}
+         onRequestClose={() => {
+           setShowEventDetailsModal(false)
+           setSelectedEvent(null)
+         }}
        >
          <View style={styles.modalContainer}>
            <View style={styles.modalHeader}>
              <Text style={styles.modalTitle}>Event Details</Text>
              <TouchableOpacity 
-               onPress={() => setShowEventDetailsModal(false)}
+               onPress={() => {
+                 setShowEventDetailsModal(false)
+                 setSelectedEvent(null)
+               }}
                style={styles.closeButton}
              >
                <Text style={styles.closeButtonText}>Close</Text>
@@ -1034,13 +1071,74 @@ const MapViewNative: React.FC = () => {
                    averageRating={eventRatingStats?.averageRating || 0}
                    totalRatings={eventRatingStats?.totalRatings || 0}
                    size="medium"
-                   onPress={() => setShowRatingModal(true)}
+                   onPress={async () => {
+                     const isAuth = await userService.isAuthenticated();
+                     
+                     if (isAuth) {
+                       // Use Alert-based rating system instead of modal
+                       Alert.alert(
+                         `Rate "${selectedEvent?.name}"`,
+                         'How would you rate this event?',
+                         [
+                           { text: '⭐ 1 Star', onPress: () => submitRating(1) },
+                           { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
+                           { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
+                           { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
+                           { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
+                           { text: 'Cancel', style: 'cancel' }
+                         ]
+                       );
+                     } else {
+                       Alert.alert(
+                         'Authentication Required',
+                         'You need to sign in to rate events. Would you like to sign in now?',
+                         [
+                           { text: 'Cancel', style: 'cancel' },
+                           { text: 'Sign In', onPress: () => {
+                             // TODO: Navigate to sign in screen or show auth modal
+                             Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
+                           }}
+                         ]
+                       );
+                     }
+                   }}
                  />
                  <TouchableOpacity
                    style={styles.rateButton}
-                   onPress={() => setShowRatingModal(true)}
+                   onPress={async () => {
+                     const isAuth = await userService.isAuthenticated();
+                     
+                     if (isAuth) {
+                       // Use Alert-based rating system instead of modal
+                       Alert.alert(
+                         `Rate "${selectedEvent?.name}"`,
+                         'How would you rate this event?',
+                         [
+                           { text: '⭐ 1 Star', onPress: () => submitRating(1) },
+                           { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
+                           { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
+                           { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
+                           { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
+                           { text: 'Cancel', style: 'cancel' }
+                         ]
+                       );
+                     } else {
+                       Alert.alert(
+                         'Authentication Required',
+                         'You need to sign in to rate events. Would you like to sign in now?',
+                         [
+                           { text: 'Cancel', style: 'cancel' },
+                           { text: 'Sign In', onPress: () => {
+                             // TODO: Navigate to sign in screen or show auth modal
+                             Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
+                           }}
+                         ]
+                       );
+                     }
+                   }}
                  >
                    <Text style={styles.rateButtonText}>Rate Event</Text>
+                   <Text style={styles.authIndicator}>🔒</Text>
                  </TouchableOpacity>
                </View>
                
@@ -1055,6 +1153,7 @@ const MapViewNative: React.FC = () => {
                    onPress={() => {
                      setShowEventDetailsModal(false)
                      setShowEventEditor(true)
+                     setSelectedEvent(null)
                    }}
                  >
                    <Text style={styles.actionButtonText}>Edit Event</Text>
@@ -1075,6 +1174,8 @@ const MapViewNative: React.FC = () => {
                              try {
                                await deleteEvent(selectedEvent.id)
                                setShowEventDetailsModal(false)
+                               // Rating modal removed - using Alert-based rating instead
+                               setSelectedEvent(null)
                                Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
                              } catch (error) {
                                console.error('Error deleting event:', error)
@@ -1299,13 +1400,7 @@ const MapViewNative: React.FC = () => {
           onClose={() => setShowUserProfile(false)}
         />
 
-        {/* Event Rating Modal */}
-        <EventRating
-          visible={showRatingModal}
-          eventId={selectedEvent?.id || ''}
-          eventName={selectedEvent?.name || ''}
-          onClose={() => setShowRatingModal(false)}
-        />
+        {/* Event Rating Modal - Removed, using Alert-based rating instead */}
     </View>
   )
 }
@@ -1819,6 +1914,10 @@ const styles = StyleSheet.create({
       color: '#333',
       fontSize: 14,
       fontWeight: '600',
+    },
+    authIndicator: {
+      fontSize: 10,
+      marginLeft: 4,
     },
   })
 

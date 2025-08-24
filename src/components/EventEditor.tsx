@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native'
-import DateTimePicker from '@react-native-community/datetimepicker'
+// import DateTimePicker from '@react-native-community/datetimepicker' // Removed - using Alert-based selection instead
 
 import { Event } from '../data/events'
 import { saveEventsToFile, updateEventForAllUsers, deleteEventForAllUsers } from '../utils/eventStorage'
@@ -76,9 +76,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
   
   // Date/Time picker state
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [showTimePicker, setShowTimePicker] = useState(false)
-  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date')
+  // const [showDatePicker, setShowDatePicker] = useState(false) // Removed - using Alert-based selection
+  // const [showTimePicker, setShowTimePicker] = useState(false) // Removed - using Alert-based selection
+  // const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date') // Removed - using Alert-based selection
   
   // Location editing
   const [isEditingLocation, setIsEditingLocation] = useState(false)
@@ -94,57 +94,79 @@ const EventEditor: React.FC<EventEditorProps> = ({
     ]
   }
   
-  // Date/Time picker handlers - Simplified for reliability
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    console.log('📅 Date picker event:', event.type, 'selectedDate:', selectedDate)
+  // Date/Time picker handlers - Removed old modal-based handlers, using Alert-based selection instead
+  
+  const showDatePickerAlert = () => {
+    console.log('📅 showDatePickerAlert called')
     
-    // Always close the picker
-    setShowDatePicker(false)
+    // Get current date or today's date
+    const currentDate = date ? new Date(date) : new Date()
+    const today = new Date()
     
-    // Only update if user didn't cancel
-    if (event.type !== 'dismissed' && selectedDate) {
-      const dateStr = selectedDate.toISOString().split('T')[0]
-      setDate(dateStr)
-      console.log('📅 Date updated to:', dateStr)
-      
-      // Keep current time when updating date
-      const currentTime = time || '12:00'
-      const [hours, minutes] = currentTime.split(':')
-      const newDateTime = new Date(selectedDate)
-      newDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0)
-      setSelectedDate(newDateTime)
+    // Create date options for the next 30 days
+    const dateOptions = []
+    for (let i = 0; i < 30; i++) {
+      const optionDate = new Date(today)
+      optionDate.setDate(today.getDate() + i)
+      dateOptions.push(optionDate)
     }
+    
+    // Create alert buttons for date selection
+    const dateButtons = dateOptions.map(optionDate => ({
+      text: optionDate.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      onPress: () => {
+        const dateStr = optionDate.toISOString().split('T')[0]
+        setDate(dateStr)
+        setSelectedDate(optionDate)
+        console.log('📅 Date selected:', dateStr)
+      }
+    }))
+    
+    // Add cancel button
+    dateButtons.push({ text: 'Cancel', style: 'cancel' })
+    
+    Alert.alert(
+      'Select Date',
+      'Choose the event date:',
+      dateButtons
+    )
   }
   
-  const handleTimeChange = (event: any, selectedDate?: Date) => {
-    console.log('⏰ Time picker event:', event.type, 'selectedDate:', selectedDate)
+  const showTimePickerAlert = () => {
+    console.log('⏰ showTimePickerAlert called')
     
-    // Always close the picker
-    setShowTimePicker(false)
-    
-    // Only update if user didn't cancel
-    if (event.type !== 'dismissed' && selectedDate) {
-      const timeStr = selectedDate.toTimeString().slice(0, 5)
-      setTime(timeStr)
-      console.log('⏰ Time updated to:', timeStr)
-      
-      // Keep current date when updating time
-      const currentDate = date || new Date().toISOString().split('T')[0]
-      const newDateTime = new Date(`${currentDate}T${timeStr}:00`)
-      setSelectedDate(newDateTime)
+    // Create time options (every 30 minutes from 00:00 to 23:30)
+    const timeOptions = []
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        timeOptions.push(timeStr)
+      }
     }
-  }
-  
-  const showDatePickerModal = () => {
-    console.log('📅 showDatePickerModal called')
-    setShowDatePicker(true)
-    console.log('📅 Date picker should now be visible, showDatePicker:', true)
-  }
-  
-  const showTimePickerModal = () => {
-    console.log('⏰ showTimePickerModal called')
-    setShowTimePicker(true)
-    console.log('⏰ Time picker should now be visible, showTimePicker:', true)
+    
+    // Create alert buttons for time selection (limit to 20 options to avoid too many buttons)
+    const timeButtons = timeOptions
+      .filter((_, index) => index % 2 === 0) // Take every other option to reduce button count
+      .map(timeStr => ({
+        text: timeStr,
+        onPress: () => {
+          setTime(timeStr)
+          console.log('⏰ Time selected:', timeStr)
+        }
+      }))
+    
+    // Add cancel button
+    timeButtons.push({ text: 'Cancel', style: 'cancel' })
+    
+    Alert.alert(
+      'Select Time',
+      'Choose the event time:',
+      timeButtons
+    )
   }
   
   const formatDateForDisplay = (dateStr: string) => {
@@ -1486,76 +1508,25 @@ const EventEditor: React.FC<EventEditorProps> = ({
               </View>
 
               <Text style={styles.fieldLabel}>Date</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="YYYY-MM-DD (e.g., 2025-08-25)"
-                value={date}
-                onChangeText={(text) => {
-                  // Allow only numbers and dashes
-                  let cleaned = text.replace(/[^0-9-]/g, '')
-                  
-                  // Auto-format as user types: YYYY-MM-DD
-                  if (cleaned.length >= 4 && !cleaned.includes('-')) {
-                    cleaned = cleaned.slice(0, 4) + '-' + cleaned.slice(4)
-                  }
-                  if (cleaned.length >= 7 && cleaned.split('-').length === 2) {
-                    cleaned = cleaned.slice(0, 7) + '-' + cleaned.slice(7)
-                  }
-                  
-                  setDate(cleaned)
-                }}
-                keyboardType="default"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Text style={styles.helpText}>
-                Format: YYYY-MM-DD (e.g., 2025-08-25)
-              </Text>
-              
               <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => {
-                  const today = new Date().toISOString().split('T')[0]
-                  setDate(today)
-                  console.log('📅 Set date to today:', today)
-                }}
+                style={styles.dateTimeButton}
+                onPress={showDatePickerAlert}
               >
-                <Text style={styles.quickButtonText}>📅 Set to Today</Text>
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateForDisplay(date)}
+                </Text>
+                <Text style={styles.dateTimeButtonIcon}>📅</Text>
               </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>Time</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="HH:MM (e.g., 14:30)"
-                value={time}
-                onChangeText={(text) => {
-                  // Allow only numbers and colons
-                  let cleaned = text.replace(/[^0-9:]/g, '')
-                  
-                  // Auto-format as user types: HH:MM
-                  if (cleaned.length >= 2 && !cleaned.includes(':')) {
-                    cleaned = cleaned.slice(0, 2) + ':' + cleaned.slice(2)
-                  }
-                  
-                  setTime(cleaned)
-                }}
-                keyboardType="default"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Text style={styles.helpText}>
-                Format: HH:MM (24-hour format, e.g., 14:30 for 2:30 PM)
-              </Text>
-              
               <TouchableOpacity
-                style={styles.quickButton}
-                onPress={() => {
-                  const now = new Date().toTimeString().slice(0, 5)
-                  setTime(now)
-                  console.log('⏰ Set time to now:', now)
-                }}
+                style={styles.dateTimeButton}
+                onPress={showTimePickerAlert}
               >
-                <Text style={styles.quickButtonText}>⏰ Set to Now</Text>
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeForDisplay(time)}
+                </Text>
+                <Text style={styles.dateTimeButtonIcon}>🕐</Text>
               </TouchableOpacity>
 
               <Text style={styles.fieldLabel}>Organizer</Text>
@@ -1788,7 +1759,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                  <Text style={styles.fieldLabel}>Date</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={showDatePickerAlert}
                 >
                   <Text style={styles.dateTimeButtonText}>
                     {formatDateForDisplay(date)}
@@ -1799,7 +1770,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
                 <Text style={styles.fieldLabel}>Time</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => setShowTimePicker(true)}
+                  onPress={showTimePickerAlert}
                 >
                   <Text style={styles.dateTimeButtonText}>
                     {formatTimeForDisplay(time)}
@@ -2763,47 +2734,7 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
-  dateTimePickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-  },
-  dateTimePickerModal: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  dateTimePickerContainer: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 20,
-  },
-  dateTimePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  dateTimePickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  dateTimePickerDoneButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  dateTimePickerDoneText: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
+  // dateTimePicker styles removed - using Alert-based selection instead
   quickButton: {
     backgroundColor: '#f0f0f0',
     paddingHorizontal: 12,

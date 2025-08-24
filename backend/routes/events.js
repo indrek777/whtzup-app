@@ -51,7 +51,7 @@ const eventUpdateValidation = [
 // GET /api/events - Get all events
 router.get('/', async (req, res) => {
   try {
-    const { category, venue, limit = 15000, offset = 0, latitude, longitude, radius } = req.query;
+    const { category, venue, limit = 15000, offset = 0, latitude, longitude, radius, from, to } = req.query;
     const deviceId = req.headers['x-device-id'];
     
     let query = 'SELECT * FROM events WHERE deleted_at IS NULL';
@@ -68,6 +68,19 @@ router.get('/', async (req, res) => {
       paramCount++;
       query += ` AND venue ILIKE $${paramCount}`;
       params.push(`%${venue}%`);
+    }
+
+    // Add date filtering if from and/or to parameters are provided
+    if (from) {
+      paramCount++;
+      query += ` AND starts_at >= $${paramCount}`;
+      params.push(from + 'T00:00:00.000Z');
+    }
+
+    if (to) {
+      paramCount++;
+      query += ` AND starts_at <= $${paramCount}`;
+      params.push(to + 'T23:59:59.999Z');
     }
 
     // Add radius-based filtering if coordinates and radius are provided

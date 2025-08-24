@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native';
-import { ratingService, EventRating, EventRatingStats } from '../utils/ratingService';
+import { ratingService, EventRating as EventRatingType, EventRatingStats } from '../utils/ratingService';
 import { userService } from '../utils/userService';
 
 interface EventRatingProps {
@@ -27,9 +27,9 @@ const EventRating: React.FC<EventRatingProps> = ({
   visible,
   onClose
 }) => {
-  const [userRating, setUserRating] = useState<EventRating | null>(null);
+  const [userRating, setUserRating] = useState<EventRatingType | null>(null);
   const [stats, setStats] = useState<EventRatingStats | null>(null);
-  const [ratings, setRatings] = useState<EventRating[]>([]);
+  const [ratings, setRatings] = useState<EventRatingType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedRating, setSelectedRating] = useState(0);
@@ -122,6 +122,11 @@ const EventRating: React.FC<EventRatingProps> = ({
   };
 
   const renderStars = (rating: number, size: 'small' | 'medium' | 'large' = 'medium', interactive = false) => {
+    // Ensure rating is a valid number
+    if (typeof rating !== 'number' || isNaN(rating)) {
+      rating = 0;
+    }
+    
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       const starStyle = {
@@ -147,6 +152,11 @@ const EventRating: React.FC<EventRatingProps> = ({
   };
 
   const renderRatingBar = (rating: number, count: number, total: number) => {
+    // Ensure all parameters are valid numbers
+    if (typeof rating !== 'number' || isNaN(rating)) rating = 0;
+    if (typeof count !== 'number' || isNaN(count)) count = 0;
+    if (typeof total !== 'number' || isNaN(total)) total = 0;
+    
     const percentage = total > 0 ? (count / total) * 100 : 0;
     return (
       <View style={styles.ratingBarContainer}>
@@ -161,12 +171,18 @@ const EventRating: React.FC<EventRatingProps> = ({
 
   if (!visible) return null;
 
+  // Don't render if we don't have a valid eventId
+  if (!eventId || eventId.trim() === '') {
+    return null;
+  }
+  
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
+      transparent={false}
     >
       <View style={styles.container}>
         <View style={styles.header}>
@@ -185,24 +201,33 @@ const EventRating: React.FC<EventRatingProps> = ({
           ) : (
             <>
               {/* Overall Stats */}
-              {stats && (
+              {stats && typeof stats === 'object' && (
                 <View style={styles.statsContainer}>
                   <View style={styles.overallRating}>
-                    <Text style={styles.averageRating}>{ratingService.formatRating(stats.averageRating)}</Text>
+                    <Text style={styles.averageRating}>
+                      {(() => {
+                        try {
+                          return ratingService.formatRating(stats.averageRating || 0);
+                        } catch (error) {
+                          console.error('Error formatting rating:', error);
+                          return '0.0';
+                        }
+                      })()}
+                    </Text>
                     <View style={styles.starsContainer}>
-                      {renderStars(stats.averageRating, 'large')}
+                      {renderStars(stats.averageRating || 0, 'large')}
                     </View>
-                    <Text style={styles.totalRatings}>{stats.totalRatings} ratings</Text>
+                    <Text style={styles.totalRatings}>{stats.totalRatings || 0} ratings</Text>
                   </View>
 
                   {/* Rating Distribution */}
                   <View style={styles.distributionContainer}>
                     <Text style={styles.distributionTitle}>Rating Distribution</Text>
-                    {renderRatingBar(5, stats.rating5Count, stats.totalRatings)}
-                    {renderRatingBar(4, stats.rating4Count, stats.totalRatings)}
-                    {renderRatingBar(3, stats.rating3Count, stats.totalRatings)}
-                    {renderRatingBar(2, stats.rating2Count, stats.totalRatings)}
-                    {renderRatingBar(1, stats.rating1Count, stats.totalRatings)}
+                    {renderRatingBar(5, stats.rating5Count || 0, stats.totalRatings || 0)}
+                    {renderRatingBar(4, stats.rating4Count || 0, stats.totalRatings || 0)}
+                    {renderRatingBar(3, stats.rating3Count || 0, stats.totalRatings || 0)}
+                    {renderRatingBar(2, stats.rating2Count || 0, stats.totalRatings || 0)}
+                    {renderRatingBar(1, stats.rating1Count || 0, stats.totalRatings || 0)}
                   </View>
                 </View>
               )}
@@ -285,7 +310,7 @@ const EventRating: React.FC<EventRatingProps> = ({
               </View>
 
               {/* Recent Ratings */}
-              {ratings.length > 0 && (
+              {ratings && Array.isArray(ratings) && ratings.length > 0 && (
                 <View style={styles.recentRatingsSection}>
                   <Text style={styles.sectionTitle}>Recent Ratings</Text>
                   {ratings.slice(0, 5).map((rating) => (
@@ -295,14 +320,14 @@ const EventRating: React.FC<EventRatingProps> = ({
                           {rating.userName || 'Anonymous User'}
                         </Text>
                         <View style={styles.ratingItemStars}>
-                          {renderStars(rating.rating, 'small')}
+                          {renderStars(rating.rating || 0, 'small')}
                         </View>
                       </View>
                       {rating.review && (
                         <Text style={styles.ratingReview}>{rating.review}</Text>
                       )}
                       <Text style={styles.ratingDate}>
-                        {new Date(rating.createdAt).toLocaleDateString()}
+                        {rating.createdAt ? new Date(rating.createdAt).toLocaleDateString() : 'Unknown date'}
                       </Text>
                     </View>
                   ))}
@@ -319,7 +344,7 @@ const EventRating: React.FC<EventRatingProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
