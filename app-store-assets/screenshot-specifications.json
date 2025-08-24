@@ -1,0 +1,55 @@
+{
+  "deviceSpecs": {
+    "iphone-6.7": {
+      "width": 1290,
+      "height": 2796,
+      "device": "iPhone 15 Pro Max"
+    },
+    "iphone-6.5": {
+      "width": 1242,
+      "height": 2688,
+      "device": "iPhone 14 Plus"
+    },
+    "iphone-5.5": {
+      "width": 1242,
+      "height": 2208,
+      "device": "iPhone 8 Plus"
+    }
+  },
+  "screenshots": [
+    {
+      "name": "01-main-map-view",
+      "title": "Discover 13,000+ Events",
+      "description": "Interactive map with colorful event markers showing different categories"
+    },
+    {
+      "name": "02-event-details",
+      "title": "Detailed Event Information",
+      "description": "Event detail modal with full information, ratings, and reviews"
+    },
+    {
+      "name": "03-search-filtering",
+      "title": "Smart Search & Filtering",
+      "description": "Search interface with category filters and advanced filtering options"
+    },
+    {
+      "name": "04-event-creation",
+      "title": "Create Your Own Events",
+      "description": "Event creation form with map location selection"
+    },
+    {
+      "name": "05-user-profile",
+      "title": "Personalized Experience",
+      "description": "User profile with subscription status and settings"
+    }
+  ],
+  "instructions": {
+    "backgroundColor": "#FFFFFF",
+    "textColor": "#000000",
+    "fontFamily": "SF Pro Display",
+    "fontSize": "48px",
+    "fontWeight": "bold",
+    "textPosition": "bottom",
+    "textPadding": "40px"
+  }
+}

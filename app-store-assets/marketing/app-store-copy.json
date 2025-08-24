@@ -1,0 +1,28 @@
+{
+  "appName": "Event Discovery - Find Local Events",
+  "subtitle": "Discover events near you",
+  "shortDescription": "Find and explore local events with our interactive map. Discover concerts, festivals, workshops, and more near you.",
+  "longDescription": "```\n🎉 Discover Amazing Events Near You!\n\nEvent Discovery is your ultimate companion for finding and exploring local events. With over 13,000 events across Europe, discover concerts, festivals, workshops, sports events, and much more right in your area.\n\n🗺️ **Interactive Map Experience**\n• Explore events on a beautiful, interactive map\n• See events clustered by location for easy browsing\n• Real-time location tracking shows events near you\n• Smart radius filtering (25km to 500km)\n\n🎯 **Smart Event Discovery**\n• 17 event categories: Music, Sports, Art, Food, Business, Technology, and more\n• Advanced filtering by category, date, distance, and source\n• AI-generated events + user-created events\n• Distance-based prioritization\n\n⭐ **Community Features**\n• Rate events and read community reviews\n• Share events with friends\n• Create your own events\n• Real-time event updates\n\n🔍 **Powerful Search & Filtering**\n• Text search across event names and descriptions\n• Filter by event category (Music, Sports, Art, Food, etc.)\n• Date range filtering\n• Distance-based filtering\n• Source filtering (All, AI Generated, User Created)\n\n📍 **Location Intelligence**\n• Automatic location detection\n• Smart radius calculation based on your city\n• Country-based filtering with flag selection\n• Real-time distance calculations\n\n⚡ **Performance Optimized**\n• Lightning-fast loading with smart partial loading\n• 90% memory reduction for smooth performance\n• Offline support with automatic sync\n• Battery-efficient location services\n\n🎨 **Beautiful Design**\n• Modern, intuitive interface\n• Smooth animations and transitions\n• Color-coded event markers by category\n• Responsive design for all iOS devices\n\n🔒 **Privacy & Security**\n• Secure authentication system\n• Privacy-focused location services\n• Data encryption and protection\n• GDPR compliant\n\nPerfect for:\n• Event organizers looking to promote their events\n• Music lovers discovering concerts and festivals\n• Sports enthusiasts finding games and tournaments\n• Foodies exploring culinary events and tastings\n• Business professionals networking at industry events\n• Families finding kid-friendly activities\n• Students discovering educational workshops\n• Travelers exploring local culture and events\n\nDownload Event Discovery today and never miss out on amazing events happening around you!\n\n---\n\n**Features:**\n• Interactive map with 13,000+ events\n• 17 event categories\n• Real-time location tracking\n• Advanced search and filtering\n• Community ratings and reviews\n• Offline support with sync\n• Create and share events\n• Beautiful, intuitive design\n• Privacy-focused and secure\n\n**Supported Languages:**\n• English\n• Estonian (coming soon)\n\n**Compatibility:**\n• iOS 15.1 or later\n• iPhone and iPad\n• Optimized for all screen sizes\n```",
+  "keywords": "events,local,discovery,map,find,activities,concerts,shows,festivals,nightlife,music,sports,art,food,business,networking,workshops,comedy,theater,family",
+  "features": [
+    "Interactive map with 13,000+ events",
+    "17 event categories",
+    "Real-time location tracking",
+    "Advanced search and filtering",
+    "Community ratings and reviews",
+    "Offline support with sync",
+    "Create and share events",
+    "Beautiful, intuitive design",
+    "Privacy-focused and secure"
+  ],
+  "targetAudience": [
+    "Event organizers looking to promote their events",
+    "Music lovers discovering concerts and festivals",
+    "Sports enthusiasts finding games and tournaments",
+    "Foodies exploring culinary events and tastings",
+    "Business professionals networking at industry events",
+    "Families finding kid-friendly activities",
+    "Students discovering educational workshops",
+    "Travelers exploring local culture and events"
+  ]
+}

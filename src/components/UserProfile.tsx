@@ -17,6 +17,8 @@ import {
 import { userService, User, Subscription, UserPreferences } from '../utils/userService'
 import { errorHandler, ErrorType } from '../utils/errorHandler'
 import { iapService, SUBSCRIPTION_PRODUCTS } from '../utils/iapServiceMock'
+import SubscriptionManager from './SubscriptionManager'
+import SubscriptionTerms from './SubscriptionTerms'
 
 interface UserProfileProps {
   visible: boolean
@@ -36,6 +38,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const [showBillingModal, setShowBillingModal] = useState(false)
   const [showPlanChangeModal, setShowPlanChangeModal] = useState(false)
   const [showBenefitsModal, setShowBenefitsModal] = useState(false)
+  const [showSubscriptionManager, setShowSubscriptionManager] = useState(false)
+  const [showSubscriptionTerms, setShowSubscriptionTerms] = useState(false)
   
   // Auth states
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
@@ -1042,6 +1046,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                   <Text style={styles.actionArrow}>›</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity 
+                  style={styles.actionItem}
+                  onPress={() => setShowSubscriptionManager(true)}
+                >
+                  <Text style={styles.actionIcon}>📋</Text>
+                  <Text style={styles.actionText}>Manage Subscription</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.actionItem}
+                  onPress={() => setShowSubscriptionTerms(true)}
+                >
+                  <Text style={styles.actionIcon}>📄</Text>
+                  <Text style={styles.actionText}>Subscription Terms</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
                 {detailedSubscription?.canUpgrade ? (
                   <TouchableOpacity 
                     style={styles.actionItem}
@@ -1092,6 +1114,17 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         {renderBillingModal()}
         {renderPlanChangeModal()}
         {renderBenefitsModal()}
+        
+        {/* Subscription Management Modals */}
+        <SubscriptionManager 
+          visible={showSubscriptionManager} 
+          onClose={() => setShowSubscriptionManager(false)} 
+        />
+        
+        <SubscriptionTerms 
+          visible={showSubscriptionTerms} 
+          onClose={() => setShowSubscriptionTerms(false)} 
+        />
       </SafeAreaView>
     </Modal>
   )
