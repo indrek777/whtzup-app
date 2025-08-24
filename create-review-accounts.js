@@ -3,12 +3,12 @@
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 
-// Database configuration
+// Database configuration - Updated for Docker setup
 const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
+  user: process.env.DB_USER || 'whtzup_user',
   host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'event_discovery',
-  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'whtzup_events',
+  password: process.env.DB_PASSWORD || 'whtzup_password',
   port: process.env.DB_PORT || 5432,
 });
 
@@ -82,23 +82,28 @@ async function createTestAccounts() {
     for (const account of testAccounts) {
       console.log(`📝 Creating account: ${account.email}`);
       
-      // Hash password
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(account.password, saltRounds);
-      
-      // Generate user ID
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      try {
+        // Check if user already exists
+        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [account.email]);
+        
+        if (existingUser.rows.length > 0) {
+          console.log(`⚠️  User already exists: ${account.email}`);
+          console.log(`   User ID: ${existingUser.rows[0].id}`);
+          console.log(`   Skipping creation...\n`);
+          continue;
+        }
+        
+        // Hash password
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(account.password, saltRounds);
+        
+        // Generate user ID
+        const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Create user account
       const userResult = await pool.query(`
         INSERT INTO users (id, email, password_hash, name, created_at, updated_at, is_active, email_verified)
         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true, true)
-        ON CONFLICT (email) DO UPDATE SET
-          password_hash = EXCLUDED.password_hash,
-          name = EXCLUDED.name,
-          updated_at = CURRENT_TIMESTAMP,
-          is_active = true,
-          email_verified = true
         RETURNING id
       `, [userId, account.email, hashedPassword, account.name]);
       
@@ -109,14 +114,6 @@ async function createTestAccounts() {
         await pool.query(`
           INSERT INTO user_subscriptions (user_id, status, plan, start_date, end_date, auto_renew, features)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (user_id) DO UPDATE SET
-            status = EXCLUDED.status,
-            plan = EXCLUDED.plan,
-            start_date = EXCLUDED.start_date,
-            end_date = EXCLUDED.end_date,
-            auto_renew = EXCLUDED.auto_renew,
-            features = EXCLUDED.features,
-            updated_at = CURRENT_TIMESTAMP
         `, [
           userIdResult,
           account.subscription.status,
@@ -132,20 +129,23 @@ async function createTestAccounts() {
       await pool.query(`
         INSERT INTO user_preferences (user_id, notifications, email_updates, default_radius, favorite_categories, language, theme)
         VALUES ($1, true, true, 10, '[]', 'en', 'auto')
-        ON CONFLICT (user_id) DO NOTHING
       `, [userIdResult]);
       
       // Create user stats
       await pool.query(`
-        INSERT INTO user_stats (user_id, events_created, events_attended, total_events_viewed, last_activity)
-        VALUES ($1, 0, 0, 0, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id) DO NOTHING
+        INSERT INTO user_stats (user_id, events_created, events_attended, total_events)
+        VALUES ($1, 0, 0, 0)
       `, [userIdResult]);
       
       console.log(`✅ Account created successfully: ${account.email}`);
       console.log(`   Type: ${account.accountType}`);
       console.log(`   Password: ${account.password}`);
       console.log(`   User ID: ${userIdResult}\n`);
+      
+      } catch (error) {
+        console.error(`❌ Error creating account ${account.email}:`, error.message);
+        console.log(`   Skipping this account...\n`);
+      }
     }
     
     console.log('🎉 All test accounts created successfully!');

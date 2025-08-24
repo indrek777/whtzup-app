@@ -207,7 +207,7 @@ class SyncService {
       } else {
         console.log('🔓 userService not properly initialized');
       }
-    } catch (error) {
+    } catch (error: any) {
       // If userService is not available, continue without auth headers
       console.log('🔓 No authentication available for API call:', error.message);
     }
@@ -500,18 +500,16 @@ class SyncService {
         console.log(`🎯 Fetching events within ${radius}km of user location`);
       }
       
-      // Add date filtering if provided (temporarily disabled until backend supports it)
+      // Add date filtering if provided
       if (dateFilter) {
-        console.log(`📅 Date filtering temporarily disabled - backend doesn't support date filters yet`);
-        // TODO: Re-enable when backend supports date filtering
-        // if (dateFilter.from) {
-        //   params.append('from', dateFilter.from);
-        //   console.log(`📅 Date filter from: ${dateFilter.from}`);
-        // }
-        // if (dateFilter.to) {
-        //   params.append('to', dateFilter.to);
-        //   console.log(`📅 Date filter to: ${dateFilter.to}`);
-        // }
+        if (dateFilter.from) {
+          params.append('from', dateFilter.from);
+          console.log(`📅 Date filter from: ${dateFilter.from}`);
+        }
+        if (dateFilter.to) {
+          params.append('to', dateFilter.to);
+          console.log(`📅 Date filter to: ${dateFilter.to}`);
+        }
       }
       
       // Add limit for progressive loading
@@ -567,7 +565,36 @@ class SyncService {
       
       if (cachedEvents.length > 0) {
         console.log(`📦 Using ${cachedEvents.length} cached events for instant display`);
-        initialEvents = cachedEvents;
+        
+        // Apply date filtering to cached events if date filter is provided
+        if (dateFilter && (dateFilter.from || dateFilter.to)) {
+          const now = new Date();
+          initialEvents = cachedEvents.filter(event => {
+            const eventDate = new Date(event.startsAt);
+            
+            // Filter by from date
+            if (dateFilter.from) {
+              const fromDate = new Date(dateFilter.from + 'T00:00:00.000Z');
+              if (eventDate < fromDate) {
+                return false;
+              }
+            }
+            
+            // Filter by to date
+            if (dateFilter.to) {
+              const toDate = new Date(dateFilter.to + 'T23:59:59.999Z');
+              if (eventDate > toDate) {
+                return false;
+              }
+            }
+            
+            return true;
+          });
+          
+          console.log(`📅 Applied date filter to cached events: ${cachedEvents.length} -> ${initialEvents.length} events`);
+        } else {
+          initialEvents = cachedEvents;
+        }
       }
       
       // Then fetch fresh data in background (limited to 100 events initially)
@@ -577,12 +604,33 @@ class SyncService {
         initial: initialEvents.length > 0 ? initialEvents : freshEvents,
         total: freshEvents.length
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Progressive loading failed:', error);
       const cachedEvents = await this.getCachedEvents();
+      
+      // Apply date filtering to cached events even in error case
+      let filteredCachedEvents = cachedEvents;
+      if (dateFilter && (dateFilter.from || dateFilter.to)) {
+        filteredCachedEvents = cachedEvents.filter(event => {
+          const eventDate = new Date(event.startsAt);
+          
+          if (dateFilter.from) {
+            const fromDate = new Date(dateFilter.from + 'T00:00:00.000Z');
+            if (eventDate < fromDate) return false;
+          }
+          
+          if (dateFilter.to) {
+            const toDate = new Date(dateFilter.to + 'T23:59:59.999Z');
+            if (eventDate > toDate) return false;
+          }
+          
+          return true;
+        });
+      }
+      
       return {
-        initial: cachedEvents,
-        total: cachedEvents.length
+        initial: filteredCachedEvents,
+        total: filteredCachedEvents.length
       };
     }
   }
