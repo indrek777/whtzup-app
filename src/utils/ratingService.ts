@@ -1,6 +1,6 @@
 import { userService } from './userService';
 
-const API_BASE_URL = 'http://olympio.ee:4000/api';
+const API_BASE_URL = 'http://88.196.240.63:4000/api';
 
 export interface EventRating {
   id: number;

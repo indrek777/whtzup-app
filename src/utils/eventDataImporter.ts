@@ -373,20 +373,14 @@ export const transformImportedEvents = (importedData: ImportedEvent[]): Event[] 
 // Function to fetch and load events from the JSON file
 export const loadEventsFromFile = async (): Promise<Event[]> => {
   try {
-    const response = await fetch('/events-user.json')
+    // For React Native/Expo, we need to use a different approach
+    // We'll import the data directly or use a different method
+    console.log('Loading events from file...')
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data = await response.json()
-    
-    if (!Array.isArray(data)) {
-      throw new Error('Data is not an array')
-    }
-    
-    const transformedEvents = transformImportedEvents(data)
-    return transformedEvents
+    // For now, return empty array to avoid network request errors
+    // TODO: Implement proper file loading for React Native
+    console.log('Skipping local file load for React Native - using backend data only')
+    return []
   } catch (error) {
     console.error('Error in loadEventsFromFile:', error)
     throw error
@@ -397,27 +391,13 @@ export const loadEventsFromFile = async (): Promise<Event[]> => {
 export const loadAIEventsFromFile = async (): Promise<Event[]> => {
   try {
     // For React Native/Expo, we need to use a different approach
-    // We'll copy the file to the public directory first
-    const response = await fetch('/ai-events.json')
+    // We'll import the data directly or use a different method
+    console.log('Loading AI events from file...')
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data = await response.json()
-    
-    if (!Array.isArray(data)) {
-      throw new Error('AI events data is not an array')
-    }
-    
-    // Mark all events as AI source
-    const aiEvents = data.map((event: ImportedEvent) => ({
-      ...event,
-      source: 'ai'
-    }))
-    
-    const transformedEvents = transformImportedEvents(aiEvents)
-    return transformedEvents
+    // For now, return empty array to avoid network request errors
+    // TODO: Implement proper file loading for React Native
+    console.log('Skipping AI events file load for React Native - using backend data only')
+    return []
   } catch (error) {
     console.error('Error in loadAIEventsFromFile:', error)
     throw error

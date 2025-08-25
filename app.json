@@ -37,6 +37,18 @@
               "NSExceptionMinimumTLSVersion": "1.0",
               "NSExceptionRequiresForwardSecrecy": false,
               "NSIncludesSubdomains": true
+            },
+            "192.168.66.54": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            },
+            "88.196.240.63": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
             }
           }
         }
