@@ -9,9 +9,11 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Platform
+  Platform,
+  SafeAreaView,
+  Dimensions
 } from 'react-native'
-import MapView, { Marker, Region } from 'react-native-maps'
+import MapView, { Marker, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { loadEventsPartially } from '../utils/eventLoader'
 import { Event } from '../data/events'
@@ -20,12 +22,13 @@ import { useEvents } from '../context/EventContext'
 import UserGroupManager from './UserGroupManager'
 import { reverseGeocode } from '../utils/geocoding'
 import UserProfile from './UserProfile'
-import { userService } from '../utils/userService'
+import { userService, UserGroup } from '../utils/userService'
 // import EventRating from './EventRating' // Removed - using Alert-based rating instead
 import RatingDisplay from './RatingDisplay'
 import { ratingService } from '../utils/ratingService'
 import { errorHandler, ErrorType } from '../utils/errorHandler'
 import ErrorDisplay from './ErrorDisplay'
+import { UserGroupBanner } from './UserGroupBanner'
 
 // Clustering interfaces
 interface EventCluster {
@@ -540,7 +543,7 @@ const SimpleMarker = React.memo(({
 })
 
 const MapViewNative: React.FC = () => {
-  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck, refreshEvents } = useEvents()
+  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck, refreshEvents, refreshUserGroupLimits } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [currentError, setCurrentError] = useState<any>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
@@ -570,6 +573,45 @@ const MapViewNative: React.FC = () => {
   
   // Map reference
   const mapRef = useRef<MapView>(null)
+  
+  // Get user group limits
+  const [userMaxRadius, setUserMaxRadius] = useState(500) // Default to premium limit
+  const [userGroup, setUserGroup] = useState<UserGroup>('unregistered')
+  
+  // Load user group limits
+  useEffect(() => {
+    const loadUserGroupLimits = async () => {
+      try {
+        console.log('🎯 Loading user group limits...')
+        const group = await userService.getUserGroup()
+        const features = await userService.getUserGroupFeatures()
+        setUserGroup(group)
+        setUserMaxRadius(features.maxRadiusKm)
+        console.log(`🎯 User group loaded: ${group}, max radius: ${features.maxRadiusKm}km`)
+        console.log(`🎯 User group features:`, features)
+        console.log(`🎯 State updated: userGroup=${group}, userMaxRadius=${features.maxRadiusKm}`)
+      } catch (error) {
+        console.log('⚠️ Could not load user group limits, using default:', error)
+      }
+    }
+    
+    loadUserGroupLimits()
+    
+    // Set up interval to check for subscription changes
+    const interval = setInterval(async () => {
+      try {
+        const currentGroup = await userService.getUserGroup()
+        if (currentGroup !== userGroup) {
+          console.log(`🎯 User group changed from ${userGroup} to ${currentGroup}, reloading limits`)
+          loadUserGroupLimits()
+        }
+      } catch (error) {
+        console.log('⚠️ Error checking user group changes:', error)
+      }
+    }, 5000) // Check every 5 seconds
+    
+    return () => clearInterval(interval)
+  }, [userGroup])
   
   // Function to start location picker mode
   const startLocationPicker = useCallback((callback: (location: { latitude: number; longitude: number; address?: string }) => void) => {
@@ -782,7 +824,16 @@ const MapViewNative: React.FC = () => {
     // Apply radius filtering if user location is available
     let filtered = events;
     if (userLocation && currentRadius) {
-      const radiusInDegrees = currentRadius / 111; // Approximate conversion from km to degrees
+      // Ensure radius doesn't exceed user group limit
+      const effectiveRadius = Math.min(currentRadius, userMaxRadius)
+      
+      console.log(`🎯 Radius filtering debug: currentRadius=${currentRadius}km, userMaxRadius=${userMaxRadius}km, effectiveRadius=${effectiveRadius}km`)
+      
+      if (currentRadius > userMaxRadius) {
+        console.log(`⚠️ Requested radius ${currentRadius}km exceeds user group limit ${userMaxRadius}km, using ${effectiveRadius}km`)
+      }
+      
+      const radiusInDegrees = effectiveRadius / 111; // Approximate conversion from km to degrees
       filtered = events.filter(event => {
         if (!event.latitude || !event.longitude) return false;
         
@@ -800,11 +851,11 @@ const MapViewNative: React.FC = () => {
         return isWithinRadius;
       });
       
-      console.log(`🎯 Radius filtering: ${events.length} total events, ${filtered.length} within ${currentRadius}km radius`);
+      console.log(`🎯 Radius filtering: ${events.length} total events, ${filtered.length} within ${effectiveRadius}km radius (user group limit: ${userMaxRadius}km)`);
     }
     
     setFilteredEvents(filtered)
-  }, [events, userLocation, currentRadius])
+  }, [events, userLocation, currentRadius, userMaxRadius])
 
   // Event press handler
   const handleEventPress = useCallback((event: Event) => {
@@ -1012,55 +1063,113 @@ const MapViewNative: React.FC = () => {
               'Choose your filters:',
               [
                 { text: 'Adjust Radius', onPress: () => {
+                  // Create radius options based on user group limits
+                  const radiusOptions = [
+                    { text: '5km (Very Local)', onPress: () => setCurrentRadius(5) },
+                    { text: '10km (Local)', onPress: () => setCurrentRadius(10) },
+                    { text: '15km (Regional)', onPress: () => setCurrentRadius(15) },
+                    { text: '50km (Wide)', onPress: () => setCurrentRadius(50) },
+                    { text: '100km (Very Wide)', onPress: () => setCurrentRadius(100) },
+                    { text: '200km (Extended)', onPress: () => setCurrentRadius(200) },
+                    { text: '300km (Very Extended)', onPress: () => setCurrentRadius(300) },
+                    { text: '500km (Maximum)', onPress: () => setCurrentRadius(500) }
+                  ].filter(option => {
+                    // Extract radius value from text (e.g., "5km" -> 5)
+                    const radiusMatch = option.text.match(/(\d+)km/)
+                    if (radiusMatch) {
+                      const radius = parseInt(radiusMatch[1])
+                      return radius <= userMaxRadius
+                    }
+                    return true
+                  })
+                  
+                  console.log(`🎯 Radius options for user group ${userGroup} (max: ${userMaxRadius}km):`, radiusOptions.map(o => o.text))
+                  
                   Alert.alert(
                     'Search Radius',
-                    'Choose your search radius:',
+                    `Choose your search radius (max: ${userMaxRadius}km):`,
                     [
-                      { text: '50km (Local)', onPress: () => setCurrentRadius(50) },
-                      { text: '100km (Regional)', onPress: () => setCurrentRadius(100) },
-                      { text: '200km (Wide)', onPress: () => setCurrentRadius(200) },
-                      { text: '300km (Very Wide)', onPress: () => setCurrentRadius(300) },
+                      ...radiusOptions,
                       { text: 'Cancel', style: 'cancel' }
                     ]
                   )
                 }},
                 { text: 'Date Range', onPress: () => {
+                  // Get user group date filter limits
+                  const getDateFilterOptions = () => {
+                    const now = new Date()
+                    const today = now.toISOString().split('T')[0]
+                    
+                    const options = [
+                      { text: 'Today', onPress: () => {
+                        setDateFilter({ from: today, to: today })
+                      }}
+                    ]
+                    
+                    // Add "This Week" option based on user group
+                    if (userGroup === 'registered' || userGroup === 'premium') {
+                      const endOfWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+                      options.push({
+                        text: 'This Week',
+                        onPress: () => {
+                          setDateFilter({ 
+                            from: today, 
+                            to: endOfWeek.toISOString().split('T')[0] 
+                          })
+                        }
+                      })
+                    }
+                    
+                    // Add "Next 2 Weeks" option for premium users
+                    if (userGroup === 'premium') {
+                      const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+                      options.push({
+                        text: 'Next 2 Weeks',
+                        onPress: () => {
+                          setDateFilter({ 
+                            from: today, 
+                            to: twoWeeksFromNow.toISOString().split('T')[0] 
+                          })
+                        }
+                      })
+                    }
+                    
+                    // Add "This Month" option for premium users
+                    if (userGroup === 'premium') {
+                      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                      options.push({
+                        text: 'This Month',
+                        onPress: () => {
+                          setDateFilter({ 
+                            from: today, 
+                            to: endOfMonth.toISOString().split('T')[0] 
+                          })
+                        }
+                      })
+                    }
+                    
+                    // Add "All Events" option for premium users
+                    if (userGroup === 'premium') {
+                      options.push({
+                        text: 'All Events',
+                        onPress: () => {
+                          setDateFilter({ from: today, to: '' })
+                        }
+                      })
+                    }
+                    
+                    return options
+                  }
+                  
+                  const options = getDateFilterOptions()
+                  
+                  console.log(`🎯 Date filter options for user group ${userGroup}:`, options.map(o => o.text))
+                  
                   Alert.alert(
                     'Date Range',
-                    'Choose your date range:',
+                    `Choose your date range (${userGroup} user):`,
                     [
-                      { text: 'Today', onPress: () => {
-                        const today = new Date().toISOString().split('T')[0]
-                        setDateFilter({ from: today, to: today })
-                      }},
-                      { text: 'This Week', onPress: () => {
-                        const now = new Date()
-                        const endOfWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-                        setDateFilter({ 
-                          from: now.toISOString().split('T')[0], 
-                          to: endOfWeek.toISOString().split('T')[0] 
-                        })
-                      }},
-                      { text: 'Next 2 Weeks', onPress: () => {
-                        const now = new Date()
-                        const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-                        setDateFilter({ 
-                          from: now.toISOString().split('T')[0], 
-                          to: twoWeeksFromNow.toISOString().split('T')[0] 
-                        })
-                      }},
-                      { text: 'This Month', onPress: () => {
-                        const now = new Date()
-                        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-                        setDateFilter({ 
-                          from: now.toISOString().split('T')[0], 
-                          to: endOfMonth.toISOString().split('T')[0] 
-                        })
-                      }},
-                      { text: 'All Events', onPress: () => {
-                        const today = new Date().toISOString().split('T')[0]
-                        setDateFilter({ from: today, to: '' })
-                      }},
+                      ...options,
                       { text: 'Cancel', style: 'cancel' }
                     ]
                   )

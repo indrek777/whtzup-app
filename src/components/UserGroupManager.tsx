@@ -45,8 +45,8 @@ const UserGroupCard: React.FC<UserGroupCardProps> = ({ group, features, isCurren
 
   const getGroupDescription = (group: UserGroup) => {
     switch (group) {
-      case 'unregistered': return 'Basic access to view events'
-      case 'registered': return 'Create and manage your own events'
+      case 'unregistered': return 'Basic access to view events (5km radius, 1 day filter)'
+      case 'registered': return 'Create events with limits (1/day, 15km radius, 1 week filter)'
       case 'premium': return 'Unlimited access to all features'
     }
   }
@@ -80,6 +80,7 @@ const UserGroupCard: React.FC<UserGroupCardProps> = ({ group, features, isCurren
         <Text style={styles.limitsTitle}>Limits:</Text>
         <Text style={styles.limitText}>Events per day: {features.maxEventsPerDay}</Text>
         <Text style={styles.limitText}>Max radius: {features.maxRadiusKm}km</Text>
+        <Text style={styles.limitText}>Event filter: {features.maxEventFilterDays > 0 ? `${features.maxEventFilterDays} days` : 'No limit'}</Text>
       </View>
       
       {onUpgrade && !isCurrent && (
@@ -244,10 +245,10 @@ export const UserGroupManager: React.FC<UserGroupManagerProps> = ({ visible, onC
             <View style={styles.infoContainer}>
               <Text style={styles.infoTitle}>About User Groups</Text>
               <Text style={styles.infoText}>
-                • Unregistered users can browse events with basic filtering
+                • Unregistered users can browse events with basic filtering (5km radius, 1 day filter)
               </Text>
               <Text style={styles.infoText}>
-                • Registered users can create events, rate, and review
+                • Registered users can create events (1/day), rate, and review (15km radius, 1 week filter)
               </Text>
               <Text style={styles.infoText}>
                 • Premium subscribers get unlimited access to all features

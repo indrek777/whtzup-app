@@ -65,8 +65,37 @@ Your privacy is important to us. Our collection and use of personal information 
 
 ## Subscription Services
 
+### User Groups and Features
+
+**Unregistered Users (No Account)**
+- Basic event discovery within 5km radius
+- 1-day event filter limit
+- Cannot create events
+- Cannot rate or review events
+- Cannot access premium features
+
+**Registered Users (Free Account)**
+- Event discovery within 15km radius
+- 1-week event filter limit
+- Create up to 1 event per day
+- Rate and review events
+- Basic filtering options
+- Cannot access premium features
+
+**Premium Users (Paid Subscription)**
+- Event discovery within 500km radius
+- 1-year event filter limit
+- Create unlimited events
+- Advanced search and filtering
+- Analytics and insights
+- Custom categories
+- Data export functionality
+- Ad-free experience
+- Priority support
+- Early access to new features
+
 ### Premium Features
-- Premium subscription provides access to additional features
+- Premium subscription provides access to additional features as listed above
 - Subscription fees are billed in advance
 - Subscriptions automatically renew unless cancelled
 

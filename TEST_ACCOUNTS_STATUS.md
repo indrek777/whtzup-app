@@ -31,7 +31,7 @@ Features: All premium features enabled
 Email: review.free@eventdiscovery.app
 Password: AppStoreReview2024!
 Account Type: Free User
-Features: Basic features only
+Features: Basic features only (1 event/day, 15km radius, 1 week filter)
 ```
 
 ### **Demo Account (Free User)**
@@ -39,7 +39,7 @@ Features: Basic features only
 Email: demo@eventdiscovery.app
 Password: demo123
 Account Type: Free User
-Features: Basic features only
+Features: Basic features only (1 event/day, 15km radius, 1 week filter)
 ```
 
 ---

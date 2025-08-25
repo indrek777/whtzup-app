@@ -114,3 +114,28 @@ const getDefaultDateFilter = () => {
 4. **Smart Suggestions**: Suggest date ranges based on user behavior
 
 The date filtering feature significantly improves app performance while providing users with more relevant, upcoming events. The default 1-week filter ensures fast loading while the user-configurable options provide flexibility for different use cases.
+
+## 📅 Date Filtering Implementation
+
+### **Overview**
+The date filtering system now respects user group limits:
+- **Unregistered Users**: 1 day filter limit
+- **Registered Users**: 1 week filter limit
+- **Premium Users**: 1 year filter limit
+
+### **Default Configuration**
+- **Default Range**: Based on user group limits
+- **Unregistered**: Today to 1 day ahead
+- **Registered**: Today to 1 week ahead
+- **Premium**: Today to 1 year ahead
+
+### **Date Filter Options**
+1. **Today** - Shows only today's events
+2. **This Week** - Shows events from today to user group limit ahead
+3. **This Month** - Shows events from today to 30 days ahead (premium only)
+4. **Custom Range** - User-defined date range (premium only)
+
+### **User Group Limits**
+- **Unregistered**: 1 day filter limit
+- **Registered**: 1 week filter limit
+- **Premium**: 1 year filter limit

@@ -56,6 +56,7 @@ export interface UserGroupFeatures {
   canWriteReviews: boolean
   maxEventsPerDay: number
   maxRadiusKm: number
+  maxEventFilterDays: number // Event filter limit in days
   canAccessPremiumCategories: boolean
   canUseAdvancedFilters: boolean
   canExportEvents: boolean
@@ -75,7 +76,8 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
     canRateEvents: false,
     canWriteReviews: false,
     maxEventsPerDay: 0,
-    maxRadiusKm: 50,
+    maxRadiusKm: 5,
+    maxEventFilterDays: 1, // 1 day event filter limit
     canAccessPremiumCategories: false,
     canUseAdvancedFilters: false,
     canExportEvents: false,
@@ -91,8 +93,9 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
     canDeleteEvents: true,
     canRateEvents: true,
     canWriteReviews: true,
-    maxEventsPerDay: 5,
-    maxRadiusKm: 150,
+    maxEventsPerDay: 1,
+    maxRadiusKm: 15,
+    maxEventFilterDays: 7, // 1 week event filter limit
     canAccessPremiumCategories: false,
     canUseAdvancedFilters: true,
     canExportEvents: false,
@@ -110,6 +113,7 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
     canWriteReviews: true,
     maxEventsPerDay: 50,
     maxRadiusKm: 500,
+    maxEventFilterDays: 365, // 1 year limit for premium
     canAccessPremiumCategories: true,
     canUseAdvancedFilters: true,
     canExportEvents: true,
@@ -205,16 +209,28 @@ class UserService {
   async getUserGroup(): Promise<UserGroup> {
     await this.ensureInitialized()
     
+    console.log('🔍 getUserGroup debug:', {
+      hasUser: !!this.currentUser,
+      userId: this.currentUser?.id,
+      userEmail: this.currentUser?.email
+    })
+    
     if (!this.currentUser) {
+      console.log('🔍 No current user, returning unregistered')
       return 'unregistered'
     }
     
     // Check if user has premium subscription
-    if (await this.hasPremiumSubscription()) {
+    const hasPremium = await this.hasPremiumSubscription()
+    console.log('🔍 Premium subscription check:', hasPremium)
+    
+    if (hasPremium) {
+      console.log('🔍 User has premium, returning premium')
       return 'premium'
     }
     
     // If user is authenticated but not premium, they are registered
+    console.log('🔍 User is authenticated but not premium, returning registered')
     return 'registered'
   }
 
@@ -265,7 +281,20 @@ class UserService {
           this.currentUser.subscription = result.data
           await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
           
-          return result.data.status === 'premium'
+          console.log('🔍 Subscription status from backend:', result.data.status)
+          
+          // Only return true if status is 'premium' and not expired
+          if (result.data.status === 'premium') {
+            if (result.data.endDate) {
+              const endDate = new Date(result.data.endDate)
+              const now = new Date()
+              const isActive = endDate > now
+              console.log('🔍 Premium subscription end date check:', { endDate, now, isActive })
+              return isActive
+            }
+            return true
+          }
+          return false
         }
       }
     } catch (error) {

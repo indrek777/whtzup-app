@@ -62,13 +62,22 @@ The premium account (`review@eventdiscovery.app`) includes:
 
 ### **Free Account Limitations**
 Free accounts (`review.free@eventdiscovery.app`, `demo@eventdiscovery.app`) have:
-- ❌ Limited radius (10km)
+- ❌ Limited radius (15km)
+- ❌ Limited event creation (1 event/day)
+- ❌ Limited event filter (1 week)
 - ❌ Basic filtering only
-- ❌ Limited event creation (3 events)
 - ❌ No analytics access
 - ❌ No custom categories
 - ❌ No data export
 - ❌ May see advertisements
+
+### **Unregistered User Limitations**
+Users without accounts have:
+- ❌ Limited radius (5km)
+- ❌ Limited event filter (1 day)
+- ❌ Cannot create events
+- ❌ Cannot rate or review events
+- ❌ Cannot access any premium features
 
 ---
 
@@ -129,10 +138,18 @@ const pool = new Pool({
 
 ### **5. Test Free User Limitations**
 **Using `review.free@eventdiscovery.app`:**
-- ❌ Limited search radius (10km)
+- ❌ Limited search radius (15km)
 - ❌ Basic filtering only
-- ❌ Limited event creation
+- ❌ Limited event creation (1/day)
 - ❌ No premium features access
+
+### **6. Test Unregistered User Limitations**
+**Without logging in:**
+- ❌ Limited search radius (5km)
+- ❌ Limited event filter (1 day)
+- ❌ Cannot create events
+- ❌ Cannot rate or review events
+- ❌ Cannot access any premium features
 
 ### **6. Test Subscription Purchase Flow**
 1. Use demo account or create new account

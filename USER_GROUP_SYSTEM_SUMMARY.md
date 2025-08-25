@@ -16,14 +16,16 @@ Successfully implemented a comprehensive three-tier user group system for the ev
   - Cannot edit events
   - Cannot rate events
   - Cannot write reviews
-  - Max radius: 50km
+  - Max radius: 5km
+  - Max event filter: 1 day
   - Events per day: 0
 
 ### 2. Registered Users
 - **Features**: Basic search, advanced filtering, create events, rate events, write reviews, invite friends
 - **Limits**:
-  - Max events per day: 5
-  - Max radius: 150km
+  - Max events per day: 1
+  - Max radius: 15km
+  - Max event filter: 1 week
   - Cannot access premium categories
   - Cannot export events
   - Cannot access analytics

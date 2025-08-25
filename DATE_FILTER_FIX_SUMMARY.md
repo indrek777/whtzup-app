@@ -163,12 +163,11 @@ if (dateFilter && (dateFilter.from || dateFilter.to)) {
 
 ## 🧪 **Testing the Fix**
 
-### **Date Filter Options**
-1. **Today**: Shows only events happening today
-2. **This Week**: Shows events from today to 7 days ahead
-3. **Next 2 Weeks**: Shows events from today to 14 days ahead
-4. **This Month**: Shows events from today to end of current month
-5. **All Events**: Shows all events from today onwards (no past events)
+### **Fixed Date Filter Options**
+1. **Today**: Shows only today's events
+2. **This Week**: Shows events from today to user group limit ahead (1 day for unregistered, 1 week for registered, 1 year for premium)
+3. **This Month**: Shows events from today to 30 days ahead (premium only)
+4. **Custom Range**: User-defined date range (premium only)
 
 ### **Expected Behavior**
 - ✅ **"Today" filter**: Only shows events with `starts_at` date matching today

@@ -122,8 +122,8 @@ export const UserGroupBanner: React.FC<UserGroupBannerProps> = ({
               {getGroupTitle(currentGroup)}
             </Text>
             <Text style={styles.groupDescription}>
-              {currentGroup === 'unregistered' && 'Sign up to create and manage events'}
-              {currentGroup === 'registered' && 'Upgrade to premium for unlimited features'}
+              {currentGroup === 'unregistered' && 'Sign up to create and manage events (currently: 5km radius, 1 day filter)'}
+              {currentGroup === 'registered' && 'Upgrade to premium for unlimited features (currently: 1 event/day, 15km radius, 1 week filter)'}
               {currentGroup === 'premium' && 'You have access to all premium features'}
             </Text>
           </View>

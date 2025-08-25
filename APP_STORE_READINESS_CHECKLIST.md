@@ -1,11 +1,18 @@
-# 📱 App Store Submission Readiness Checklist
+# 🍎 App Store Readiness Checklist
+
+## 📱 **App Information**
+- ✅ **App Name**: Event Discovery
+- ✅ **Version**: `1.2.0` (major update with enhanced user group system)
+- ✅ **Build Number**: `13`
+- ✅ **Bundle ID**: `com.eventdiscovery.app`
+- ✅ **Platform**: iOS only
 
 ## ✅ **Configuration Status: READY**
 
 ### **✅ App Configuration (app.json):**
 - ✅ **App Name**: "Event Discovery" (professional name)
-- ✅ **Version**: `1.1.0` (major update with subscription system)
-- ✅ **Build Number**: `8` (incremented for new submission)
+- ✅ **Version**: `1.2.0` (major update with enhanced user group system)
+- ✅ **Build Number**: `13` (incremented for new submission)
 - ✅ **Bundle ID**: `com.eventdiscovery.app`
 - ✅ **Description**: Added comprehensive app description
 - ✅ **Privacy Policy URL**: `https://olympio.ee/privacy-policy`
@@ -134,12 +141,13 @@ eas submit --platform ios --profile production
 
 **Your Event Discovery app is now fully configured and ready for App Store submission!** 🚀📱
 
-### **Version 1.1.0 Features:**
+### **Version 1.2.0 Features:**
 - 🗺️ **Interactive Event Map**: Real-time event discovery
 - 💳 **Complete Subscription System**: Monthly/yearly plans
 - 📍 **Location-Based Search**: Find events near you
 - 🔍 **Advanced Filtering**: Category and date filtering
 - 👤 **User Profiles**: Complete user management
+- 🎯 **Enhanced User Group System**: Dynamic limits and features
 - 📱 **Apple Compliance**: All App Store requirements met
 
 **Ready to launch on the App Store!** 🎉

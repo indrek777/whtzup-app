@@ -548,14 +548,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             <View style={styles.featuresList}>
               <Text style={styles.featuresTitle}>Premium Features:</Text>
               {[
-                '✨ Unlimited event creation',
+                '✨ Unlimited event creation (vs 1/day for free users)',
                 '🔍 Advanced search & filtering',
                 '📊 Analytics & insights',
                 '🎨 Custom categories',
                 '📤 Export your data',
                 '🚫 No advertisements',
                 '⚡ Early access to new features',
-                '🎯 Priority support'
+                '🎯 Priority support',
+                '🌍 Extended radius (500km vs 15km for free users)',
+                '📅 Extended event filter (1 year vs 1 week for free users)'
               ].map((feature, index) => (
                 <Text key={index} style={styles.featureItem}>{feature}</Text>
               ))}

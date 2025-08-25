@@ -1,121 +1,50 @@
-# 📱 Version Update Summary for App Store Build
+# Version Update Summary
 
-## 🔄 **Version Changes Made**
+## 📱 **Current Version Status**
 
-### **Before:**
-- **Version**: `1.0.5`
-- **iOS Build Number**: `7`
+### **Latest Version:**
+- **Version**: `1.2.0` ✅
+- **Build Number**: `13` ✅
+- **Release Date**: August 25, 2025
+- **Status**: Ready for App Store submission
 
-### **After:**
-- **Version**: `1.1.0` ✅
-- **iOS Build Number**: `8` ✅
+### **Version History:**
+
+#### **Version 1.2.0 (Current)**
+- **Build**: 13
+- **Release**: August 25, 2025
+- **Features**:
+  - Enhanced user group system with dynamic limits
+  - Updated unregistered user limits (5km radius, 1 day filter)
+  - Updated registered user limits (15km radius, 1 week filter)
+  - Premium user limits remain unchanged (500km radius, 1 year filter)
+  - Improved map filtering with user group-specific options
+  - Enhanced subscription management with real-time updates
+  - Updated documentation for Apple Store review compliance
+  - Fixed premium user filter options not updating after subscription
+  - Improved error handling and performance optimizations
+
+#### **Version 1.1.1**
+- **Build**: 12
+- **Release**: August 24, 2025
+- **Features**:
+  - Bug fixes and performance improvements
+  - Enhanced error handling
+  - Improved user experience
+
+#### **Version 1.1.0:**
+- **Build**: 11
+- **Release**: August 24, 2025
+- **Features**:
+  - Complete subscription system implementation
+  - Premium features and user group management
+  - Apple Store review accounts and documentation
+  - Enhanced map performance and filtering
+  - Improved user interface and experience
 
 ---
 
 ## 📋 **What Was Updated**
 
 ### **1. App Version (app.json)**
-```diff
-- "version": "1.0.5"
-+ "version": "1.1.0"
 ```
-
-### **2. iOS Build Number (app.json)**
-```diff
-- "buildNumber": "7"
-+ "buildNumber": "8"
-```
-
-
-
----
-
-## 🎯 **Why These Updates?**
-
-### **Version 1.1.0:**
-- **Major Feature Addition**: Complete subscription system implementation
-- **Apple Compliance**: All App Store subscription requirements met
-- **New Features**: Subscription management, terms, receipt validation
-- **Bug Fixes**: Network security, location services, event filtering
-
-### **Build Numbers:**
-- **iOS Build 8**: Increment for new App Store submission
-
----
-
-## ✅ **App Store Ready Features**
-
-### **Subscription System:**
-- ✅ **In-App Purchases**: Monthly/yearly subscription plans
-- ✅ **Subscription Management**: UI for managing subscriptions
-- ✅ **Subscription Terms**: Complete terms and conditions
-- ✅ **Receipt Validation**: Server-side receipt validation
-- ✅ **Test Accounts**: Ready for App Store review
-
-### **Apple Compliance:**
-- ✅ **Network Security**: HTTP connections configured
-- ✅ **Location Services**: Proper permissions and descriptions
-- ✅ **Privacy Policy**: Complete privacy documentation
-- ✅ **Terms of Service**: Complete terms documentation
-- ✅ **App Store Guidelines**: All requirements met
-
-### **Core Features:**
-- ✅ **Event Discovery**: Real-time event browsing
-- ✅ **Interactive Map**: Location-based event display
-- ✅ **User Authentication**: Secure user accounts
-- ✅ **Premium Features**: Extended radius, advanced filtering
-- ✅ **Offline Support**: Cached events for offline use
-
----
-
-## 🚀 **Ready for Build**
-
-### **Build Commands:**
-```bash
-# Development Build
-eas build --platform ios --profile development
-
-# Preview Build (TestFlight)
-eas build --platform ios --profile preview
-
-# Production Build (App Store)
-eas build --platform ios --profile production
-```
-
-### **Submit Commands:**
-```bash
-# Submit to App Store
-eas submit --platform ios --profile production
-```
-
----
-
-## 📱 **Test Account Credentials**
-
-### **Premium Test Account:**
-- **Email**: `review@eventdiscovery.app`
-- **Password**: `AppStoreReview2024!`
-- **Type**: Premium Subscription (Active)
-
-### **Free Test Account:**
-- **Email**: `review.free@eventdiscovery.app`
-- **Password**: `AppStoreReview2024!`
-- **Type**: Free User
-
-### **Demo Account:**
-- **Email**: `demo@eventdiscovery.app`
-- **Password**: `demo123`
-- **Type**: Free User
-
----
-
-## 🎉 **Status: Ready for App Store Submission**
-
-**Your Event Discovery app is now ready for App Store submission with:**
-- ✅ **Updated version numbers**
-- ✅ **Complete subscription system**
-- ✅ **Apple compliance features**
-- ✅ **Test accounts ready**
-- ✅ **All documentation complete**
-
-**Version 1.1.0 represents a significant update with the complete subscription system implementation!** 🚀📱

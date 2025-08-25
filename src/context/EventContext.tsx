@@ -302,6 +302,7 @@ interface EventContextType {
   forceUpdateCheck: () => Promise<void>
   refreshEvents: () => Promise<void>
   clearSyncErrors: () => void
+  refreshUserGroupLimits: () => Promise<void>
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined)
@@ -327,23 +328,60 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
   const [currentRadius, setCurrentRadius] = useState(300) // Increased default radius to 300km for better coverage
   
-  // Default date filter: 1 week ahead from now
-  const getDefaultDateFilter = () => {
+  // Default date filter based on user group limits
+  const getDefaultDateFilter = async () => {
     const now = new Date()
-    const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-    return {
-      from: now.toISOString().split('T')[0], // Today
-      to: oneWeekFromNow.toISOString().split('T')[0] // 1 week from now
+    
+    try {
+      // Get user group to determine filter limits
+      const userGroup = await userService.getUserGroup()
+      const userFeatures = await userService.getUserGroupFeatures()
+      
+      // Calculate end date based on user group limits
+      const maxFilterDays = userFeatures.maxEventFilterDays
+      const endDate = new Date(now.getTime() + maxFilterDays * 24 * 60 * 60 * 1000)
+      
+      console.log(`📅 Date filter: User group ${userGroup}, max filter days: ${maxFilterDays}`)
+      
+      return {
+        from: now.toISOString().split('T')[0], // Today
+        to: endDate.toISOString().split('T')[0] // Based on user group limit
+      }
+    } catch (error) {
+      console.log('⚠️ Could not get user group, using default 1 week filter')
+      // Fallback to 1 week if user service is not available
+      const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+      return {
+        from: now.toISOString().split('T')[0], // Today
+        to: oneWeekFromNow.toISOString().split('T')[0] // 1 week from now
+      }
     }
   }
   
-  const [dateFilter, setDateFilter] = useState(getDefaultDateFilter())
+  const [dateFilter, setDateFilter] = useState({
+    from: new Date().toISOString().split('T')[0], // Today as default
+    to: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 week as default
+  })
   const [syncStatus, setSyncStatus] = useState({
     isOnline: false,
     lastSyncAt: null as string | null,
     pendingOperations: 0,
     errors: [] as string[]
   })
+
+  // Set date filter based on user group limits
+  useEffect(() => {
+    const setUserGroupDateFilter = async () => {
+      try {
+        const newDateFilter = await getDefaultDateFilter()
+        setDateFilter(newDateFilter)
+      } catch (error) {
+        console.log('⚠️ Could not set user group date filter, keeping default')
+      }
+    }
+    
+    setUserGroupDateFilter()
+  }, []) // Run once on component mount
 
   // Get user location for radius filtering
   useEffect(() => {
@@ -387,22 +425,38 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         try {
           let result: { initial: Event[], total: number }
           
-                     // Check if we have location permission and user location
-           if (locationPermissionGranted === true && userLocation) {
-             // Use user's preferred radius or calculate smart radius
-             const radiusToUse = currentRadius !== 150 ? currentRadius : await calculateSmartRadius(userLocation)
-             console.log(`🎯 Loading events: Using ${radiusToUse}km radius for user at ${userLocation[0]}, ${userLocation[1]}`)
-             
-             result = await syncService.fetchEventsProgressive(
-               { latitude: userLocation[0], longitude: userLocation[1] }, 
-               radiusToUse,
-               dateFilter
-             )
+          // Check if we have location permission and user location
+          if (locationPermissionGranted === true && userLocation) {
+            // Get user group radius limits
+            const userFeatures = await userService.getUserGroupFeatures()
+            const maxRadius = userFeatures.maxRadiusKm
+            
+            // Use user's preferred radius but respect user group limits
+            let radiusToUse = currentRadius !== 150 ? currentRadius : await calculateSmartRadius(userLocation)
+            
+            // Ensure radius doesn't exceed user group limit
+            if (radiusToUse > maxRadius) {
+              console.log(`⚠️ Requested radius ${radiusToUse}km exceeds user group limit ${maxRadius}km, using ${maxRadius}km`)
+              radiusToUse = maxRadius
+            }
+            
+            console.log(`🎯 Loading events: Using ${radiusToUse}km radius (max allowed: ${maxRadius}km) for user at ${userLocation[0]}, ${userLocation[1]}`)
+            
+            result = await syncService.fetchEventsProgressive(
+              { latitude: userLocation[0], longitude: userLocation[1] }, 
+              radiusToUse,
+              dateFilter
+            )
           } else if (locationPermissionGranted === false) {
-            // Location permission was explicitly denied, load events around Estonia center
+            // Location permission was explicitly denied, load events around Estonia center with user group limits
             console.log('📍 Location permission denied, loading events around Estonia center')
             const estoniaCenter = { latitude: 58.3776252, longitude: 26.7290063 }
-            result = await syncService.fetchEventsProgressive(estoniaCenter, 100, dateFilter)
+            
+            // Get user group radius limits
+            const userFeatures = await userService.getUserGroupFeatures()
+            const maxRadius = userFeatures.maxRadiusKm
+            
+            result = await syncService.fetchEventsProgressive(estoniaCenter, maxRadius, dateFilter)
           } else {
             // Location permission check is still pending, wait for it to complete
             console.log('⏳ Location permission check pending, skipping event load')
@@ -1043,6 +1097,16 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   }
 
+  const refreshUserGroupLimits = async () => {
+    try {
+      console.log('🔄 Refreshing user group limits from EventContext')
+      // This will trigger a re-render in components that use userService
+      // The MapViewNative component will detect the change and update its state
+    } catch (error) {
+      console.error('❌ Error refreshing user group limits:', error)
+    }
+  }
+
   const value: EventContextType = {
     events,
     selectedEvent,
@@ -1065,7 +1129,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     rateEvent,
     forceUpdateCheck,
     refreshEvents,
-    clearSyncErrors
+    clearSyncErrors,
+    refreshUserGroupLimits
   }
 
   return (

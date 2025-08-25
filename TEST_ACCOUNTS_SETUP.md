@@ -21,7 +21,7 @@ Features: All premium features enabled
 Email: review.free@eventdiscovery.app
 Password: AppStoreReview2024!
 Account Type: Free User
-Features: Basic features only
+Features: Basic features only (1 event/day, 15km radius, 1 week filter)
 ```
 
 ### **Demo Account (Free User)**
@@ -29,7 +29,7 @@ Features: Basic features only
 Email: demo@eventdiscovery.app
 Password: demo123
 Account Type: Free User
-Features: Basic features only
+Features: Basic features only (1 event/day, 15km radius, 1 week filter)
 ```
 
 ---
@@ -197,16 +197,28 @@ VALUES (
 #### **Using Free Account (review.free@eventdiscovery.app)**
 1. Sign in with the free account
 2. Test limitations:
-   - ❌ **Limited Radius**: Only 10km search radius
+   - ❌ **Limited Radius**: Only 15km search radius
    - ❌ **Basic Filtering**: Limited filter options
-   - ❌ **Event Creation**: Limited to 3 events
+   - ❌ **Event Creation**: Limited to 1 event per day
+   - ❌ **Event Filter**: Limited to 1 week
    - ❌ **Event Editing**: Can only edit own events
    - ❌ **No Analytics**: No access to analytics
    - ❌ **No Custom Categories**: Standard categories only
    - ❌ **No Export**: Cannot export data
    - ❌ **Ads**: May see advertisements
 
-### **6. Testing Subscription Purchase Flow**
+### **6. Testing Unregistered User Limitations**
+
+#### **Without Logging In**
+1. Use the app without creating an account
+2. Test limitations:
+   - ❌ **Limited Radius**: Only 5km search radius
+   - ❌ **Limited Event Filter**: Only 1 day
+   - ❌ **No Event Creation**: Cannot create events
+   - ❌ **No Rating/Review**: Cannot rate or review events
+   - ❌ **No Premium Features**: Cannot access any premium features
+
+### **7. Testing Subscription Purchase Flow**
 
 #### **New User Subscription Test**
 1. Create a new account or use demo account

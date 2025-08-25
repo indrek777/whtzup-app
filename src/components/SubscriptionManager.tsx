@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { userService } from '../utils/userService';
 import SubscriptionTerms from './SubscriptionTerms';
+import { useEvents } from '../context/EventContext';
 
 interface SubscriptionManagerProps {
   visible: boolean;
@@ -18,6 +19,7 @@ interface SubscriptionManagerProps {
 }
 
 const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onClose }) => {
+  const { refreshUserGroupLimits } = useEvents();
   const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
@@ -33,6 +35,9 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
     try {
       const status = await userService.getDetailedSubscriptionStatus();
       setSubscriptionStatus(status);
+      
+      // Refresh user group limits after subscription status change
+      await refreshUserGroupLimits();
     } catch (error) {
       console.error('Error loading subscription status:', error);
     } finally {
@@ -46,7 +51,10 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
       const result = await userService.restorePurchases();
       if (result.success) {
         Alert.alert('Success', 'Your purchases have been restored successfully!');
-        loadSubscriptionStatus();
+        await loadSubscriptionStatus();
+        
+        // Refresh user group limits after restore
+        await refreshUserGroupLimits();
       } else {
         Alert.alert('Restore Failed', result.error || 'No purchases found to restore.');
       }
@@ -250,7 +258,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Upgrade to Premium</Text>
                   <Text style={styles.upgradeText}>
-                    Get access to unlimited events, advanced search, extended radius, and more premium features!
+                    Get access to unlimited events, advanced search, extended radius (500km), and more premium features! Currently limited to 1 event/day, 15km radius, and 1 week event filter.
                   </Text>
                   <TouchableOpacity 
                     style={[styles.actionButton, styles.upgradeButton]} 
