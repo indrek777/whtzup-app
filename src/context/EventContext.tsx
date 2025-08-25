@@ -325,7 +325,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
-  const [currentRadius, setCurrentRadius] = useState(200) // Default radius (increased to include user events)
+  const [currentRadius, setCurrentRadius] = useState(300) // Increased default radius to 300km for better coverage
   
   // Default date filter: 1 week ahead from now
   const getDefaultDateFilter = () => {
@@ -449,12 +449,20 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
                       ? { latitude: userLocation[0], longitude: userLocation[1] }
                       : { latitude: 58.3776252, longitude: 26.7290063 },
                     loadMoreRadius,
-                    undefined,
+                    2000, // Increased limit to 2000 for better coverage
                     dateFilter
                   )
                   const processedAdditional = await processEventsWithVenueStorage(additionalEvents)
-                  setEvents(processedAdditional)
-                  console.log(`✅ Smart background loading complete: ${processedAdditional.length} total events`)
+                  
+                  // Merge additional events with existing events instead of replacing
+                  const mergedEvents = [...processedEvents, ...processedAdditional]
+                  // Remove duplicates based on event ID
+                  const uniqueEvents = mergedEvents.filter((event, index, self) => 
+                    index === self.findIndex(e => e.id === event.id)
+                  )
+                  
+                  setEvents(uniqueEvents)
+                  console.log(`✅ Smart background loading complete: ${uniqueEvents.length} total events (merged from ${processedEvents.length} + ${processedAdditional.length})`)
                 } catch (error) {
                   console.log('⚠️ Smart background loading failed:', error)
                 } finally {

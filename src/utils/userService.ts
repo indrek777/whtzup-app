@@ -122,7 +122,7 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
 }
 
 // Backend API URL - update this to match your backend server
-const API_BASE_URL = 'http://88.196.240.63:4000/api' // Update this to your actual backend URL
+const API_BASE_URL = 'http://olympio.ee:4000/api' // Update this to your actual backend URL
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',
@@ -517,12 +517,9 @@ class UserService {
     // Check if token is expired and try to refresh it
     if (this.isTokenExpired()) {
       console.log('🔄 Token expired, attempting refresh...')
-      console.log('🔍 Token expiration check called from:', new Error().stack?.split('\n')[2] || 'unknown location')
       const refreshed = await this.refreshAuthToken()
       if (!refreshed) {
-        console.log('❌ Token refresh failed, but keeping user logged in for limited functionality')
-        // Don't automatically sign out - let user continue with limited functionality
-        // They can manually sign out if needed
+        console.log('❌ Token refresh failed, returning empty headers')
         return {}
       }
       console.log('✅ Token refreshed successfully')
@@ -551,36 +548,12 @@ class UserService {
     
     try {
       // Decode JWT token to check expiration
-      console.log('🔍 Token parts:', this.authToken.split('.').length)
-      console.log('🔍 Token length:', this.authToken.length)
-      console.log('🔍 Token start:', this.authToken.substring(0, 20) + '...')
-      console.log('🔍 Token is empty:', this.authToken.trim() === '')
-      console.log('🔍 Token contains Bearer:', this.authToken.includes('Bearer'))
-      console.log('🔍 Token contains spaces:', this.authToken.includes(' '))
-      console.log('🔍 Token contains null:', this.authToken.includes('null'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
-      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
       const base64Url = this.authToken.split('.')[1]
+      if (!base64Url) {
+        console.log('❌ Invalid token format - missing payload')
+        return true
+      }
+      
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
       const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
@@ -601,7 +574,8 @@ class UserService {
     } catch (error) {
       console.log('❌ Error checking token expiration:', error)
       console.log('❌ Error details:', error instanceof Error ? error.message : 'Unknown error')
-      // If we can't decode the token, assume it's expired
+      
+      // If we can't decode the token, consider it expired
       return true
     }
   }
@@ -762,11 +736,20 @@ class UserService {
         return true
       } else {
         console.log('❌ Token refresh failed:', result.error || 'Unknown error')
+        
+        // If refresh token is invalid or revoked, sign out the user
+        if (result.error && (result.error.includes('Invalid') || result.error.includes('revoked'))) {
+          console.log('🔐 Invalid refresh token detected, signing out user')
+          await this.signOut()
+        }
+        
         return false
       }
     } catch (error) {
       console.error('❌ Token refresh network error:', error)
       console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error')
+      
+      // On network errors, don't sign out immediately, just return false
       return false
     }
   }

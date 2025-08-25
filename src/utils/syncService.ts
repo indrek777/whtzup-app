@@ -28,7 +28,7 @@ interface Conflict {
 }
 
 // Configuration
-const API_BASE_URL = 'http://88.196.240.63:4000';
+const API_BASE_URL = 'http://olympio.ee:4000';
 const SYNC_INTERVAL = 30000; // 30 seconds
 const UPDATE_CHECK_INTERVAL = 60000; // 60 seconds for checking updates (reduced frequency)
 const MAX_RETRY_COUNT = 3;
@@ -597,13 +597,18 @@ class SyncService {
         }
       }
       
-      // Then fetch fresh data in background (limited to 100 events initially)
-      const freshEvents = await this.fetchEvents(userLocation, radius, 100, dateFilter);
+      // Then fetch fresh data in background - increased limit to 1000 for better coverage
+      const freshEvents = await this.fetchEvents(userLocation, radius, 1000, dateFilter);
+      
+      // Use fresh events count as total count since count endpoint is not available
+      const totalCount = freshEvents.length;
+      
+      console.log(`📊 Progressive loading complete: ${initialEvents.length} initial + ${freshEvents.length} fresh = ${totalCount} total events`)
       
       return {
-        initial: initialEvents.length > 0 ? initialEvents : freshEvents,
-        total: freshEvents.length
-      };
+        initial: initialEvents,
+        total: totalCount
+      }
     } catch (error: any) {
       console.error('❌ Progressive loading failed:', error);
       const cachedEvents = await this.getCachedEvents();

@@ -829,8 +829,8 @@ const MapViewNative: React.FC = () => {
   const markers = useMemo(() => {
     console.log('🎯 Creating markers from', filteredEvents.length, 'events')
     
-    // Limit events for performance - start with smaller limit for faster initial render
-    const maxEvents = Math.min(filteredEvents.length, 500) // Reduced from 1000 to 500
+    // Limit events for performance - increased limit for better coverage
+    const maxEvents = Math.min(filteredEvents.length, 2000) // Increased from 500 to 2000
     const eventsToShow = filteredEvents.slice(0, maxEvents)
     
     console.log('🎯 Processing', eventsToShow.length, 'events for markers (limited for performance)')
