@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { AppState, AppStateStatus } from 'react-native'
 import { EventProvider } from './context/EventContext'
 import { userService } from './utils/userService'
 const MapViewNative = require('./components/MapViewNative')
@@ -64,6 +65,52 @@ function App() {
     };
 
     initializeIAP();
+  }, []);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      console.log('📱 App state changed:', nextAppState);
+      
+      if (nextAppState === 'active') {
+        // App came to foreground
+        console.log('🔄 App became active, checking authentication...');
+        try {
+          // Check if user is authenticated
+          const isAuthenticated = await userService.isAuthenticated();
+          console.log('🔐 Authentication status:', isAuthenticated);
+          
+          if (isAuthenticated) {
+            // Check if token needs refresh
+            const headers = await userService.getAuthHeaders();
+            if (!headers.Authorization) {
+              console.log('🔄 Token expired, attempting refresh...');
+              const refreshed = await userService.refreshAuthToken();
+              if (!refreshed) {
+                console.log('❌ Token refresh failed, user needs to sign in again');
+                // Don't automatically sign out, let user continue with limited functionality
+              } else {
+                console.log('✅ Token refreshed successfully');
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error checking authentication on app resume:', error);
+        }
+      } else if (nextAppState === 'background') {
+        // App went to background
+        console.log('📱 App went to background');
+        // Optionally save any pending data or cleanup
+      }
+    };
+
+    // Add AppState listener
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Cleanup on unmount
+    return () => {
+      subscription?.remove();
+    };
   }, []);
 
   return (

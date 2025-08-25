@@ -146,35 +146,52 @@ class UserService {
   private initializationPromise: Promise<void> | null = null
 
   constructor() {
+    console.log('🚀 Initializing UserService...')
     this.initializationPromise = this.loadUserFromStorage()
   }
 
   // Initialize user from storage
   private async loadUserFromStorage() {
     try {
+      console.log('🔄 Loading user data from storage...')
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
       const refreshTokenData = await AsyncStorage.getItem('refresh_token')
       
       if (userData) {
         this.currentUser = JSON.parse(userData)
+        console.log('✅ User data loaded from storage')
+      } else {
+        console.log('📝 No user data found in storage')
       }
+      
       if (tokenData) {
         this.authToken = tokenData
+        console.log('✅ Auth token loaded from storage')
+      } else {
+        console.log('📝 No auth token found in storage')
       }
+      
       if (refreshTokenData) {
         this.refreshToken = refreshTokenData
+        console.log('✅ Refresh token loaded from storage')
+      } else {
+        console.log('📝 No refresh token found in storage')
       }
+      
+      console.log('📊 Final state - User:', !!this.currentUser, 'AuthToken:', !!this.authToken, 'RefreshToken:', !!this.refreshToken)
     } catch (error) {
-      // Error loading user from storage
+      console.error('❌ Error loading user from storage:', error)
     }
   }
 
   // Wait for initialization to complete
   private async ensureInitialized() {
     if (this.initializationPromise) {
+      console.log('⏳ Waiting for user service initialization...')
       await this.initializationPromise
       this.initializationPromise = null
+      console.log('✅ User service initialization complete')
     }
   }
 
@@ -223,7 +240,9 @@ class UserService {
   // Check if user is authenticated
   async isAuthenticated(): Promise<boolean> {
     await this.ensureInitialized()
-    return this.currentUser !== null && this.authToken !== null
+    const isAuth = this.currentUser !== null && this.authToken !== null
+    console.log('🔐 Authentication check:', isAuth, 'User:', !!this.currentUser, 'Token:', !!this.authToken)
+    return isAuth
   }
 
   // Check if user has premium subscription
@@ -487,6 +506,7 @@ class UserService {
 
   // Get authentication headers with automatic token refresh
   async getAuthHeaders(): Promise<Record<string, string>> {
+    console.log('🔐 Getting auth headers...')
     await this.ensureInitialized()
     
     if (!this.authToken) {
@@ -497,10 +517,12 @@ class UserService {
     // Check if token is expired and try to refresh it
     if (this.isTokenExpired()) {
       console.log('🔄 Token expired, attempting refresh...')
+      console.log('🔍 Token expiration check called from:', new Error().stack?.split('\n')[2] || 'unknown location')
       const refreshed = await this.refreshAuthToken()
       if (!refreshed) {
-        console.log('❌ Token refresh failed, clearing auth data')
-        await this.signOut()
+        console.log('❌ Token refresh failed, but keeping user logged in for limited functionality')
+        // Don't automatically sign out - let user continue with limited functionality
+        // They can manually sign out if needed
         return {}
       }
       console.log('✅ Token refreshed successfully')
@@ -511,18 +533,53 @@ class UserService {
       return {}
     }
     
-    return {
+    const headers = {
       'Authorization': `Bearer ${this.authToken}`,
       'Content-Type': 'application/json'
     }
+    console.log('✅ Auth headers ready:', !!headers.Authorization)
+    return headers
   }
 
   // Check if token is expired by decoding JWT
   private isTokenExpired(): boolean {
-    if (!this.authToken) return true
+    console.log('🕐 Checking token expiration...')
+    if (!this.authToken) {
+      console.log('❌ No auth token to check')
+      return true
+    }
     
     try {
       // Decode JWT token to check expiration
+      console.log('🔍 Token parts:', this.authToken.split('.').length)
+      console.log('🔍 Token length:', this.authToken.length)
+      console.log('🔍 Token start:', this.authToken.substring(0, 20) + '...')
+      console.log('🔍 Token is empty:', this.authToken.trim() === '')
+      console.log('🔍 Token contains Bearer:', this.authToken.includes('Bearer'))
+      console.log('🔍 Token contains spaces:', this.authToken.includes(' '))
+      console.log('🔍 Token contains null:', this.authToken.includes('null'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
+      console.log('🔍 Token contains undefined:', this.authToken.includes('undefined'))
       const base64Url = this.authToken.split('.')[1]
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
       const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
@@ -531,6 +588,7 @@ class UserService {
       
       const payload = JSON.parse(jsonPayload)
       const currentTime = Math.floor(Date.now() / 1000)
+      console.log('🔍 Token payload:', { exp: payload.exp, currentTime })
       
       // Check if token is expired (with 30 second buffer)
       if (payload.exp && payload.exp < (currentTime + 30)) {
@@ -538,9 +596,11 @@ class UserService {
         return true
       }
       
+      console.log('✅ Token is still valid')
       return false
     } catch (error) {
       console.log('❌ Error checking token expiration:', error)
+      console.log('❌ Error details:', error instanceof Error ? error.message : 'Unknown error')
       // If we can't decode the token, assume it's expired
       return true
     }
@@ -551,8 +611,9 @@ class UserService {
     console.log('🔄 Handling 401 response, attempting token refresh...')
     const refreshed = await this.refreshAuthToken()
     if (!refreshed) {
-      console.log('❌ Token refresh failed, user needs to sign in again')
-      await this.signOut()
+      console.log('❌ Token refresh failed, but keeping user logged in for limited functionality')
+      // Don't automatically sign out - let user continue with limited functionality
+      // They can manually sign out if needed
       return false
     }
     return true
@@ -587,6 +648,8 @@ class UserService {
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
         await AsyncStorage.setItem('refresh_token', this.refreshToken!)
+        
+        console.log('💾 User data saved to storage successfully')
 
         return { success: true, user: this.currentUser || undefined }
       } else {
@@ -628,6 +691,8 @@ class UserService {
         await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(this.currentUser))
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
         await AsyncStorage.setItem('refresh_token', this.refreshToken!)
+        
+        console.log('💾 User data saved to storage successfully')
 
         return { success: true, user: this.currentUser || undefined }
       } else {
@@ -642,6 +707,10 @@ class UserService {
 
   // Sign out user
   async signOut(): Promise<void> {
+    console.log('🚪 User signing out...')
+    console.log('📊 Current state before signout - User:', !!this.currentUser, 'AuthToken:', !!this.authToken, 'RefreshToken:', !!this.refreshToken)
+    console.log('🔍 SignOut called from:', new Error().stack?.split('\n')[2] || 'unknown location')
+    
     this.currentUser = null
     this.authToken = null
     this.refreshToken = null
@@ -649,6 +718,13 @@ class UserService {
     await AsyncStorage.removeItem(STORAGE_KEYS.user)
     await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
     await AsyncStorage.removeItem('refresh_token')
+    console.log('✅ User signed out successfully')
+    
+    // Verify that data was removed
+    const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
+    const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
+    const refreshTokenData = await AsyncStorage.getItem('refresh_token')
+    console.log('📊 After signout - User:', !!userData, 'AuthToken:', !!tokenData, 'RefreshToken:', !!refreshTokenData)
   }
 
   // Refresh authentication token
@@ -660,6 +736,8 @@ class UserService {
 
     try {
       console.log('🔄 Attempting to refresh token...')
+      console.log('🌐 Making request to:', `${API_BASE_URL}/auth/refresh`)
+      
       const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
@@ -680,6 +758,7 @@ class UserService {
         }
         await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
         console.log('✅ Token refreshed successfully')
+        console.log('💾 New tokens saved to storage')
         return true
       } else {
         console.log('❌ Token refresh failed:', result.error || 'Unknown error')
@@ -687,6 +766,7 @@ class UserService {
       }
     } catch (error) {
       console.error('❌ Token refresh network error:', error)
+      console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error')
       return false
     }
   }
