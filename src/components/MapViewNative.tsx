@@ -43,6 +43,11 @@ interface EventCluster {
   categories: Set<string>
 }
 
+// Performance optimization constants
+const MAX_MARKERS_TO_RENDER = 1000 // Limit markers to prevent crashes
+const CLUSTER_RADIUS = 0.01 // ~1km cluster radius
+const MARKER_BATCH_SIZE = 100 // Render markers in batches
+
 // Helper function to calculate distance between two points
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371 // Earth's radius in kilometers
@@ -2692,5 +2697,5 @@ const styles = StyleSheet.create({
      },
      
    })
-
 export default MapViewNative
+

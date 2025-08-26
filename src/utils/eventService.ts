@@ -12,7 +12,7 @@ export interface EventResponse {
 }
 
 // Backend API URL
-const API_BASE_URL = 'http://olympio.ee:4000/api' // Backend URL
+const API_BASE_URL = 'http://localhost:4000/api' // Backend URL
 const API_ENDPOINTS = {
   events: '/events',
   stats: '/events/stats',
