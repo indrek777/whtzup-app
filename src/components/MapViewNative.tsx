@@ -15,7 +15,7 @@ import {
   Linking,
   Share
 } from 'react-native'
-import MapView, { Marker, Region, Callout } from 'react-native-maps'
+import MapView, { Marker, Region, Callout, Circle } from 'react-native-maps'
 import * as Location from 'expo-location'
 import { loadEventsPartially } from '../utils/eventLoader'
 import { Event } from '../data/events'
@@ -1197,6 +1197,20 @@ const MapViewNative: React.FC = () => {
         minZoomLevel={3}
         onPress={handleMapPress}
       >
+        {/* Render radius circle if user location is available */}
+        {userLocation && currentRadius && (
+          <Circle
+            center={{
+              latitude: userLocation[0],
+              longitude: userLocation[1],
+            }}
+            radius={currentRadius * 1000} // Convert km to meters
+            strokeColor="rgba(0, 122, 255, 0.3)"
+            strokeWidth={2}
+            fillColor="rgba(0, 122, 255, 0.1)"
+          />
+        )}
+        
         {/* Render simple markers */}
         {markers}
         
@@ -1436,6 +1450,20 @@ const MapViewNative: React.FC = () => {
            <Text style={styles.backgroundLoadingText}>Loading more events...</Text>
          </View>
        )}
+
+      {/* Radius Info Display */}
+      {userLocation && currentRadius && (
+        <View style={styles.radiusInfoContainer}>
+          <Text style={styles.radiusInfoText}>
+            📍 Showing events within {currentRadius}km radius
+          </Text>
+          {userGroup === 'unregistered' && (
+            <Text style={styles.radiusInfoSubtext}>
+              Register to see more events and features!
+            </Text>
+          )}
+        </View>
+      )}
 
 
 
@@ -2686,16 +2714,39 @@ const styles = StyleSheet.create({
        alignItems: 'center',
        justifyContent: 'center',
        padding: 15,
-       backgroundColor: '#f8f9fa',
+     },
+     radiusInfoContainer: {
+       position: 'absolute',
+       top: 100,
+       left: 16,
+       right: 16,
+       backgroundColor: 'rgba(255, 255, 255, 0.95)',
+       padding: 12,
        borderRadius: 8,
-       marginTop: 10,
+       shadowColor: '#000',
+       shadowOffset: { width: 0, height: 2 },
+       shadowOpacity: 0.1,
+       shadowRadius: 4,
+       elevation: 3,
+       zIndex: 1000,
+     },
+     radiusInfoText: {
+       fontSize: 14,
+       fontWeight: '600',
+       color: '#333',
+       textAlign: 'center',
+     },
+     radiusInfoSubtext: {
+       fontSize: 12,
+       color: '#666',
+       textAlign: 'center',
+       marginTop: 4,
      },
      permissionLoadingText: {
        fontSize: 14,
        color: '#666',
        marginLeft: 8,
      },
-     
    })
 export default MapViewNative
 

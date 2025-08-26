@@ -328,7 +328,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
-  const [currentRadius, setCurrentRadius] = useState(300) // Increased default radius to 300km for better coverage
+  const [currentRadius, setCurrentRadius] = useState(5) // Default radius 5km for unregistered users
   
   // Add state persistence for user group and filters
   const [userGroupState, setUserGroupState] = useState<string>('unregistered')
@@ -533,7 +533,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
                       ? { latitude: userLocation[0], longitude: userLocation[1] }
                       : { latitude: 58.3776252, longitude: 26.7290063 },
                     loadMoreRadius,
-                    2000, // Increased limit to 2000 for better coverage
+                    200, // Reduced limit to 200 for better performance
                     dateFilter
                   )
                   const processedAdditional = await processEventsWithVenueStorage(additionalEvents)
@@ -675,7 +675,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     const maxRadius = await userService.getMaxRadius()
     
     // Use user's preferred radius if set, otherwise calculate smart radius
-    if (currentRadius !== 150) {
+    if (currentRadius !== 5) {
       const limitedRadius = Math.min(currentRadius, maxRadius)
       console.log(`🎯 Using user's preferred radius: ${limitedRadius}km (max allowed: ${maxRadius}km)`)
       return limitedRadius
@@ -700,8 +700,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       if (distance < 50) { // Within 50km of a major city
         const limitedRadius = Math.min(city.radius, maxRadius)
         console.log(`🏙️ User near ${city.name}, using ${limitedRadius}km radius (max allowed: ${maxRadius}km)`)
-        // Only set currentRadius if it's still the default (150)
-        if (currentRadius === 150) {
+        // Only set currentRadius if it's still the default (5)
+        if (currentRadius === 5) {
           setCurrentRadius(limitedRadius)
         }
         return limitedRadius
@@ -709,10 +709,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
     
     // Rural areas - larger radius to find more events
-    const ruralRadius = Math.min(150, maxRadius)
+    const ruralRadius = Math.min(5, maxRadius)
     console.log(`🌲 User in rural area, using ${ruralRadius}km radius (max allowed: ${maxRadius}km)`)
-    // Only set currentRadius if it's still the default (150)
-    if (currentRadius === 150) {
+    // Only set currentRadius if it's still the default (5)
+    if (currentRadius === 5) {
       setCurrentRadius(ruralRadius)
     }
     return ruralRadius

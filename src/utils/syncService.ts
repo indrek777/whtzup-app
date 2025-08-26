@@ -48,11 +48,12 @@ class SyncService {
   private isUpdateCheckInProgress: boolean = false;
 
   constructor() {
-    this.initializeDeviceId();
-    this.setupNetworkListener();
-    this.setupSocketConnection();
-    this.loadPendingOperations();
-    this.loadLastUpdateCheck();
+    this.initializeDeviceId().then(() => {
+      this.setupNetworkListener();
+      this.setupSocketConnection();
+      this.loadPendingOperations();
+      this.loadLastUpdateCheck();
+    });
   }
 
   // Initialize device ID
@@ -62,9 +63,15 @@ class SyncService {
       if (!this.deviceId) {
         this.deviceId = this.generateDeviceId();
         await AsyncStorage.setItem('deviceId', this.deviceId);
+        console.log('🆔 Generated new device ID:', this.deviceId);
+      } else {
+        console.log('🆔 Loaded existing device ID:', this.deviceId);
       }
     } catch (error) {
       console.error('Error initializing device ID:', error);
+      // Fallback: generate device ID even if storage fails
+      this.deviceId = this.generateDeviceId();
+      console.log('🆔 Generated fallback device ID:', this.deviceId);
     }
   }
 
@@ -109,6 +116,13 @@ class SyncService {
   private setupSocketConnection(): void {
     if (!this.deviceId) {
       console.log('❌ No device ID available for Socket.IO connection');
+      // Retry after a short delay
+      setTimeout(() => {
+        if (this.deviceId) {
+          console.log('🔄 Retrying Socket.IO connection with device ID...');
+          this.setupSocketConnection();
+        }
+      }, 1000);
       return;
     }
 
@@ -559,83 +573,64 @@ class SyncService {
     console.log('🚀 Starting progressive event loading...');
     
     try {
-      // First, try to get cached events immediately for instant display
-      const cachedEvents = await this.getCachedEvents();
-      let initialEvents: Event[] = [];
-      
-      if (cachedEvents.length > 0) {
-        console.log(`📦 Using ${cachedEvents.length} cached events for instant display`);
+      // First, try to get total count from backend with same filters
+      let totalCount = 0;
+      try {
+        let countUrl = '/events/count';
+        const params = new URLSearchParams();
         
-        // Apply date filtering to cached events if date filter is provided
-        if (dateFilter && (dateFilter.from || dateFilter.to)) {
-          const now = new Date();
-          initialEvents = cachedEvents.filter(event => {
-            const eventDate = new Date(event.startsAt);
-            
-            // Filter by from date
-            if (dateFilter.from) {
-              const fromDate = new Date(dateFilter.from + 'T00:00:00.000Z');
-              if (eventDate < fromDate) {
-                return false;
-              }
-            }
-            
-            // Filter by to date
-            if (dateFilter.to) {
-              const toDate = new Date(dateFilter.to + 'T23:59:59.999Z');
-              if (eventDate > toDate) {
-                return false;
-              }
-            }
-            
-            return true;
-          });
-          
-          console.log(`📅 Applied date filter to cached events: ${cachedEvents.length} -> ${initialEvents.length} events`);
-        } else {
-          initialEvents = cachedEvents;
+        // Add same filters as for events
+        if (userLocation && radius) {
+          params.append('latitude', userLocation.latitude.toString());
+          params.append('longitude', userLocation.longitude.toString());
+          params.append('radius', radius.toString());
         }
+        
+        if (dateFilter) {
+          if (dateFilter.from) {
+            params.append('from', dateFilter.from);
+          }
+          if (dateFilter.to) {
+            params.append('to', dateFilter.to);
+          }
+        }
+        
+        if (params.toString()) {
+          countUrl += `?${params.toString()}`;
+        }
+        
+        const countResponse = await this.makeApiCall(countUrl);
+        if (countResponse.success) {
+          totalCount = countResponse.count || 0;
+          console.log(`📊 Total filtered events available: ${totalCount}`);
+        }
+      } catch (countError) {
+        console.log('⚠️ Could not get total count, will estimate from initial load');
       }
       
-      // Then fetch fresh data in background - increased limit to 1000 for better coverage
-      const freshEvents = await this.fetchEvents(userLocation, radius, 1000, dateFilter);
+      // Fetch initial batch with reasonable limit (50 events for fast loading)
+      console.log('🔄 Fetching initial batch of events from backend...');
+      const initialEvents = await this.fetchEvents(userLocation, radius, 50, dateFilter);
       
-      // Use fresh events count as total count since count endpoint is not available
-      const totalCount = freshEvents.length;
+      // If we couldn't get total count, estimate from initial load
+      if (totalCount === 0) {
+        totalCount = initialEvents.length;
+        console.log(`📊 Estimated total events: ${totalCount} (from initial load)`);
+      }
       
-      console.log(`📊 Progressive loading complete: ${initialEvents.length} initial + ${freshEvents.length} fresh = ${totalCount} total events`)
+      console.log(`📊 Progressive loading complete: ${initialEvents.length} initial events, ${totalCount} total available`);
       
       return {
         initial: initialEvents,
         total: totalCount
-      }
+      };
     } catch (error: any) {
       console.error('❌ Progressive loading failed:', error);
-      const cachedEvents = await this.getCachedEvents();
       
-      // Apply date filtering to cached events even in error case
-      let filteredCachedEvents = cachedEvents;
-      if (dateFilter && (dateFilter.from || dateFilter.to)) {
-        filteredCachedEvents = cachedEvents.filter(event => {
-          const eventDate = new Date(event.startsAt);
-          
-          if (dateFilter.from) {
-            const fromDate = new Date(dateFilter.from + 'T00:00:00.000Z');
-            if (eventDate < fromDate) return false;
-          }
-          
-          if (dateFilter.to) {
-            const toDate = new Date(dateFilter.to + 'T23:59:59.999Z');
-            if (eventDate > toDate) return false;
-          }
-          
-          return true;
-        });
-      }
-      
+      // Return empty result if backend fails
       return {
-        initial: filteredCachedEvents,
-        total: filteredCachedEvents.length
+        initial: [],
+        total: 0
       };
     }
   }

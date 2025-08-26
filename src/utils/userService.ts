@@ -76,8 +76,8 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
     canRateEvents: false,
     canWriteReviews: false,
     maxEventsPerDay: 0,
-    maxRadiusKm: 5,
-    maxEventFilterDays: 1, // 1 day event filter limit
+    maxRadiusKm: 5, // Back to 5km for unregistered users
+    maxEventFilterDays: 1, // Back to 1 day for unregistered users
     canAccessPremiumCategories: false,
     canUseAdvancedFilters: false,
     canExportEvents: false,
@@ -766,10 +766,11 @@ class UserService {
       } else {
         console.log('❌ Token refresh failed:', result.error || 'Unknown error')
         
-        // If refresh token is invalid or revoked, sign out the user
+        // If refresh token is invalid or revoked, don't sign out automatically
+        // Let the user continue with limited functionality
         if (result.error && (result.error.includes('Invalid') || result.error.includes('revoked'))) {
-          console.log('🔐 Invalid refresh token detected, signing out user')
-          await this.signOut()
+          console.log('🔐 Invalid refresh token detected, but allowing user to continue')
+          console.log('💡 User can still view events but may need to sign in for full features')
         }
         
         return false

@@ -1,0 +1,8 @@
+
+<svg width="1242" height="2436" viewBox="0 0 1242 2436" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1242" height="2436" fill="#007AFF"/>
+  <circle cx="621" cy="1218" r="200" fill="white"/>
+  <circle cx="621" cy="1218" r="150" fill="#007AFF"/>
+  <text x="621" y="1250" text-anchor="middle" fill="white" font-size="80" font-weight="bold" font-family="Arial">Event</text>
+  <text x="621" y="1300" text-anchor="middle" fill="white" font-size="40" font-family="Arial">Discovery</text>
+</svg>

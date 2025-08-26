@@ -1,0 +1,88 @@
+{
+  "name": "event",
+  "version": "1.2.0",
+  "type": "commonjs",
+  "description": "Event discovery app",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --ios --lan",
+    "start:lan": "expo start --lan",
+    "start:tunnel": "expo start --tunnel",
+    "start:offline": "expo start --offline",
+    "start:online": "expo start",
+    "ios": "expo start --ios --lan",
+    "android": "expo start --android --lan",
+    "web": "expo start --web --lan",
+    "build:ios": "eas build --platform ios",
+    "submit:ios": "eas submit --platform ios",
+    "lint": "eslint . --ext js,jsx,ts,tsx"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~5.0.4",
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-community/datetimepicker": "8.4.1",
+    "@react-native-community/netinfo": "^11.4.1",
+    "@react-navigation/bottom-tabs": "^6.5.8",
+    "@react-navigation/native": "^6.1.7",
+    "@react-navigation/stack": "^6.3.17",
+    "axios": "^1.11.0",
+    "bcrypt": "^6.0.0",
+    "date-fns": "^2.29.3",
+    "expo": "^53.0.22",
+    "expo-camera": "~16.1.11",
+    "expo-constants": "~17.1.7",
+    "expo-dev-client": "~5.2.4",
+    "expo-device": "~7.1.4",
+    "expo-file-system": "~18.1.11",
+    "expo-image-picker": "~16.1.4",
+    "expo-in-app-purchases": "^14.5.0",
+    "expo-location": "~18.1.6",
+    "expo-sharing": "~13.1.5",
+    "expo-status-bar": "~2.2.3",
+    "lodash": "^4.17.21",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.16.3",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.79.5",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-maps": "1.20.1",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1",
+    "react-native-web": "^0.20.0",
+    "socket.io-client": "^4.8.1",
+    "statuses": "^2.0.2"
+  },
+  "devDependencies": {
+    "@expo/cli": "^0.24.0",
+    "@react-native/eslint-config": "^0.81.0",
+    "@types/lodash": "^4.17.20",
+    "@types/react": "~19.0.10",
+    "@typescript-eslint/eslint-plugin": "^8.39.1",
+    "@typescript-eslint/parser": "^8.39.1",
+    "babel-preset-expo": "~13.0.0",
+    "eslint": "^8.36.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "typescript": "~5.8.3"
+  },
+  "keywords": [
+    "event",
+    "events",
+    "discovery",
+    "mobile",
+    "expo",
+    "react-native",
+    "ios"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false
+      }
+    }
+  }
+}

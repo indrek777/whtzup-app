@@ -81,17 +81,11 @@ function App() {
           console.log('🔐 Authentication status:', isAuthenticated);
           
           if (isAuthenticated) {
-            // Check if token needs refresh
+            // Check if token needs refresh, but don't force it
             const headers = await userService.getAuthHeaders();
             if (!headers.Authorization) {
-              console.log('🔄 Token expired, attempting refresh...');
-              const refreshed = await userService.refreshAuthToken();
-              if (!refreshed) {
-                console.log('❌ Token refresh failed, user needs to sign in again');
-                // Don't automatically sign out, let user continue with limited functionality
-              } else {
-                console.log('✅ Token refreshed successfully');
-              }
+              console.log('🔄 Token expired, but allowing user to continue without refresh');
+              console.log('💡 User can still view events but may need to sign in for full features');
             }
           }
         } catch (error) {

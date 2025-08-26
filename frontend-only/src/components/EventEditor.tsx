@@ -1,0 +1,2052 @@
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  Alert,
+  StyleSheet,
+  Switch,
+  FlatList,
+  ActivityIndicator,
+  Platform
+} from 'react-native'
+// import DateTimePicker from '@react-native-community/datetimepicker' // Removed - using Alert-based selection instead
+
+import { Event } from '../data/events'
+import { saveEventsToFile, updateEventForAllUsers, deleteEventForAllUsers } from '../utils/eventStorage'
+import { searchAddress, reverseGeocode } from '../utils/geocoding'
+import { syncService } from '../utils/syncService'
+import { userService } from '../utils/userService'
+
+interface EventEditorProps {
+  visible: boolean
+  onClose: () => void
+  selectedEvent?: Event | null
+  onEventUpdated?: (event: Event) => void
+  events: Event[]
+  onUpdateEvent: (eventId: string, updatedEvent: Event) => void
+  onDeleteEvent: (eventId: string) => void
+  startLocationPicker?: (callback: (location: { latitude: number; longitude: number; address?: string }) => void) => void
+  onLocationPickerClose?: () => void
+}
+
+
+
+const EventEditor: React.FC<EventEditorProps> = ({
+  visible,
+  onClose,
+  selectedEvent,
+  onEventUpdated,
+  events,
+  onUpdateEvent,
+  onDeleteEvent,
+  startLocationPicker,
+  onLocationPickerClose
+}) => {
+  
+  // Editor state
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showSingleEventEditor, setShowSingleEventEditor] = useState(false)
+  const [showCoordinateAssignmentEditor, setShowCoordinateAssignmentEditor] = useState(false)
+  const [eventsToAssignCoordinates, setEventsToAssignCoordinates] = useState<Event[]>([])
+  const [currentEventIndex, setCurrentEventIndex] = useState(0)
+  
+  // Form fields
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState<string>('other')
+  const [venue, setVenue] = useState('')
+  const [address, setAddress] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [organizer, setOrganizer] = useState('')
+  const [attendees, setAttendees] = useState('')
+  const [maxAttendees, setMaxAttendees] = useState('')
+  const [url, setUrl] = useState('')
+  
+  // Date/Time picker state
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  // const [showDatePicker, setShowDatePicker] = useState(false) // Removed - using Alert-based selection
+  // const [showTimePicker, setShowTimePicker] = useState(false) // Removed - using Alert-based selection
+  // const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date') // Removed - using Alert-based selection
+  
+  // Location editing
+  const [isEditingLocation, setIsEditingLocation] = useState(false)
+  const [locationSearch, setLocationSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [coordinates, setCoordinates] = useState<[number, number]>([0, 0])
+  
+  // Helper function to ensure coordinates are always valid numbers
+  const safeCoordinates = (coords: [number, number]): [number, number] => {
+    return [
+      typeof coords[0] === 'number' && !isNaN(coords[0]) ? coords[0] : 0,
+      typeof coords[1] === 'number' && !isNaN(coords[1]) ? coords[1] : 0
+    ]
+  }
+  
+  // Date/Time picker handlers - Removed old modal-based handlers, using Alert-based selection instead
+  
+  const showDatePickerAlert = () => {
+    console.log('📅 showDatePickerAlert called')
+    
+    // Get current date or today's date
+    const currentDate = date ? new Date(date) : new Date()
+    const today = new Date()
+    
+    // Create date options for the next 30 days
+    const dateOptions = []
+    for (let i = 0; i < 30; i++) {
+      const optionDate = new Date(today)
+      optionDate.setDate(today.getDate() + i)
+      dateOptions.push(optionDate)
+    }
+    
+    // Create alert buttons for date selection
+    const dateButtons = dateOptions.map(optionDate => ({
+      text: optionDate.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      onPress: () => {
+        const dateStr = optionDate.toISOString().split('T')[0]
+        setDate(dateStr)
+        setSelectedDate(optionDate)
+        console.log('📅 Date selected:', dateStr)
+      }
+    }))
+    
+    // Add cancel button
+    dateButtons.push({ text: 'Cancel', style: 'cancel' })
+    
+    Alert.alert(
+      'Select Date',
+      'Choose the event date:',
+      dateButtons
+    )
+  }
+  
+  const showTimePickerAlert = () => {
+    console.log('⏰ showTimePickerAlert called')
+    
+    // Create time options (every 30 minutes from 00:00 to 23:30)
+    const timeOptions = []
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+        timeOptions.push(timeStr)
+      }
+    }
+    
+    // Create alert buttons for time selection (limit to 20 options to avoid too many buttons)
+    const timeButtons = timeOptions
+      .filter((_, index) => index % 2 === 0) // Take every other option to reduce button count
+      .map(timeStr => ({
+        text: timeStr,
+        onPress: () => {
+          setTime(timeStr)
+          console.log('⏰ Time selected:', timeStr)
+        }
+      }))
+    
+    // Add cancel button
+    timeButtons.push({ text: 'Cancel', style: 'cancel' })
+    
+    Alert.alert(
+      'Select Time',
+      'Choose the event time:',
+      timeButtons
+    )
+  }
+  
+  const formatDateForDisplay = (dateStr: string) => {
+    if (!dateStr) return 'Select Date'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    })
+  }
+  
+  const formatTimeForDisplay = (timeStr: string) => {
+    if (!timeStr) return 'Select Time'
+    return timeStr
+  }
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('📍 EventEditor state updated:', { address, venue, coordinates })
+  }, [address, venue, coordinates])
+  
+
+
+    // Initialize editor when modal opens
+  // Track if this is the first time the EventEditor is being opened
+  // Track if form has been initialized to prevent resetting when location picker closes
+  const formInitializedRef = useRef(false)
+
+  useEffect(() => {
+    console.log('🎯 Form initialization effect triggered. visible:', visible, 'formInitialized:', formInitializedRef.current, 'selectedEvent:', !!selectedEvent, 'hasLocationData:', hasLocationDataRef.current, 'address:', address, 'venue:', venue)
+    
+    // Don't initialize if we have location data that was just set
+    if (hasLocationDataRef.current && (address || venue)) {
+      console.log('🎯 Location data detected, skipping form initialization')
+      hasLocationDataRef.current = false
+      return
+    }
+    
+    // Reset form initialization flag when selectedEvent changes
+    if (selectedEvent && formInitializedRef.current) {
+      console.log('🎯 selectedEvent changed, resetting form initialization flag')
+      formInitializedRef.current = false
+    }
+    
+    if (visible && !formInitializedRef.current) {
+      console.log('🎯 Initializing EventEditor form for the first time...')
+      if (selectedEvent) {
+        // Single event edit mode
+        console.log('🎯 Setting up EVENT EDITING mode for:', selectedEvent.name)
+        setEditingEvent(selectedEvent)
+        populateForm(selectedEvent)
+      } else {
+        // New event creation mode
+        console.log('🎯 Setting up NEW EVENT creation')
+        setEditingEvent(null)
+        // Initialize form with empty values for new event
+        setTitle('')
+        setDescription('')
+        setCategory('other')
+        setVenue('')
+        setAddress('')
+        setDate('')
+        setTime('12:00')
+        setSelectedDate(new Date())
+        setOrganizer('Event Organizer')
+        setAttendees('0')
+        setMaxAttendees('')
+        setUrl('')
+        setCoordinates([0, 0])
+        console.log('🎯 NEW EVENT setup complete')
+      }
+      formInitializedRef.current = true
+    }
+  }, [visible, selectedEvent, address, venue])
+
+  // Track previous visibility state to detect actual closing
+  const prevVisibleRef = useRef(false)
+  
+  // Track if we have location data that was just set to prevent form re-initialization
+  const hasLocationDataRef = useRef(false)
+  
+  // Debug logging for date/time picker state
+  useEffect(() => {
+    console.log('📅⏰ Date/Time picker state changed:', { selectedDate })
+  }, [selectedDate])
+  
+  // Debug logging for date and time state
+  useEffect(() => {
+    console.log('📅 Date state changed:', date)
+  }, [date])
+  
+  useEffect(() => {
+    console.log('⏰ Time state changed:', time)
+  }, [time])
+  
+
+  
+  // Separate effect to handle modal closing
+  useEffect(() => {
+    console.log('🎯 Modal closing effect triggered. visible:', visible, 'prevVisible:', prevVisibleRef.current)
+    // Only reset when the EventEditor is actually closed by the user (not when location picker closes)
+    // The EventEditor is closed when it goes from visible=true to visible=false AND showEventEditor=false
+    if (!visible && prevVisibleRef.current) {
+      console.log('🎯 Modal is closing, resetting form initialization flag')
+      // When main modal closes, reset the flag and close modals
+      formInitializedRef.current = false
+      setShowCoordinateAssignmentEditor(false)
+      setShowSingleEventEditor(false)
+    }
+    prevVisibleRef.current = visible
+  }, [visible])
+
+     // Debug coordinate assignment modal state
+  useEffect(() => {
+    console.log('showCoordinateAssignmentEditor changed to:', showCoordinateAssignmentEditor)
+    if (showCoordinateAssignmentEditor) {
+      console.log('Coordinate assignment modal should now be visible!')
+    }
+  }, [showCoordinateAssignmentEditor])
+
+
+
+
+
+  // Populate form with event data
+  const populateForm = (event: Event) => {
+    setTitle(event.name)
+    setDescription(event.description)
+    setCategory(event.category || 'other')
+    setVenue(event.venue)
+    setAddress(event.address)
+    setUrl(event.url || '')
+    // Safely handle startsAt which might be undefined
+    if (event.startsAt) {
+      try {
+        const eventDate = new Date(event.startsAt)
+        if (!isNaN(eventDate.getTime())) {
+          // Extract date in YYYY-MM-DD format
+          const dateStr = eventDate.toISOString().split('T')[0]
+          setDate(dateStr)
+          
+          // Extract time in HH:MM format
+          const timeStr = eventDate.toTimeString().split(' ')[0].substring(0, 5)
+          setTime(timeStr)
+          
+          // Set selectedDate for the picker
+          setSelectedDate(eventDate)
+        } else {
+          setDate('')
+          setTime('12:00')
+          setSelectedDate(new Date())
+        }
+      } catch (error) {
+        console.error('Error parsing startsAt:', error)
+        setDate('')
+        setTime('12:00')
+        setSelectedDate(new Date())
+      }
+    } else {
+      setDate('')
+      setTime('12:00')
+      setSelectedDate(new Date())
+    }
+    setOrganizer(event.createdBy || 'Event Organizer')
+    setAttendees('0') // Default value since this field doesn't exist in the Event type
+    setMaxAttendees('')
+    setCoordinates([event.latitude, event.longitude])
+  }
+
+
+
+  // Open single event editor for a specific event
+  const openSingleEventEditor = (event: Event) => {
+    setEditingEvent(event)
+    populateForm(event)
+    setShowSingleEventEditor(true)
+  }
+
+  // Close single event editor
+  const closeSingleEventEditor = () => {
+    setShowSingleEventEditor(false)
+    setEditingEvent(null)
+  }
+
+  // Open coordinate assignment editor for multiple events
+  const openCoordinateAssignmentEditor = (events: Event[]) => {
+    console.log('openCoordinateAssignmentEditor called with', events.length, 'events')
+    setEventsToAssignCoordinates(events)
+    setCurrentEventIndex(0)
+    setShowCoordinateAssignmentEditor(true)
+    // Populate form with first event
+    if (events.length > 0) {
+      console.log('Populating form with first event:', events[0].name)
+      populateForm(events[0])
+    }
+    console.log('Modal state set to true, showCoordinateAssignmentEditor should be:', true)
+  }
+
+  // Close coordinate assignment editor
+  const closeCoordinateAssignmentEditor = () => {
+    setShowCoordinateAssignmentEditor(false)
+    setEventsToAssignCoordinates([])
+    setCurrentEventIndex(0)
+  }
+
+  // Get current event being edited in coordinate assignment
+  const getCurrentEvent = () => {
+    return eventsToAssignCoordinates[currentEventIndex]
+  }
+
+  // Move to next event in coordinate assignment
+  const nextEvent = () => {
+    if (currentEventIndex < eventsToAssignCoordinates.length - 1) {
+      const newIndex = currentEventIndex + 1
+      setCurrentEventIndex(newIndex)
+      // Populate form with next event
+      const nextEventData = eventsToAssignCoordinates[newIndex]
+      populateForm(nextEventData)
+    }
+  }
+
+  // Move to previous event in coordinate assignment
+  const previousEvent = () => {
+    if (currentEventIndex > 0) {
+      const newIndex = currentEventIndex - 1
+      setCurrentEventIndex(newIndex)
+      // Populate form with previous event
+      const previousEventData = eventsToAssignCoordinates[newIndex]
+      populateForm(previousEventData)
+    }
+  }
+
+  // Save current event coordinates and move to next
+  const saveCurrentEventCoordinates = async () => {
+    const currentEvent = getCurrentEvent()
+    if (!currentEvent) return
+
+    const updatedEvent: Event = {
+      ...currentEvent,
+      latitude: safeCoordinates(coordinates)[0],
+      longitude: safeCoordinates(coordinates)[1],
+      address: address,
+      venue: venue,
+      updatedAt: new Date().toISOString()
+    }
+
+    try {
+      setIsLoading(true)
+      await updateEventForAllUsers(currentEvent.id, updatedEvent, events)
+      onUpdateEvent(currentEvent.id, updatedEvent)
+      
+      // Move to next event or close if done
+      if (currentEventIndex < eventsToAssignCoordinates.length - 1) {
+        nextEvent()
+      } else {
+        // All events processed
+        closeCoordinateAssignmentEditor()
+        Alert.alert('Success', `All ${eventsToAssignCoordinates.length} events have been updated with new coordinates! Changes are saved locally.`)
+      }
+    } catch (error) {
+      console.error('Error saving event coordinates:', error)
+      Alert.alert('Error', 'Failed to save event coordinates. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Search for location
+  const handleLocationSearch = useCallback(async (query: string) => {
+    if (query.length < 3) {
+      setSearchResults([])
+      return
+    }
+    
+    setIsLoading(true)
+    try {
+      const results = await searchAddress(query)
+      setSearchResults(results)
+    } catch (error) {
+      console.error('Location search error:', error)
+      setSearchResults([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Select location from search results
+  const selectLocation = async (result: any) => {
+    try {
+      // Extract coordinates from the search result
+      const lat = parseFloat(result.lat)
+      const lon = parseFloat(result.lon)
+      const coords: [number, number] = [lat, lon]
+      
+      // Update single event coordinates
+      setCoordinates(coords)
+      setAddress(result.display_name)
+      setVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
+      
+      setIsEditingLocation(false)
+      setSearchResults([])
+      setLocationSearch('')
+    } catch (error) {
+      console.error('Error selecting location:', error)
+      Alert.alert('Error', 'Failed to get location coordinates')
+    }
+  }
+
+  // Handle location selection from map picker
+  const handleMapLocationPicker = () => {
+    console.log('🗺️ handleMapLocationPicker called, startLocationPicker exists:', !!startLocationPicker)
+    if (!startLocationPicker) return
+    
+    console.log('🗺️ Starting map location picker...')
+    startLocationPicker((location) => {
+      console.log('📍 Location selected from map:', location)
+      
+      // Update single event coordinates
+      console.log('📍 Setting coordinates:', [location.latitude, location.longitude])
+      setCoordinates([location.latitude, location.longitude])
+      console.log('📍 Setting address:', location.address || '')
+      setAddress(location.address || '')
+      if (location.address) {
+        // Extract venue name from address (first part before comma)
+        const venueName = (location.address || '').split(',')[0].trim()
+        console.log('📍 Setting venue:', venueName)
+        setVenue(venueName)
+      }
+      // Set flag to prevent form re-initialization
+      hasLocationDataRef.current = true
+      console.log('📍 Location data flag set to prevent form re-initialization')
+      
+      // The EventEditor should remain visible after location selection
+      // No need to re-open it since it wasn't closed
+      console.log('📍 Location data updated in EventEditor, form should show new data')
+    })
+  }
+
+  // Save single event
+  const saveEvent = async () => {
+    console.log('💾 Save event called')
+    console.log('💾 Editing event:', editingEvent?.name)
+    console.log('💾 Form data:', { title, venue, category, date, time })
+    
+    // Check authentication first
+    const isAuthenticated = await userService.isAuthenticated()
+    if (!isAuthenticated) {
+      console.log('❌ User not authenticated, showing auth prompt')
+      Alert.alert(
+        'Authentication Required',
+        'You need to sign in to create or edit events. Would you like to sign in now?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            onPress: () => {
+              // Close the event editor and show the user profile (which has auth)
+              onClose()
+              // You can add a callback here to open the user profile modal
+              // For now, we'll just show a message
+              Alert.alert(
+                'Sign In',
+                'Please open your profile (tap the user icon) to sign in or create an account.',
+                [{ text: 'OK' }]
+              )
+            }
+          }
+        ]
+      )
+      return
+    }
+    
+    if (!title.trim() || !venue.trim()) {
+      console.log('❌ Validation failed: title or venue is empty')
+      Alert.alert('Validation Error', 'Title and venue are required')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      if (editingEvent) {
+        // Update existing event
+        console.log('💾 Updating existing event...')
+        const updatedEvent: Event = {
+          ...editingEvent,
+          name: title.trim(),
+          description: description.trim(),
+          category,
+          venue: venue.trim(),
+          address: address.trim(),
+          latitude: safeCoordinates(coordinates)[0],
+          longitude: safeCoordinates(coordinates)[1],
+          startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
+          createdBy: organizer.trim(),
+          url: url.trim(),
+          updatedAt: new Date().toISOString()
+        }
+
+        console.log('💾 Updated event data:', updatedEvent)
+        console.log('💾 Calling syncService.updateEvent...')
+        const savedEvent = await syncService.updateEvent(updatedEvent)
+        console.log('💾 Event updated successfully:', savedEvent)
+        
+        // Update local state
+        console.log('💾 Updating local state...')
+        onUpdateEvent(editingEvent.id, savedEvent)
+        onEventUpdated?.(savedEvent)
+        
+        if (showSingleEventEditor) {
+          
+          closeSingleEventEditor()
+          Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+        } else {
+          // If we're in standalone single event editor mode, close the main modal
+          onClose()
+          Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
+        }
+      } else {
+        // Create new event
+        console.log('💾 Creating new event...')
+        const newEvent: Event = {
+          id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: title.trim(),
+          description: description.trim(),
+          category,
+          venue: venue.trim(),
+          address: address.trim(),
+          latitude: safeCoordinates(coordinates)[0],
+          longitude: safeCoordinates(coordinates)[1],
+          startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
+          createdBy: organizer.trim(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          url: url.trim(),
+          source: 'user'
+        }
+
+        console.log('💾 New event data:', newEvent)
+        console.log('💾 Calling syncService.createEvent...')
+        const savedEvent = await syncService.createEvent(newEvent)
+        console.log('💾 Event created successfully:', savedEvent)
+        
+        // Add to local state
+        console.log('💾 Adding to local state...')
+        onEventUpdated?.(savedEvent)
+        
+        // Close the modal
+        onClose()
+        Alert.alert('Success', 'Event created successfully! Changes are synced to all users.')
+      }
+    } catch (error) {
+      console.error('❌ Error saving event:', error)
+      Alert.alert('Error', 'Failed to save event. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+
+
+
+  // Delete event
+  const deleteEventHandler = () => {
+    if (!editingEvent) return
+    
+    Alert.alert(
+      'Delete Event',
+      `Are you sure you want to delete "${editingEvent.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading(true)
+              // Delete via sync service
+              await syncService.deleteEvent(editingEvent.id)
+              // Update local state
+              onDeleteEvent(editingEvent.id)
+              
+              // Close the main modal
+              onClose()
+              Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
+            } catch (error) {
+              console.error('Error deleting event:', error)
+              Alert.alert('Error', 'Failed to delete event. Please try again.')
+            } finally {
+              setIsLoading(false)
+            }
+          }
+        }
+      ]
+    )
+  }
+
+
+
+
+
+
+
+
+
+  // Marker icon function (same as in MapViewNative)
+  const getMarkerIcon = (category: string): string => {
+    const icons: { [key: string]: string } = {
+      'music': '🎵',
+      'sports': '⚽',
+      'art': '🎨',
+      'food': '🍽️',
+      'business': '💼',
+      'technology': '💻',
+      'health & wellness': '🏥',
+      'entertainment': '🎭',
+      'education': '📚',
+      'cultural': '🏛️',
+      'nightlife': '🌙',
+      'family & kids': '👨‍👩‍👧‍👦',
+      'nature & environment': '🌿',
+      'theater': '🎭',
+      'comedy': '😄',
+      'charity & community': '🤝',
+      'fashion & beauty': '👗',
+      'science & education': '🔬',
+      'gaming & entertainment': '🎮',
+      'other': '⭐'
+    }
+    return icons[category.toLowerCase()] || '📍'
+  }
+
+  const categories: string[] = [
+    'music',
+    'sports', 
+    'health & wellness',
+    'entertainment',
+    'nature & environment',
+    'theater',
+    'art',
+    'comedy',
+    'food',
+    'education',
+    'business',
+    'technology',
+    'family & kids',
+    'cultural',
+    'nightlife',
+    'charity & community',
+    'fashion & beauty',
+    'science & education',
+    'gaming & entertainment',
+    'other'
+  ]
+
+  if (!visible) return null
+
+     return (
+     <>
+       <Modal
+         visible={visible}
+         animationType="slide"
+         presentationStyle="pageSheet"
+         onRequestClose={onClose}
+       >
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            {editingEvent ? 'Edit Event' : 'Create New Event'}
+          </Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.content}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+
+              <Text style={styles.fieldLabel}>Title *</Text>
+              <TextInput
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Event title"
+              />
+
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput
+                style={styles.input}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Event description"
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.fieldLabel}>Category</Text>
+              <View style={styles.categoryButtons}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.categoryButton,
+                      category === cat && styles.selectedCategory
+                    ]}
+                    onPress={() => setCategory(cat)}
+                  >
+                    <Text style={[
+                      styles.categoryButtonText,
+                      category === cat && styles.selectedCategoryText
+                    ]}>
+                      {getMarkerIcon(cat)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>Venue *</Text>
+              <TextInput
+                style={styles.input}
+                value={venue}
+                onChangeText={setVenue}
+                placeholder="Venue name"
+              />
+
+              <Text style={styles.fieldLabel}>Address</Text>
+              <TouchableOpacity
+                style={styles.locationInput}
+                onPress={() => setIsEditingLocation(true)}
+              >
+                <Text style={styles.locationText}>
+                  {address || 'Tap to set location'}
+                </Text>
+                <Text style={styles.locationIcon}>📍</Text>
+              </TouchableOpacity>
+              
+              {startLocationPicker && (
+                <TouchableOpacity
+                  style={styles.mapPickerButton}
+                  onPress={handleMapLocationPicker}
+                >
+                  <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+                </TouchableOpacity>
+              )}
+
+              <Text style={styles.fieldLabel}>Coordinates</Text>
+              <Text style={styles.helpText}>
+                Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
+              </Text>
+              <View style={styles.coordinateRow}>
+                <View style={styles.coordinateInput}>
+                  <Text style={styles.coordinateLabel}>Latitude:</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={safeCoordinates(coordinates)[0].toString()}
+                    onChangeText={(text) => {
+                      const lat = parseFloat(text) || 0
+                      setCoordinates([lat, safeCoordinates(coordinates)[1]])
+                    }}
+                    placeholder="Latitude"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.coordinateInput}>
+                  <Text style={styles.coordinateLabel}>Longitude:</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={safeCoordinates(coordinates)[1].toString()}
+                    onChangeText={(text) => {
+                      const lng = parseFloat(text) || 0
+                      setCoordinates([safeCoordinates(coordinates)[0], lng])
+                    }}
+                    placeholder="Longitude"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={showDatePickerAlert}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateForDisplay(date)}
+                </Text>
+                <Text style={styles.dateTimeButtonIcon}>📅</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Time</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={showTimePickerAlert}
+              >
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeForDisplay(time)}
+                </Text>
+                <Text style={styles.dateTimeButtonIcon}>🕐</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Organizer</Text>
+              <TextInput
+                style={styles.input}
+                value={organizer}
+                onChangeText={setOrganizer}
+                placeholder="Event organizer"
+              />
+
+              <Text style={styles.fieldLabel}>Attendees</Text>
+              <TextInput
+                style={styles.input}
+                value={attendees}
+                onChangeText={setAttendees}
+                placeholder="Number of attendees"
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.fieldLabel}>Max Attendees</Text>
+              <TextInput
+                style={styles.input}
+                value={maxAttendees}
+                onChangeText={setMaxAttendees}
+                placeholder="Maximum attendees (optional)"
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.fieldLabel}>Website URL (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={url}
+                onChangeText={setUrl}
+                placeholder="https://example.com/event"
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <View style={styles.buttonRow}>
+                {editingEvent && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.dangerButton]}
+                    onPress={deleteEventHandler}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.dangerButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.button, styles.primaryButton]}
+                  onPress={saveEvent}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <View style={styles.loadingButtonContent}>
+                      <ActivityIndicator size="small" color="white" />
+                      <Text style={styles.primaryButtonText}>Saving...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.primaryButtonText}>{editingEvent ? 'Save' : 'Create Event'}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+
+                 {/* Location Search Modal */}
+         <Modal
+           visible={isEditingLocation}
+           animationType="slide"
+           presentationStyle="pageSheet"
+         >
+           <View style={styles.locationModal}>
+             <View style={styles.locationHeader}>
+               <Text style={styles.locationTitle}>Search Location</Text>
+               <TouchableOpacity
+                 onPress={() => setIsEditingLocation(false)}
+                 style={styles.closeButton}
+               >
+                 <Text style={styles.closeButtonText}>✕</Text>
+               </TouchableOpacity>
+             </View>
+
+             <TextInput
+               style={styles.searchInput}
+               value={locationSearch}
+               onChangeText={(text) => {
+                 setLocationSearch(text)
+                 handleLocationSearch(text)
+               }}
+               placeholder="Search for location..."
+             />
+
+             {isLoading && (
+               <View style={styles.loadingContainer}>
+                 <ActivityIndicator size="large" color="#007AFF" />
+                 <Text style={styles.loadingText}>Searching...</Text>
+               </View>
+             )}
+
+             <FlatList
+               data={searchResults}
+               keyExtractor={(item, index) => index.toString()}
+               renderItem={({ item }) => (
+                 <TouchableOpacity
+                   style={styles.searchResult}
+                   onPress={() => selectLocation(item)}
+                 >
+                   <Text style={styles.searchResultTitle}>
+                     {item.name || (item.display_name ? item.display_name.split(',')[0] : 'Unknown Location')}
+                   </Text>
+                   <Text style={styles.searchResultAddress}>
+                     {item.display_name}
+                   </Text>
+                 </TouchableOpacity>
+               )}
+               style={styles.searchResults}
+             />
+           </View>
+         </Modal>
+
+                   {/* Single Event Editor Modal */}
+          <Modal
+            visible={showSingleEventEditor}
+            animationType="slide"
+            presentationStyle="pageSheet"
+          >
+            <View style={styles.container}>
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.headerTitle}>Edit Event</Text>
+                <TouchableOpacity onPress={closeSingleEventEditor} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Single Event Edit Form */}
+              <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <Text style={styles.fieldLabel}>Title *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Event title"
+                />
+
+                <Text style={styles.fieldLabel}>Description</Text>
+                <TextInput
+                  style={styles.input}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Event description"
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <Text style={styles.fieldLabel}>Category</Text>
+                <View style={styles.categoryButtons}>
+                  {categories.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.categoryButton,
+                        category === cat && styles.selectedCategory
+                      ]}
+                      onPress={() => setCategory(cat)}
+                    >
+                      <Text style={[
+                        styles.categoryButtonText,
+                        category === cat && styles.selectedCategoryText
+                      ]}>
+                        {getMarkerIcon(cat)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.fieldLabel}>Venue *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={venue}
+                  onChangeText={setVenue}
+                  placeholder="Venue name"
+                />
+
+                                 <Text style={styles.fieldLabel}>Address</Text>
+                 <TouchableOpacity
+                   style={styles.locationInput}
+                   onPress={() => setIsEditingLocation(true)}
+                 >
+                   <Text style={styles.locationText}>
+                     {address || 'Tap to set location'}
+                   </Text>
+                   <Text style={styles.locationIcon}>📍</Text>
+                 </TouchableOpacity>
+                 
+                 {startLocationPicker && (
+                   <TouchableOpacity
+                     style={styles.mapPickerButton}
+                     onPress={handleMapLocationPicker}
+                   >
+                     <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+                   </TouchableOpacity>
+                 )}
+
+                 <Text style={styles.fieldLabel}>Coordinates</Text>
+                 <Text style={styles.helpText}>
+                   Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
+                 </Text>
+                 <View style={styles.coordinateRow}>
+                   <View style={styles.coordinateInput}>
+                     <Text style={styles.coordinateLabel}>Latitude:</Text>
+                     <TextInput
+                       style={styles.input}
+                       value={safeCoordinates(coordinates)[0].toString()}
+                       onChangeText={(text) => {
+                         const lat = parseFloat(text) || 0
+                         setCoordinates([lat, safeCoordinates(coordinates)[1]])
+                       }}
+                       placeholder="Latitude"
+                       keyboardType="numeric"
+                     />
+                   </View>
+                   <View style={styles.coordinateInput}>
+                     <Text style={styles.coordinateLabel}>Longitude:</Text>
+                     <TextInput
+                       style={styles.input}
+                       value={safeCoordinates(coordinates)[1].toString()}
+                       onChangeText={(text) => {
+                         const lng = parseFloat(text) || 0
+                         setCoordinates([safeCoordinates(coordinates)[0], lng])
+                       }}
+                       placeholder="Longitude"
+                       keyboardType="numeric"
+                     />
+                   </View>
+                 </View>
+
+                 <Text style={styles.fieldLabel}>Date</Text>
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={showDatePickerAlert}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {formatDateForDisplay(date)}
+                  </Text>
+                  <Text style={styles.dateTimeButtonIcon}>📅</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.fieldLabel}>Time</Text>
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={showTimePickerAlert}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {formatTimeForDisplay(time)}
+                  </Text>
+                  <Text style={styles.dateTimeButtonIcon}>🕐</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.fieldLabel}>Organizer</Text>
+                <TextInput
+                  style={styles.input}
+                  value={organizer}
+                  onChangeText={setOrganizer}
+                  placeholder="Event organizer"
+                />
+
+                <Text style={styles.fieldLabel}>Attendees</Text>
+                <TextInput
+                  style={styles.input}
+                  value={attendees}
+                  onChangeText={setAttendees}
+                  placeholder="Number of attendees"
+                  keyboardType="numeric"
+                />
+
+                <Text style={styles.fieldLabel}>Max Attendees</Text>
+                <TextInput
+                  style={styles.input}
+                  value={maxAttendees}
+                  onChangeText={setMaxAttendees}
+                  placeholder="Maximum attendees (optional)"
+                  keyboardType="numeric"
+                />
+
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.dangerButton]}
+                    onPress={deleteEventHandler}
+                    disabled={isLoading}
+                  >
+                    <Text style={styles.dangerButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, styles.primaryButton]}
+                    onPress={saveEvent}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <View style={styles.loadingButtonContent}>
+                        <ActivityIndicator size="small" color="white" />
+                        <Text style={styles.primaryButtonText}>Saving...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+
+                     
+             </View>
+     </Modal>
+
+     {/* Coordinate Assignment Editor Modal - Outside main modal to avoid nesting issues */}
+     <Modal
+       visible={showCoordinateAssignmentEditor}
+       animationType="slide"
+       presentationStyle="pageSheet"
+               onShow={() => {
+          console.log('Coordinate assignment modal shown, current event:', getCurrentEvent()?.name)
+          console.log('Modal is now visible!')
+        }}
+     >
+       <View style={styles.container}>
+         {/* Header */}
+         <View style={styles.header}>
+           <Text style={styles.headerTitle}>
+             Assign Coordinates ({currentEventIndex + 1} of {eventsToAssignCoordinates.length})
+           </Text>
+           <TouchableOpacity onPress={closeCoordinateAssignmentEditor} style={styles.closeButton}>
+             <Text style={styles.closeButtonText}>✕</Text>
+           </TouchableOpacity>
+         </View>
+
+         {/* Current Event Info */}
+         <View style={styles.currentEventInfo}>
+           <Text style={styles.currentEventTitle}>
+             {getCurrentEvent()?.name}
+           </Text>
+           <Text style={styles.currentEventVenue}>
+             Venue: {getCurrentEvent()?.venue}
+           </Text>
+           <Text style={styles.currentEventDate}>
+             Date: {getCurrentEvent()?.startsAt}
+           </Text>
+         </View>
+
+         {/* Events List Preview */}
+         <View style={styles.eventsPreviewContainer}>
+           <Text style={styles.eventsPreviewTitle}>
+             Events to Edit ({eventsToAssignCoordinates.length} total):
+           </Text>
+           <ScrollView style={styles.eventsPreviewList} horizontal showsHorizontalScrollIndicator={false}>
+             {eventsToAssignCoordinates.map((event, index) => (
+               <TouchableOpacity
+                 key={event.id} 
+                 style={[
+                   styles.eventPreviewItem,
+                   index === currentEventIndex && styles.currentEventPreviewItem
+                 ]}
+                 onPress={() => {
+                   setCurrentEventIndex(index)
+                   populateForm(event)
+                 }}
+               >
+                 <Text style={styles.eventPreviewNumber}>{index + 1}</Text>
+                 <Text style={styles.eventPreviewName} numberOfLines={1}>
+                   {event.name}
+                 </Text>
+                 <Text style={styles.eventPreviewCoordinates}>
+                   {event.latitude === 0 && event.longitude === 0 ? (
+                     '⚠️ (0,0)'
+                   ) : (
+                     `${event.latitude?.toFixed(4) || '0.0000'}, ${event.longitude?.toFixed(4) || '0.0000'}`
+                   )}
+                 </Text>
+               </TouchableOpacity>
+             ))}
+           </ScrollView>
+         </View>
+
+         {/* Coordinate Assignment Form */}
+         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+           <Text style={styles.fieldLabel}>Venue</Text>
+           <TextInput
+             style={styles.input}
+             value={venue}
+             onChangeText={setVenue}
+             placeholder="Venue name"
+           />
+
+           <Text style={styles.fieldLabel}>Address</Text>
+           <TouchableOpacity
+             style={styles.locationInput}
+             onPress={() => setIsEditingLocation(true)}
+           >
+             <Text style={styles.locationText}>
+               {address || 'Tap to set location'}
+             </Text>
+             <Text style={styles.locationIcon}>📍</Text>
+           </TouchableOpacity>
+           
+           {startLocationPicker && (
+             <TouchableOpacity
+               style={styles.mapPickerButton}
+               onPress={handleMapLocationPicker}
+             >
+               <Text style={styles.mapPickerButtonText}>🗺️ Pick from Map</Text>
+             </TouchableOpacity>
+           )}
+
+           <Text style={styles.fieldLabel}>Coordinates</Text>
+           <Text style={styles.helpText}>
+             Current: {safeCoordinates(coordinates)[0].toFixed(6)}, {safeCoordinates(coordinates)[1].toFixed(6)}
+           </Text>
+           <View style={styles.coordinateRow}>
+             <View style={styles.coordinateInput}>
+               <Text style={styles.coordinateLabel}>Latitude:</Text>
+               <TextInput
+                 style={styles.input}
+                 value={safeCoordinates(coordinates)[0].toString()}
+                 onChangeText={(text) => {
+                   const lat = parseFloat(text) || 0
+                   setCoordinates([lat, safeCoordinates(coordinates)[1]])
+                 }}
+                 placeholder="Latitude"
+                 keyboardType="numeric"
+               />
+             </View>
+             <View style={styles.coordinateInput}>
+               <Text style={styles.coordinateLabel}>Longitude:</Text>
+               <TextInput
+                 style={styles.input}
+                 value={safeCoordinates(coordinates)[1].toString()}
+                 onChangeText={(text) => {
+                   const lng = parseFloat(text) || 0
+                   setCoordinates([safeCoordinates(coordinates)[0], lng])
+                 }}
+                 placeholder="Longitude"
+                 keyboardType="numeric"
+               />
+             </View>
+           </View>
+
+           {/* Navigation Buttons */}
+           <View style={styles.navigationButtons}>
+             <TouchableOpacity
+               style={[styles.navButton, styles.previousButton]}
+               onPress={previousEvent}
+               disabled={currentEventIndex === 0}
+             >
+               <Text style={styles.navButtonText}>← Previous</Text>
+             </TouchableOpacity>
+             
+             <TouchableOpacity
+               style={[styles.navButton, styles.nextButton]}
+               onPress={saveCurrentEventCoordinates}
+               disabled={isLoading}
+             >
+               {isLoading ? (
+                 <View style={styles.loadingButtonContent}>
+                   <ActivityIndicator size="small" color="white" />
+                   <Text style={styles.navButtonText}>Saving...</Text>
+                 </View>
+               ) : currentEventIndex === eventsToAssignCoordinates.length - 1 ? (
+                 <Text style={styles.navButtonText}>Finish</Text>
+               ) : (
+                 <Text style={styles.navButtonText}>Save & Next →</Text>
+               )}
+             </TouchableOpacity>
+           </View>
+           
+           
+         </ScrollView>
+         
+
+       </View>
+                        </Modal>
+
+     {/* Date/Time picker removed - using simple text inputs instead */}
+
+     </>
+   )
+ }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#666',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  modeLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  groupingToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  groupingLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    marginTop: 16,
+  },
+  venueGroup: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  selectedVenueGroup: {
+    borderColor: '#007AFF',
+    backgroundColor: '#f0f8ff',
+  },
+  venueName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  eventCount: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  selectionCount: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  locationInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  locationIcon: {
+    fontSize: 20,
+  },
+  mapPickerButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  mapPickerButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  categoryButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  categoryButton: {
+    backgroundColor: '#f0f0f0',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 8,
+    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedCategory: {
+    backgroundColor: '#007AFF',
+  },
+  categoryButtonText: {
+    fontSize: 20,
+    color: '#333',
+  },
+  selectedCategoryText: {
+    color: '#fff',
+  },
+  eventSelectionList: {
+    maxHeight: 200,
+    marginBottom: 16,
+  },
+  eventSelectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  selectedEventItem: {
+    backgroundColor: '#f0f8ff',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 4,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedCheckbox: {
+    backgroundColor: '#007AFF',
+  },
+  checkmark: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  eventInfo: {
+    flex: 1,
+  },
+  eventTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  selectedEventTitle: {
+    color: '#007AFF',
+  },
+  eventDate: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  eventCoordinates: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  },
+  eventVenue: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  secondaryButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dangerButton: {
+    backgroundColor: '#ff3b30',
+  },
+  dangerButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  locationModal: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  locationTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  searchInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    margin: 16,
+    fontSize: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+  },
+  searchResults: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
+  searchResult: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  searchResultTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  searchResultAddress: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  loadingButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventSelectionContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    marginTop: 8,
+    flexDirection: 'row',
+  },
+  eventListContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  fixedActionButtons: {
+    width: 100,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  actionButtonsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  actionButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  actionButtonLabel: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  selectionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  selectionButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  selectionButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  spreadButton: {
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  spreadButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  randomButton: {
+    backgroundColor: '#8E44AD',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  randomButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  gridButton: {
+    backgroundColor: '#E67E22',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  gridButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  baseCoordinateButton: {
+    backgroundColor: '#27AE60',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  baseCoordinateButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  coordinateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  coordinateInput: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  coordinateLabel: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  locationButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  locationButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  warningContainer: {
+    backgroundColor: '#FFF3CD',
+    borderWidth: 1,
+    borderColor: '#FFEAA7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '600',
+  },
+  quickActionsContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  quickActionsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  coordinateButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  coordinateButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 6,
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  coordinateButtonText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  moveToCoordinateButton: {
+    backgroundColor: '#27AE60',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  moveToCoordinateButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  editIcon: {
+    fontSize: 20,
+    marginLeft: 12,
+  },
+  individualCoordinateButton: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  individualCoordinateButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  currentEventInfo: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  currentEventTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  currentEventVenue: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  currentEventDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+  },
+  navButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  previousButton: {
+    backgroundColor: '#6c757d',
+  },
+  nextButton: {
+    backgroundColor: '#28a745',
+  },
+  navButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  eventsPreviewContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  eventsPreviewTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  eventsPreviewList: {
+    flexDirection: 'row',
+  },
+  eventPreviewItem: {
+    backgroundColor: '#fff',
+    padding: 12,
+    marginRight: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  currentEventPreviewItem: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  eventPreviewNumber: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  eventPreviewName: {
+    fontSize: 12,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  eventPreviewCoordinates: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+    fontFamily: 'monospace',
+  },
+  eventListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  backButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  dateTimeButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  // dateTimePicker styles removed - using Alert-based selection instead
+  quickButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  quickButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+
+})
+
+export default EventEditor

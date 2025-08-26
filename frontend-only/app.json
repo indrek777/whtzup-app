@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "Event Discovery",
+    "slug": "event-discovery",
+    "version": "1.2.0",
+    "description": "Discover and explore events near you with our interactive map. Find concerts, festivals, workshops, and more happening in your area.",
+    "orientation": "portrait",
+    "icon": "assets/icon_assets/Expo/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eventdiscovery.app",
+      "buildNumber": "13",
+      "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to show events near you",
+        "NSCameraUsageDescription": "This app uses camera to take photos for events",
+        "NSPhotoLibraryUsageDescription": "This app uses photo library to select images for events",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIStatusBarHidden": true,
+        "NSPrivacyPolicyURL": "https://olympio.ee/privacy-policy",
+        "NSTermsOfServiceURL": "https://olympio.ee/terms-of-service",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "olympio.ee": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            },
+            "192.168.66.54": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            },
+            "88.196.240.63": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
+
+      }
+    },
+    "plugins": [
+      "expo-location",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e2541317-1823-49bd-9e1a-734fdc5511e1"
+      }
+    }
+  }
+}

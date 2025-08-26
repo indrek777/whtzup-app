@@ -1,1 +1,0 @@
-events,local,discovery,map,find,activities,concerts,shows,festivals,nightlife,music,sports,art,food,business,networking,workshops,comedy,theater,family

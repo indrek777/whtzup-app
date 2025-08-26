@@ -1,9 +1,0 @@
-📋 Test 1: Testing HTTP connection...
-✅ HTTP Status: 200
-📊 Response: {"status":"OK","timestamp":"2025-08-20T09:38:17.278Z","uptime":1035.813834162}
-
-📋 Test 2: Testing event upload...
-📊 Upload Status: 201
-📊 Upload Response: {"success":true,"data":{"id":"1657ae19-404c-4da2-80e4-39416a5b78c9","name":"Simple Debug Test","description":"Test event","category":"other","venue":"Test Venue","address":"Test Address","latitude":"59.43700000","longitude":"24.75360000","starts_at":"2025-08-21T09:38:17.406Z","created_by":"Simple Debug","created_at":"2025-08-20T09:38:17.302Z","updated_at":"2025-08-20T09:38:17.302Z","deleted_at":null,"version":1,"last_sync_at":"2025-08-20T09:38:17.302Z"},"message":"Event created successfully","deviceId":"58636db8-dcfc-4108-a06a-4c8d92e5c90c"}
-📊 Success: true
-📊 Error: undefined
