@@ -1,0 +1,45 @@
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Deploy to Digital Ocean
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.DIGITAL_OCEAN_HOST }}
+        username: ${{ secrets.DIGITAL_OCEAN_USERNAME }}
+        key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+        port: ${{ secrets.DIGITAL_OCEAN_PORT || 22 }}
+        script: |
+          cd /opt/whtzup-app
+          git pull origin main
+          chmod +x deploy.sh
+          ./deploy.sh production
+          
+    - name: Health Check
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.DIGITAL_OCEAN_HOST }}
+        username: ${{ secrets.DIGITAL_OCEAN_USERNAME }}
+        key: ${{ secrets.DIGITAL_OCEAN_SSH_KEY }}
+        port: ${{ secrets.DIGITAL_OCEAN_PORT || 22 }}
+        script: |
+          cd /opt/whtzup-app
+          sleep 60
+          if curl -f http://localhost:4000/api/health; then
+            echo "✅ Deployment successful - API is healthy"
+          else
+            echo "❌ Deployment failed - API health check failed"
+            docker-compose -f docker-compose.prod.yml logs --tail=50
+            exit 1
+          fi
