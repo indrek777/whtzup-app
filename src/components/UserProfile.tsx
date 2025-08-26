@@ -40,6 +40,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const [showBenefitsModal, setShowBenefitsModal] = useState(false)
   const [showSubscriptionManager, setShowSubscriptionManager] = useState(false)
   const [showSubscriptionTerms, setShowSubscriptionTerms] = useState(false)
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
   
   // Auth states
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
@@ -47,6 +49,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const [authPassword, setAuthPassword] = useState('')
   const [authName, setAuthName] = useState('')
   const [isAuthLoading, setIsAuthLoading] = useState(false)
+  
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false)
+  
+  // Forgot password states
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [isForgotLoading, setIsForgotLoading] = useState(false)
   
   // Subscription states
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly')
@@ -218,6 +230,59 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         }
       ]
     )
+  }
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'New passwords do not match')
+      return
+    }
+    
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters long')
+      return
+    }
+    
+    setIsPasswordLoading(true)
+    try {
+      await userService.changePassword(currentPassword, newPassword)
+      Alert.alert('Success', 'Password changed successfully')
+      setShowChangePasswordModal(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      const appError = errorHandler.handleApiError(error, {
+        action: 'change_password',
+        entity: 'user'
+      })
+      Alert.alert('Error', appError.message)
+    } finally {
+      setIsPasswordLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail || !forgotEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address')
+      return
+    }
+    
+    setIsForgotLoading(true)
+    try {
+      await userService.forgotPassword(forgotEmail)
+      Alert.alert('Success', 'Password reset email sent. Please check your inbox.')
+      setShowForgotPasswordModal(false)
+      setForgotEmail('')
+    } catch (error) {
+      const appError = errorHandler.handleApiError(error, {
+        action: 'forgot_password',
+        entity: 'user'
+      })
+      Alert.alert('Error', appError.message)
+    } finally {
+      setIsForgotLoading(false)
+    }
   }
 
   const handleSubscribe = async () => {
@@ -1097,6 +1162,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 
                 <TouchableOpacity 
                   style={styles.actionItem}
+                  onPress={() => setShowChangePasswordModal(true)}
+                >
+                  <Text style={styles.actionIcon}>🔐</Text>
+                  <Text style={styles.actionText}>Change Password</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.actionItem}
+                  onPress={() => setShowForgotPasswordModal(true)}
+                >
+                  <Text style={styles.actionIcon}>📧</Text>
+                  <Text style={styles.actionText}>Forgot Password</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.actionItem}
                   onPress={handleSignOut}
                 >
                   <Text style={styles.actionIcon}>🚪</Text>
@@ -1127,6 +1210,143 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
           visible={showSubscriptionTerms} 
           onClose={() => setShowSubscriptionTerms(false)} 
         />
+
+        {/* Password Change Modal */}
+        <Modal
+          visible={showChangePasswordModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Change Password</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowChangePasswordModal(false)
+                  setCurrentPassword('')
+                  setNewPassword('')
+                  setConfirmPassword('')
+                }}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.content}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Change Your Password</Text>
+                <Text style={styles.sectionDescription}>
+                  Enter your current password and choose a new password.
+                </Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Current Password</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter current password"
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>New Password</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter new password (min 6 characters)"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <TouchableOpacity
+                  style={[styles.primaryButton, isPasswordLoading && styles.disabledButton]}
+                  onPress={handleChangePassword}
+                  disabled={isPasswordLoading}
+                >
+                  {isPasswordLoading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Change Password</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Forgot Password Modal */}
+        <Modal
+          visible={showForgotPasswordModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+        >
+          <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Forgot Password</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowForgotPasswordModal(false)
+                  setForgotEmail('')
+                }}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.content}>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Reset Your Password</Text>
+                <Text style={styles.sectionDescription}>
+                  Enter your email address and we'll send you a password reset link.
+                </Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Email Address</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter your email address"
+                    value={forgotEmail}
+                    onChangeText={setForgotEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+                
+                <TouchableOpacity
+                  style={[styles.primaryButton, isForgotLoading && styles.disabledButton]}
+                  onPress={handleForgotPassword}
+                  disabled={isForgotLoading}
+                >
+                  {isForgotLoading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Send Reset Email</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
       </SafeAreaView>
     </Modal>
   )

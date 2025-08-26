@@ -1416,6 +1416,72 @@ class UserService {
       }
     }
   }
+
+  // Change password
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.ensureInitialized()
+    
+    if (!this.currentUser || !this.authToken) {
+      throw new Error('User not authenticated')
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.authToken}`
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to change password')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to change password')
+      }
+
+      console.log('✅ Password changed successfully')
+    } catch (error) {
+      console.error('❌ Failed to change password:', error)
+      throw error
+    }
+  }
+
+  // Forgot password
+  async forgotPassword(email: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send password reset email')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send password reset email')
+      }
+
+      console.log('✅ Password reset email sent successfully')
+    } catch (error) {
+      console.error('❌ Failed to send password reset email:', error)
+      throw error
+    }
+  }
 }
 
 // Export singleton instance
