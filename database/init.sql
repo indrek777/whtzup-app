@@ -170,6 +170,20 @@ CREATE INDEX IF NOT EXISTS idx_event_ratings_user_id ON event_ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_event_ratings_rating ON event_ratings(rating);
 CREATE INDEX IF NOT EXISTS idx_event_ratings_created_at ON event_ratings(created_at);
 
+-- Create event_registrations table
+CREATE TABLE IF NOT EXISTS event_registrations (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(255) NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(event_id, user_id)
+);
+
+-- Create indexes for event_registrations table
+CREATE INDEX IF NOT EXISTS idx_event_registrations_event_id ON event_registrations(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_user_id ON event_registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_registered_at ON event_registrations(registered_at);
+
 -- Create event_rating_stats table for aggregated rating data
 CREATE TABLE IF NOT EXISTS event_rating_stats (
     event_id VARCHAR(255) PRIMARY KEY,

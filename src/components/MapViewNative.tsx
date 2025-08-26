@@ -12,7 +12,8 @@ import {
   Platform,
   SafeAreaView,
   Dimensions,
-  Linking
+  Linking,
+  Share
 } from 'react-native'
 import MapView, { Marker, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
@@ -30,6 +31,7 @@ import { ratingService } from '../utils/ratingService'
 import { errorHandler, ErrorType } from '../utils/errorHandler'
 import ErrorDisplay from './ErrorDisplay'
 import { UserGroupBanner } from './UserGroupBanner'
+import { EventRegistrationComponent } from './EventRegistration'
 
 // Clustering interfaces
 interface EventCluster {
@@ -166,10 +168,12 @@ const createClusters = (events: Event[], clusterRadius: number = 0.001): EventCl
 // Enhanced cluster marker component for large groups
 const ClusterMarker = React.memo(({ 
   cluster, 
-  onPress 
+  onPress,
+  onShare
 }: {
   cluster: EventCluster
   onPress: () => void
+  onShare: (event: Event) => void
 }) => {
   const isMultiEvent = cluster.count > 1
   
@@ -515,10 +519,12 @@ const determineCategory = (name: string, description: string): string => {
 // Simple marker component
 const SimpleMarker = React.memo(({ 
   event, 
-  onPress 
+  onPress,
+  onShare
 }: {
   event: Event
   onPress: () => void
+  onShare: (event: Event) => void
 }) => {
   // Use determineCategory if category is missing, undefined, or "other"
   const category = (!event.category || event.category === 'other') 
@@ -539,12 +545,26 @@ const SimpleMarker = React.memo(({
       <View style={[styles.marker, { backgroundColor: color }]}>
         <Text style={styles.markerIcon}>{icon}</Text>
       </View>
+      <Callout>
+        <View style={styles.calloutContainer}>
+          <Text style={styles.calloutTitle}>{event.name}</Text>
+          <Text style={styles.calloutVenue}>{event.venue}</Text>
+          <View style={styles.calloutActions}>
+            <TouchableOpacity
+              style={styles.calloutShareButton}
+              onPress={() => onShare(event)}
+            >
+              <Text style={styles.calloutShareButtonText}>📤 Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Callout>
     </Marker>
   )
 })
 
 const MapViewNative: React.FC = () => {
-  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck, refreshEvents, refreshUserGroupLimits } = useEvents()
+  const { events, updateEvent, deleteEvent, isLoading, isBackgroundLoading, syncStatus, userLocation, locationPermissionGranted, currentRadius, setCurrentRadius, dateFilter, setDateFilter, forceUpdateCheck, refreshEvents, refreshUserGroupLimits, persistUserGroupState, restoreUserGroupState } = useEvents()
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [currentError, setCurrentError] = useState<any>(null)
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
@@ -613,6 +633,20 @@ const MapViewNative: React.FC = () => {
     
     return () => clearInterval(interval)
   }, [userGroup])
+
+  // Persist user group state on component mount and when user group changes
+  useEffect(() => {
+    const persistState = async () => {
+      try {
+        await persistUserGroupState()
+        console.log('🔄 User group state persisted on component mount')
+      } catch (error) {
+        console.log('⚠️ Could not persist user group state:', error)
+      }
+    }
+    
+    persistState()
+  }, [persistUserGroupState])
   
   // Function to start location picker mode
   const startLocationPicker = useCallback((callback: (location: { latitude: number; longitude: number; address?: string }) => void) => {
@@ -680,7 +714,173 @@ const MapViewNative: React.FC = () => {
       setEventRatingStats(null)
     }
   }, [])
-  
+
+    // Function to handle event sharing
+  const handleShareEvent = useCallback(async (event: Event) => {
+    if (!event) return
+
+    try {
+      // Create share content
+      const eventDate = new Date(event.startsAt)
+      const formattedDate = eventDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+      const formattedTime = eventDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+
+      // Create location link (Google Maps)
+      const locationLink = `https://maps.google.com/?q=${event.latitude},${event.longitude}`
+      
+      // Create share message
+      const shareMessage = `🎉 Check out this event!\n\n` +
+        `📅 ${event.name}\n` +
+        `📅 ${formattedDate} at ${formattedTime}\n` +
+        `🏢 ${event.venue}\n` +
+        `${event.address ? `📍 ${event.address}\n` : ''}` +
+        `${event.description ? `📝 ${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}\n` : ''}` +
+        `🗺️ Location: ${locationLink}\n\n` +
+        `📱 Shared via Event Discovery App`
+
+      // Share options
+      Alert.alert(
+        'Share Event',
+        'How would you like to share this event?',
+        [
+          {
+            text: '📤 Share via App',
+            onPress: async () => {
+              try {
+                // Persist current state before sharing
+                await persistUserGroupState()
+                
+                await Share.share({
+                  message: shareMessage,
+                  title: event.name
+                })
+                
+                // Restore state after sharing
+                console.log('🔄 Restoring state after share...')
+                const restoredState = restoreUserGroupState()
+                setUserGroup(restoredState.userGroup as UserGroup)
+                setUserMaxRadius(restoredState.maxRadius)
+                
+                // Ensure modal stays open
+                if (!showEventDetailsModal) {
+                  setShowEventDetailsModal(true)
+                }
+                if (!selectedEvent) {
+                  setSelectedEvent(event)
+                }
+              } catch (error) {
+                console.error('Error sharing:', error)
+                Alert.alert('Error', 'Could not share the event')
+              }
+            }
+          },
+          {
+            text: '🗺️ Open in Maps',
+            onPress: () => {
+              Linking.openURL(locationLink).catch(() => {
+                Alert.alert('Error', 'Could not open maps')
+              })
+            }
+          },
+          {
+            text: '📋 Copy Details',
+            onPress: () => {
+              // Copy to clipboard functionality would go here
+              Alert.alert('Copied!', 'Event details copied to clipboard')
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      )
+    } catch (error) {
+      console.error('Error preparing share:', error)
+      Alert.alert('Error', 'Could not prepare event for sharing')
+    }
+  }, [selectedEvent, showEventDetailsModal, userGroup, userMaxRadius])
+
+  // Function to handle cluster sharing
+  const handleShareCluster = useCallback(async (cluster: EventCluster) => {
+    if (!cluster || !cluster.events || cluster.events.length === 0) return
+
+    try {
+      const firstEvent = cluster.events[0]
+      const locationLink = `https://maps.google.com/?q=${cluster.latitude},${cluster.longitude}`
+      
+      // Create share message for cluster
+      const shareMessage = `🎉 Check out these events!\n\n` +
+        `📍 ${cluster.count} events at this location\n` +
+        `🏢 ${firstEvent.venue}\n` +
+        `${firstEvent.address ? `📍 ${firstEvent.address}\n` : ''}` +
+        `🗺️ Location: ${locationLink}\n\n` +
+        `📱 Shared via Event Discovery App`
+
+      // Share options
+      Alert.alert(
+        'Share Events',
+        'How would you like to share these events?',
+        [
+          {
+            text: '📤 Share via App',
+            onPress: async () => {
+              try {
+                // Persist current state before sharing
+                await persistUserGroupState()
+                
+                await Share.share({
+                  message: shareMessage,
+                  title: `${cluster.count} Events`
+                })
+                
+                // Restore state after sharing
+                console.log('🔄 Restoring cluster state after share...')
+                const restoredState = restoreUserGroupState()
+                setUserGroup(restoredState.userGroup as UserGroup)
+                setUserMaxRadius(restoredState.maxRadius)
+                
+                // Ensure modal stays open
+                if (!showClusterModal) {
+                  setShowClusterModal(true)
+                }
+                if (!selectedCluster) {
+                  setSelectedCluster(cluster)
+                }
+              } catch (error) {
+                console.error('Error sharing cluster:', error)
+                Alert.alert('Error', 'Could not share the events')
+              }
+            }
+          },
+          {
+            text: '🗺️ Open in Maps',
+            onPress: () => {
+              Linking.openURL(locationLink).catch(() => {
+                Alert.alert('Error', 'Could not open maps')
+              })
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      )
+    } catch (error) {
+      console.error('Error preparing cluster share:', error)
+      Alert.alert('Error', 'Could not prepare events for sharing')
+    }
+  }, [selectedCluster, showClusterModal, userGroup, userMaxRadius])
+   
   // Map state - initialize with user location or default to Estonia
   const [mapRegion, setMapRegion] = useState<Region>({
     latitude: 58.3776252,
@@ -870,12 +1070,24 @@ const MapViewNative: React.FC = () => {
     console.log(`🎯 Cluster pressed: ${cluster.count} events`)
     console.log(`🎯 Cluster events:`, cluster.events.map(e => `${e.name} (${e.id})`))
     
-    // Reset search and pagination state for new cluster
-    setClusterSearchQuery('')
-    setClusterPageIndex(0)
-    setSelectedCluster(cluster)
-    setShowClusterModal(true)
-  }, [])
+    if (cluster.count === 1) {
+      // Single event - open event details modal directly
+      const event = cluster.events[0]
+      console.log(`🎯 Opening single event details modal: ${event.name}`)
+      setSelectedEvent(event)
+      setShowEventDetailsModal(true)
+      
+      // Load rating stats for the event
+      loadEventRatingStats(event.id)
+    } else {
+      // Multiple events - open cluster modal
+      console.log(`🎯 Opening cluster modal with ${cluster.count} events`)
+      setClusterSearchQuery('')
+      setClusterPageIndex(0)
+      setSelectedCluster(cluster)
+      setShowClusterModal(true)
+    }
+  }, [loadEventRatingStats])
 
   // Create clusters and markers with performance optimization
   const markers = useMemo(() => {
@@ -931,6 +1143,7 @@ const MapViewNative: React.FC = () => {
           key={cluster.id}
           cluster={cluster}
           onPress={() => handleClusterPress(cluster)}
+          onShare={handleShareEvent}
         />
       )
     })
@@ -1234,15 +1447,23 @@ const MapViewNative: React.FC = () => {
          <View style={styles.modalContainer}>
            <View style={styles.modalHeader}>
              <Text style={styles.modalTitle}>Event Details</Text>
-             <TouchableOpacity 
-               onPress={() => {
-                 setShowEventDetailsModal(false)
-                 setSelectedEvent(null)
-               }}
-               style={styles.closeButton}
-             >
-               <Text style={styles.closeButtonText}>Close</Text>
-             </TouchableOpacity>
+             <View style={styles.modalHeaderActions}>
+               <TouchableOpacity 
+                 style={styles.iconButton}
+                 onPress={() => selectedEvent && handleShareEvent(selectedEvent)}
+               >
+                 <Text style={styles.iconButtonText}>📤</Text>
+               </TouchableOpacity>
+               <TouchableOpacity 
+                 onPress={() => {
+                   setShowEventDetailsModal(false)
+                   setSelectedEvent(null)
+                 }}
+                 style={styles.iconButton}
+               >
+                 <Text style={styles.iconButtonText}>✕</Text>
+               </TouchableOpacity>
+             </View>
            </View>
            
            {selectedEvent && (
@@ -1331,8 +1552,7 @@ const MapViewNative: React.FC = () => {
                        }
                      }}
                    >
-                     <Text style={styles.rateButtonText}>Rate Event</Text>
-                     <Text style={styles.authIndicator}>🔒</Text>
+                     <Text style={styles.rateButtonIcon}>⭐</Text>
                    </TouchableOpacity>
                  </View>
                </View>
@@ -1401,6 +1621,15 @@ const MapViewNative: React.FC = () => {
                      <Text style={styles.eventOrganizer}>{selectedEvent.createdBy}</Text>
                    </View>
                  )}
+
+                 {/* Event Registration */}
+                 <EventRegistrationComponent
+                   eventId={selectedEvent.id}
+                   eventName={selectedEvent.name}
+                   onRegistrationChange={(registrationCount, isRegistered) => {
+                     console.log('🎯 Registration changed:', { registrationCount, isRegistered });
+                   }}
+                 />
                </View>
                
                {/* Permission loading indicator */}
@@ -1482,28 +1711,10 @@ const MapViewNative: React.FC = () => {
                  {syncStatus.errors.length > 0 && (
                    <Text style={styles.syncErrorText}>
                      Errors: {syncStatus.errors.length}
-                   </Text>
-                 )}
-                 <TouchableOpacity
-                   style={styles.forceUpdateButton}
-                   onPress={() => {
-                     console.log('🔄 Manual update check requested from UI')
-                     forceUpdateCheck()
-                   }}
-                 >
-                   <Text style={styles.forceUpdateButtonText}>🔄 Check Updates</Text>
-                 </TouchableOpacity>
-                 <TouchableOpacity
-                   style={styles.forceUpdateButton}
-                   onPress={() => {
-                     console.log('🔄 Manual refresh requested from UI')
-                     refreshEvents()
-                   }}
-                 >
-                   <Text style={styles.forceUpdateButtonText}>🔄 Refresh Events</Text>
-                 </TouchableOpacity>
+                                    </Text>
+                   )}
                </View>
-             </ScrollView>
+               </ScrollView>
            )}
          </View>
        </Modal>
@@ -1545,16 +1756,24 @@ const MapViewNative: React.FC = () => {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedCluster?.count} Events at This Location</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  setShowClusterModal(false)
-                  setClusterSearchQuery('')
-                  setClusterPageIndex(0)
-                }}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>Close</Text>
-              </TouchableOpacity>
+              <View style={styles.modalHeaderActions}>
+                <TouchableOpacity 
+                  style={styles.iconButton}
+                  onPress={() => selectedCluster && handleShareCluster(selectedCluster)}
+                >
+                  <Text style={styles.iconButtonText}>📤</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setShowClusterModal(false)
+                    setClusterSearchQuery('')
+                    setClusterPageIndex(0)
+                  }}
+                  style={styles.iconButton}
+                >
+                  <Text style={styles.iconButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             
             {selectedCluster && (() => {
@@ -1619,22 +1838,33 @@ const MapViewNative: React.FC = () => {
                               </Text>
                             </View>
                           </View>
-                          {(() => {
-                            console.log('🔐 Cluster event permission check:', event.name, 'permission:', eventPermissions[event.id]);
-                            return eventPermissions[event.id];
-                          })() && (
+                          <View style={styles.clusterEventActions}>
                             <TouchableOpacity
-                              style={styles.clusterEventEditButton}
+                              style={styles.clusterEventShareButton}
                               onPress={(e) => {
                                 e.stopPropagation()
-                                setSelectedEvent(event)
-                                setShowClusterModal(false)
-                                setShowEventEditor(true)
+                                handleShareEvent(event)
                               }}
                             >
-                              <Text style={styles.clusterEventEditButtonText}>✏️</Text>
+                              <Text style={styles.clusterEventShareButtonText}>📤</Text>
                             </TouchableOpacity>
-                          )}
+                            {(() => {
+                              console.log('🔐 Cluster event permission check:', event.name, 'permission:', eventPermissions[event.id]);
+                              return eventPermissions[event.id];
+                            })() && (
+                              <TouchableOpacity
+                                style={styles.clusterEventEditButton}
+                                onPress={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedEvent(event)
+                                  setShowClusterModal(false)
+                                  setShowEventEditor(true)
+                                }}
+                              >
+                                <Text style={styles.clusterEventEditButtonText}>✏️</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         </View>
                         {event.description && (
                           <Text style={styles.clusterEventDescription} numberOfLines={2}>
@@ -1804,13 +2034,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    minHeight: 60,
+  },
+  modalHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconButton: {
+    backgroundColor: '#007AFF',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  iconButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  shareButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  shareButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+    marginRight: 12,
   },
   closeButton: {
     padding: 10,
@@ -1983,19 +2248,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     fontWeight: '600',
   },
-  forceUpdateButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  forceUpdateButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
                  createEventButton: {
      backgroundColor: '#007AFF',
      paddingHorizontal: 20,
@@ -2055,6 +2308,18 @@ const styles = StyleSheet.create({
     color: '#666',
     textTransform: 'capitalize',
   },
+  clusterEventActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clusterEventShareButton: {
+    marginRight: 8,
+    padding: 5,
+  },
+  clusterEventShareButtonText: {
+    fontSize: 16,
+    color: '#28a745',
+  },
   clusterEventEditButton: {
     marginLeft: 10,
     padding: 5,
@@ -2082,6 +2347,55 @@ const styles = StyleSheet.create({
   clusterEventTimeDetail: {
     fontSize: 12,
     color: '#999',
+  },
+  calloutContainer: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  calloutTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  calloutVenue: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  calloutActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  calloutShareButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  calloutShareButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  calloutViewButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  calloutViewButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   searchContainer: {
     padding: 15,
@@ -2338,14 +2652,25 @@ const styles = StyleSheet.create({
     },
     rateButton: {
       backgroundColor: '#FFD700',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 8,
+      borderRadius: 20,
+      width: 36,
+      height: 36,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 3,
     },
-    rateButtonText: {
+    rateButtonIcon: {
+      fontSize: 18,
       color: '#333',
-      fontSize: 14,
-      fontWeight: '600',
     },
               authIndicator: {
         fontSize: 10,

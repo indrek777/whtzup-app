@@ -102,10 +102,12 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
     switch (status) {
       case 'premium':
         return '#4CAF50';
+      case 'registered':
+        return '#2196F3';
+      case 'unregistered':
+        return '#FF9800';
       case 'expired':
         return '#FF9800';
-      case 'free':
-        return '#2196F3';
       default:
         return '#666';
     }
@@ -115,10 +117,12 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
     switch (status) {
       case 'premium':
         return 'Premium Active';
+      case 'registered':
+        return 'Registered User';
+      case 'unregistered':
+        return 'Unregistered User';
       case 'expired':
         return 'Expired';
-      case 'free':
-        return 'Free Plan';
       default:
         return 'Unknown';
     }
@@ -198,20 +202,68 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
                 </View>
               )}
 
-              {/* Premium Features */}
-              {subscriptionStatus.status === 'premium' && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Premium Features</Text>
-                  {subscriptionStatus.features.map((feature: string, index: number) => (
-                    <View key={index} style={styles.featureRow}>
-                      <Text style={styles.featureIcon}>✓</Text>
-                      <Text style={styles.featureText}>
-                        {feature.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </Text>
+              {/* Current Plan Limits */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Current Plan Limits</Text>
+                {subscriptionStatus.status === 'premium' ? (
+                  <>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Radius:</Text>
+                      <Text style={styles.limitValue}>Unlimited (up to 500km)</Text>
                     </View>
-                  ))}
-                </View>
-              )}
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Event Filter:</Text>
+                      <Text style={styles.limitValue}>Unlimited (up to 1 year)</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Events per Day:</Text>
+                      <Text style={styles.limitValue}>Unlimited</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Features:</Text>
+                      <Text style={styles.limitValue}>All Premium Features</Text>
+                    </View>
+                  </>
+                ) : subscriptionStatus.status === 'registered' ? (
+                  <>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Radius:</Text>
+                      <Text style={styles.limitValue}>15km</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Event Filter:</Text>
+                      <Text style={styles.limitValue}>1 week</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Events per Day:</Text>
+                      <Text style={styles.limitValue}>1 event</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Features:</Text>
+                      <Text style={styles.limitValue}>Basic Features</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Radius:</Text>
+                      <Text style={styles.limitValue}>5km</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Event Filter:</Text>
+                      <Text style={styles.limitValue}>1 day</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Events per Day:</Text>
+                      <Text style={styles.limitValue}>0 (view only)</Text>
+                    </View>
+                    <View style={styles.limitRow}>
+                      <Text style={styles.limitLabel}>Features:</Text>
+                      <Text style={styles.limitValue}>View Only</Text>
+                    </View>
+                  </>
+                )}
+              </View>
 
               {/* Actions */}
               <View style={styles.section}>
@@ -254,11 +306,14 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
               </View>
 
               {/* Upgrade Prompt */}
-              {subscriptionStatus.status === 'free' && (
+              {(subscriptionStatus.status === 'unregistered' || subscriptionStatus.status === 'registered') && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Upgrade to Premium</Text>
                   <Text style={styles.upgradeText}>
-                    Get access to unlimited events, advanced search, extended radius (500km), and more premium features! Currently limited to 1 event/day, 15km radius, and 1 week event filter.
+                    {subscriptionStatus.status === 'unregistered' 
+                      ? 'Upgrade from 5km radius and 1 day filter to unlimited radius (500km) and unlimited event creation!'
+                      : 'Upgrade from 15km radius and 1 event/day to unlimited radius (500km) and unlimited event creation!'
+                    }
                   </Text>
                   <TouchableOpacity 
                     style={[styles.actionButton, styles.upgradeButton]} 
@@ -309,7 +364,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: '90%',
     maxWidth: 400,
-    maxHeight: '80%',
+    height: '80%',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -423,6 +478,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+  },
+  limitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  limitLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  limitValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
   },
   actionButton: {
     backgroundColor: '#007AFF',

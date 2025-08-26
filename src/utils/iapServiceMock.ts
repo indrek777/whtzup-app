@@ -45,14 +45,14 @@ class IAPServiceMock {
       this.products = [
         {
           productId: SUBSCRIPTION_PRODUCTS.MONTHLY,
-          price: '9.99',
+          price: '4.99',
           currency: 'USD',
           title: 'Premium Monthly',
           description: 'Monthly premium subscription'
         },
         {
           productId: SUBSCRIPTION_PRODUCTS.YEARLY,
-          price: '99.99',
+          price: '39.99',
           currency: 'USD',
           title: 'Premium Yearly',
           description: 'Yearly premium subscription'

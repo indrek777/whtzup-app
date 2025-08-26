@@ -1306,13 +1306,13 @@ class UserService {
   } {
     return {
       monthly: {
-        price: 9.99,
+        price: 4.99,
         currency: 'USD'
       },
       yearly: {
-        price: 99.99,
+        price: 39.99,
         currency: 'USD',
-        savings: 'Save $19.89 (17% off)'
+        savings: 'Save $19.89 (33% off)'
       }
     }
   }

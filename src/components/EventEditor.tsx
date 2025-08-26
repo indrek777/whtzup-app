@@ -33,11 +33,7 @@ interface EventEditorProps {
   onLocationPickerClose?: () => void
 }
 
-interface BulkEditGroup {
-  venue: string
-  events: Event[]
-  coordinates: [number, number]
-}
+
 
 const EventEditor: React.FC<EventEditorProps> = ({
   visible,
@@ -53,9 +49,6 @@ const EventEditor: React.FC<EventEditorProps> = ({
   
   // Editor state
   const [editingEvent, setEditingEvent] = useState<Event | null>(null)
-  const [isBulkEditMode, setIsBulkEditMode] = useState(false)
-  const [bulkEditGroups, setBulkEditGroups] = useState<BulkEditGroup[]>([])
-  const [selectedBulkGroup, setSelectedBulkGroup] = useState<BulkEditGroup | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showSingleEventEditor, setShowSingleEventEditor] = useState(false)
   const [showCoordinateAssignmentEditor, setShowCoordinateAssignmentEditor] = useState(false)
@@ -190,14 +183,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     console.log('📍 EventEditor state updated:', { address, venue, coordinates })
   }, [address, venue, coordinates])
   
-  // Bulk edit fields
-  const [bulkTitle, setBulkTitle] = useState('')
-  const [bulkCategory, setBulkCategory] = useState<string>('other')
-  const [bulkVenue, setBulkVenue] = useState('')
-  const [bulkAddress, setBulkAddress] = useState('')
-  const [bulkCoordinates, setBulkCoordinates] = useState<[number, number]>([0, 0])
-  const [selectedEventsForBulkEdit, setSelectedEventsForBulkEdit] = useState<Set<string>>(new Set())
-  const [groupByCoordinates, setGroupByCoordinates] = useState(false)
+
 
     // Initialize editor when modal opens
   // Track if this is the first time the EventEditor is being opened
@@ -226,13 +212,11 @@ const EventEditor: React.FC<EventEditorProps> = ({
         // Single event edit mode
         console.log('🎯 Setting up EVENT EDITING mode for:', selectedEvent.name)
         setEditingEvent(selectedEvent)
-        setIsBulkEditMode(false)
         populateForm(selectedEvent)
       } else {
-        // New event creation mode - ALWAYS start in Single Event Mode
-        console.log('🎯 Setting up NEW EVENT creation - forcing Single Event Mode')
+        // New event creation mode
+        console.log('🎯 Setting up NEW EVENT creation')
         setEditingEvent(null)
-        setIsBulkEditMode(false) // Force single event mode for new events
         // Initialize form with empty values for new event
         setTitle('')
         setDescription('')
@@ -247,7 +231,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         setMaxAttendees('')
         setUrl('')
         setCoordinates([0, 0])
-        console.log('🎯 NEW EVENT setup complete - isBulkEditMode should be false')
+        console.log('🎯 NEW EVENT setup complete')
       }
       formInitializedRef.current = true
     }
@@ -273,10 +257,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     console.log('⏰ Time state changed:', time)
   }, [time])
   
-  // Debug logging for bulk edit mode state
-  useEffect(() => {
-    console.log('🔄 isBulkEditMode changed to:', isBulkEditMode, '- Date/Time buttons should be', isBulkEditMode ? 'HIDDEN' : 'VISIBLE')
-  }, [isBulkEditMode])
+
   
   // Separate effect to handle modal closing
   useEffect(() => {
@@ -301,122 +282,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
     }
   }, [showCoordinateAssignmentEditor])
 
-  // Group events by venue for bulk editing
-  const groupEventsByVenue = useCallback(() => {
-    const venueGroups = new Map<string, Event[]>()
-    
-    events.forEach(event => {
-      const venueKey = (event.venue || '').toLowerCase().trim()
-      if (!venueGroups.has(venueKey)) {
-        venueGroups.set(venueKey, [])
-      }
-      venueGroups.get(venueKey)!.push(event)
-    })
-    
-    const groups: BulkEditGroup[] = Array.from(venueGroups.entries())
-      .filter(([_, events]) => events.length > 1) // Only groups with multiple events
-      .map(([venue, events]) => {
-        // Sort events by coordinates (latitude first, then longitude)
-        const sortedEvents = events.sort((a, b) => {
-          // First sort by latitude
-          if (Math.abs(a.latitude - b.latitude) > 0.0001) {
-            return a.latitude - b.latitude
-          }
-          // If latitude is very close, sort by longitude
-          return a.longitude - b.longitude
-        })
-        
-        // Check if all events have default coordinates
-        const hasDefaultCoordinates = sortedEvents.every(e => e.latitude === 0 && e.longitude === 0)
-        const venueDisplay = hasDefaultCoordinates ? `${venue} ⚠️ (NO coordinates)` : venue
-        
-        return {
-          venue: venueDisplay,
-          events: sortedEvents,
-          coordinates: [sortedEvents[0].latitude, sortedEvents[0].longitude] as [number, number]
-        }
-      })
-      .sort((a, b) => {
-        // Sort by priority: events with no coordinates first, then by number of events
-        const aHasNoCoords = (a.venue || '').includes('NO coordinates')
-        const bHasNoCoords = (b.venue || '').includes('NO coordinates')
-        if (aHasNoCoords && !bHasNoCoords) return -1
-        if (!aHasNoCoords && bHasNoCoords) return 1
-        return b.events.length - a.events.length
-      })
-    
-    setBulkEditGroups(groups)
-  }, [events])
 
-  // Group events by similar coordinates for coordinate-based editing
-  const groupEventsByCoordinates = useCallback(() => {
-    const coordinateGroups = new Map<string, Event[]>()
-    const coordinateThreshold = 0.0001 // About 10 meters
-    
-    events.forEach(event => {
-      // Check if coordinates are default/zero values
-      const isDefaultCoordinates = event.latitude === 0 && event.longitude === 0
-      
-      if (isDefaultCoordinates) {
-        // Group all events with default coordinates together
-        const coordinateKey = 'default_coordinates'
-        if (!coordinateGroups.has(coordinateKey)) {
-          coordinateGroups.set(coordinateKey, [])
-        }
-        coordinateGroups.get(coordinateKey)!.push(event)
-      } else {
-        // Round coordinates to threshold to group similar coordinates
-        const roundedLat = Math.round(event.latitude / coordinateThreshold) * coordinateThreshold
-        const roundedLng = Math.round(event.longitude / coordinateThreshold) * coordinateThreshold
-        const coordinateKey = `${roundedLat.toFixed(6)},${roundedLng.toFixed(6)}`
-        
-        if (!coordinateGroups.has(coordinateKey)) {
-          coordinateGroups.set(coordinateKey, [])
-        }
-        coordinateGroups.get(coordinateKey)!.push(event)
-      }
-    })
-    
-    const groups: BulkEditGroup[] = Array.from(coordinateGroups.entries())
-      .filter(([_, events]) => events.length > 1) // Only groups with multiple events
-      .map(([coordinateKey, events]) => {
-        // Sort events by name for better organization
-        const sortedEvents = events.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        
-        if (coordinateKey === 'default_coordinates') {
-          return {
-            venue: `⚠️ ${events.length} events with NO coordinates (0,0)`,
-            events: sortedEvents,
-            coordinates: [0, 0] as [number, number]
-          }
-        } else {
-          // Safely handle coordinateKey which might be undefined
-          if (coordinateKey && coordinateKey.includes(',')) {
-            const [lat, lng] = coordinateKey.split(',').map(Number)
-            return {
-              venue: `📍 ${events.length} events at ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-              events: sortedEvents,
-              coordinates: [lat, lng] as [number, number]
-            }
-          } else {
-            // Fallback for invalid coordinate format
-            return {
-              venue: `⚠️ ${events.length} events with invalid coordinates`,
-              events: sortedEvents,
-              coordinates: [0, 0] as [number, number]
-            }
-          }
-        }
-      })
-      .sort((a, b) => {
-        // Sort by priority: default coordinates first, then by number of events
-        if ((a.venue || '').includes('NO coordinates')) return -1
-        if ((b.venue || '').includes('NO coordinates')) return 1
-        return b.events.length - a.events.length
-      })
-    
-    setBulkEditGroups(groups)
-  }, [events])
+
+
 
   // Populate form with event data
   const populateForm = (event: Event) => {
@@ -463,25 +331,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setCoordinates([event.latitude, event.longitude])
   }
 
-  // Populate bulk edit form
-  const populateBulkForm = (group: BulkEditGroup) => {
-    console.log('Populating bulk form for group:', group.venue, 'with', group.events.length, 'events')
-    setSelectedBulkGroup(group)
-    setBulkVenue(group.venue)
-    setBulkAddress(group.events[0].address)
-    setBulkCoordinates(group.coordinates)
-    setSelectedEventsForBulkEdit(new Set()) // Start with no events selected
-    
-    // Pre-populate form fields with common values or leave empty for user to fill
-    setBulkTitle('') // Leave empty so user can choose to update or keep original
-    setBulkCategory(group.events[0].category || 'other') // Use first event's category as default
-    
-    // Check if all events have the same coordinates (data quality issue)
-    const uniqueCoordinates = new Set(group.events.map(e => `${e.latitude},${e.longitude}`))
-    if (uniqueCoordinates.size === 1) {
-      console.log('⚠️ Data quality issue: All events have the same coordinates')
-    }
-  }
+
 
   // Open single event editor for a specific event
   const openSingleEventEditor = (event: Event) => {
@@ -490,7 +340,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setShowSingleEventEditor(true)
   }
 
-  // Close single event editor and return to bulk view
+  // Close single event editor
   const closeSingleEventEditor = () => {
     setShowSingleEventEditor(false)
     setEditingEvent(null)
@@ -606,17 +456,10 @@ const EventEditor: React.FC<EventEditorProps> = ({
       const lon = parseFloat(result.lon)
       const coords: [number, number] = [lat, lon]
       
-      if (isBulkEditMode && selectedBulkGroup) {
-        // Update bulk edit coordinates
-        setBulkCoordinates(coords)
-        setBulkAddress(result.display_name)
-        setBulkVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
-      } else {
-        // Update single event coordinates
-        setCoordinates(coords)
-        setAddress(result.display_name)
-        setVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
-      }
+      // Update single event coordinates
+      setCoordinates(coords)
+      setAddress(result.display_name)
+      setVenue(result.name || (result.display_name ? result.display_name.split(',')[0] : ''))
       
       setIsEditingLocation(false)
       setSearchResults([])
@@ -636,31 +479,20 @@ const EventEditor: React.FC<EventEditorProps> = ({
     startLocationPicker((location) => {
       console.log('📍 Location selected from map:', location)
       
-      if (isBulkEditMode && selectedBulkGroup) {
-        // Update bulk edit coordinates
-        setBulkCoordinates([location.latitude, location.longitude])
-        setBulkAddress(location.address || '')
-        if (location.address) {
-          // Extract venue name from address (first part before comma)
-          const venueName = (location.address || '').split(',')[0].trim()
-          setBulkVenue(venueName)
-        }
-      } else {
-        // Update single event coordinates
-        console.log('📍 Setting coordinates:', [location.latitude, location.longitude])
-        setCoordinates([location.latitude, location.longitude])
-        console.log('📍 Setting address:', location.address || '')
-        setAddress(location.address || '')
-        if (location.address) {
-          // Extract venue name from address (first part before comma)
-          const venueName = (location.address || '').split(',')[0].trim()
-          console.log('📍 Setting venue:', venueName)
-          setVenue(venueName)
-        }
-        // Set flag to prevent form re-initialization
-        hasLocationDataRef.current = true
-        console.log('📍 Location data flag set to prevent form re-initialization')
+      // Update single event coordinates
+      console.log('📍 Setting coordinates:', [location.latitude, location.longitude])
+      setCoordinates([location.latitude, location.longitude])
+      console.log('📍 Setting address:', location.address || '')
+      setAddress(location.address || '')
+      if (location.address) {
+        // Extract venue name from address (first part before comma)
+        const venueName = (location.address || '').split(',')[0].trim()
+        console.log('📍 Setting venue:', venueName)
+        setVenue(venueName)
       }
+      // Set flag to prevent form re-initialization
+      hasLocationDataRef.current = true
+      console.log('📍 Location data flag set to prevent form re-initialization')
       
       // The EventEditor should remain visible after location selection
       // No need to re-open it since it wasn't closed
@@ -740,7 +572,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         onEventUpdated?.(savedEvent)
         
         if (showSingleEventEditor) {
-          // If we're in single event editor mode from bulk view, close it and return to bulk view
+          
           closeSingleEventEditor()
           Alert.alert('Success', 'Event updated successfully! Changes are synced to all users.')
         } else {
@@ -789,45 +621,8 @@ const EventEditor: React.FC<EventEditorProps> = ({
     }
   }
 
-  // Save bulk edit
-  const saveBulkEdit = async () => {
-    if (!selectedBulkGroup || selectedEventsForBulkEdit.size === 0) {
-      Alert.alert('Validation Error', 'Please select events to edit')
-      return
-    }
 
-            const eventsToUpdate = (selectedBulkGroup?.events || []).filter(
-          event => selectedEventsForBulkEdit.has(event.id)
-        )
 
-    try {
-      setIsLoading(true)
-      const updatedEvents = eventsToUpdate.map(event => ({
-        ...event,
-        name: bulkTitle || event.name,
-        category: bulkCategory,
-        venue: bulkVenue || event.venue,
-        address: bulkAddress || event.address,
-        latitude: bulkCoordinates[0] || 0,
-        longitude: bulkCoordinates[1] || 0,
-        updatedAt: new Date().toISOString()
-      }))
-
-      // Update each event via sync service
-      for (const event of updatedEvents) {
-        const savedEvent = await syncService.updateEvent(event)
-        onUpdateEvent(event.id, savedEvent)
-      }
-
-      onClose()
-      Alert.alert('Success', `${updatedEvents.length} events updated successfully! Changes are saved locally.`)
-    } catch (error) {
-      console.error('Error saving bulk edit:', error)
-      Alert.alert('Error', 'Failed to save changes. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Delete event
   const deleteEventHandler = () => {
@@ -849,15 +644,9 @@ const EventEditor: React.FC<EventEditorProps> = ({
               // Update local state
               onDeleteEvent(editingEvent.id)
               
-              if (showSingleEventEditor) {
-                // If we're in single event editor mode from bulk view, close it and return to bulk view
-                closeSingleEventEditor()
-                Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
-              } else {
-                // If we're in standalone single event editor mode, close the main modal
-                onClose()
-                Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
-              }
+              // Close the main modal
+              onClose()
+              Alert.alert('Success', 'Event deleted successfully! Changes are synced to all users.')
             } catch (error) {
               console.error('Error deleting event:', error)
               Alert.alert('Error', 'Failed to delete event. Please try again.')
@@ -870,267 +659,13 @@ const EventEditor: React.FC<EventEditorProps> = ({
     )
   }
 
-  // Toggle event selection for bulk edit
-  const toggleEventSelection = (eventId: string) => {
-    setSelectedEventsForBulkEdit(prevSelection => {
-      const newSelection = new Set(prevSelection)
-      if (newSelection.has(eventId)) {
-        newSelection.delete(eventId)
-      } else {
-        newSelection.add(eventId)
-      }
-      console.log('Toggling event:', eventId, 'New selection size:', newSelection.size)
-      return newSelection
-    })
-  }
 
-  // Select all events in the current group
-  const selectAllEvents = () => {
-    if (selectedBulkGroup) {
-              setSelectedEventsForBulkEdit(new Set((selectedBulkGroup?.events || []).map(e => e.id)))
-        console.log('Selected all events:', (selectedBulkGroup?.events || []).length)
-    }
-  }
 
-  // Deselect all events
-  const deselectAllEvents = () => {
-    setSelectedEventsForBulkEdit(new Set())
-    console.log('Deselected all events')
-  }
 
-  // Spread out events that are at the same coordinate
-  const spreadOutEvents = () => {
-    if (!selectedBulkGroup || selectedEventsForBulkEdit.size === 0) {
-      Alert.alert('Error', 'Please select events to spread out')
-      return
-    }
 
-    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
-    if (selectedEvents.length < 2) {
-      Alert.alert('Error', 'Need at least 2 events to spread out')
-      return
-    }
 
-    // Calculate spread radius (in degrees) - adjust as needed
-    const baseLat = selectedEvents[0]?.latitude || 0
-    const baseLng = selectedEvents[0]?.longitude || 0
-    const radius = 0.001 // About 100 meters
-    const angleStep = (2 * Math.PI) / selectedEvents.length
 
-    const updatedEvents = selectedEvents.map((event, index) => {
-      const angle = angleStep * index
-      const latOffset = radius * Math.cos(angle)
-      const lngOffset = radius * Math.sin(angle)
-      
-      return {
-        ...event,
-        latitude: baseLat + latOffset,
-        longitude: baseLng + lngOffset,
-        updatedAt: new Date().toISOString()
-      }
-    })
 
-    // Update the coordinates in the form
-    setBulkCoordinates([baseLat, baseLng])
-    
-    Alert.alert(
-      'Spread Events',
-      `Spread ${selectedEvents.length} events in a circle around the base coordinate. Each event will be moved by ~100 meters.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply',
-          onPress: async () => {
-            try {
-              setIsLoading(true)
-              for (const event of updatedEvents) {
-                await updateEventForAllUsers(event.id, event, events)
-                onUpdateEvent(event.id, event)
-              }
-              Alert.alert('Success', `${updatedEvents.length} events spread out successfully!`)
-            } catch (error) {
-              console.error('Error spreading events:', error)
-              Alert.alert('Error', 'Failed to spread events. Please try again.')
-            } finally {
-              setIsLoading(false)
-            }
-          }
-        }
-      ]
-    )
-  }
-
-  // Assign random coordinates within a radius
-  const assignRandomCoordinates = () => {
-    if (!selectedBulkGroup || selectedEventsForBulkEdit.size === 0) {
-      Alert.alert('Error', 'Please select events to assign coordinates')
-      return
-    }
-
-    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
-    const baseLat = selectedEvents[0]?.latitude || 0
-    const baseLng = selectedEvents[0]?.longitude || 0
-    const radius = 0.002 // About 200 meters
-
-    const updatedEvents = selectedEvents.map((event) => {
-      // Generate random angle and distance
-      const angle = Math.random() * 2 * Math.PI
-      const distance = Math.random() * radius
-      
-      const latOffset = distance * Math.cos(angle)
-      const lngOffset = distance * Math.sin(angle)
-      
-      return {
-        ...event,
-        latitude: baseLat + latOffset,
-        longitude: baseLng + lngOffset,
-        updatedAt: new Date().toISOString()
-      }
-    })
-
-    Alert.alert(
-      'Assign Random Coordinates',
-      `Assign random coordinates to ${selectedEvents.length} events within ~200 meters of the base location.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply',
-          onPress: async () => {
-            try {
-              setIsLoading(true)
-              for (const event of updatedEvents) {
-                await updateEventForAllUsers(event.id, event, events)
-                onUpdateEvent(event.id, event)
-              }
-              Alert.alert('Success', `${updatedEvents.length} events assigned random coordinates!`)
-            } catch (error) {
-              console.error('Error assigning coordinates:', error)
-              Alert.alert('Error', 'Failed to assign coordinates. Please try again.')
-            } finally {
-              setIsLoading(false)
-            }
-          }
-        }
-      ]
-    )
-  }
-
-  // Set new base coordinate for all selected events
-  const setNewBaseCoordinate = () => {
-    if (!selectedBulkGroup || selectedEventsForBulkEdit.size === 0) {
-      Alert.alert('Error', 'Please select events to update coordinates')
-      return
-    }
-
-    const selectedEvents = selectedBulkGroup.events.filter(e => selectedEventsForBulkEdit.has(e.id))
-    
-    Alert.alert(
-      'Set New Base Coordinate',
-      `Move all ${selectedEvents.length} selected events to the new coordinate: ${bulkCoordinates[0]?.toFixed(6) || '0.000000'}, ${bulkCoordinates[1]?.toFixed(6) || '0.000000'}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply',
-          onPress: async () => {
-            try {
-              setIsLoading(true)
-              const updatedEvents = selectedEvents.map(event => ({
-                ...event,
-                latitude: bulkCoordinates[0] || 0,
-                longitude: bulkCoordinates[1] || 0,
-                updatedAt: new Date().toISOString()
-              }))
-
-              for (const event of updatedEvents) {
-                await updateEventForAllUsers(event.id, event, events)
-                onUpdateEvent(event.id, event)
-              }
-              Alert.alert('Success', `${updatedEvents.length} events moved to new coordinate!`)
-            } catch (error) {
-              console.error('Error updating coordinates:', error)
-              Alert.alert('Error', 'Failed to update coordinates. Please try again.')
-            } finally {
-              setIsLoading(false)
-            }
-          }
-        }
-      ]
-    )
-  }
-
-  // Assign sequential coordinates in a grid pattern
-  const assignGridCoordinates = () => {
-    if (!selectedBulkGroup || selectedEventsForBulkEdit.size === 0) {
-      Alert.alert('Error', 'Please select events to assign coordinates')
-      return
-    }
-
-    const selectedEvents = (selectedBulkGroup?.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
-    const baseLat = selectedEvents[0]?.latitude || 0
-    const baseLng = selectedEvents[0]?.longitude || 0
-    const spacing = 0.0005 // About 50 meters between events
-    const eventsPerRow = Math.ceil(Math.sqrt(selectedEvents.length))
-
-    const updatedEvents = selectedEvents.map((event, index) => {
-      const row = Math.floor(index / eventsPerRow)
-      const col = index % eventsPerRow
-      
-      const latOffset = row * spacing
-      const lngOffset = col * spacing
-      
-      return {
-        ...event,
-        latitude: baseLat + latOffset,
-        longitude: baseLng + lngOffset,
-        updatedAt: new Date().toISOString()
-      }
-    })
-
-    Alert.alert(
-      'Assign Grid Coordinates',
-      `Arrange ${selectedEvents.length} events in a grid pattern starting from the base location.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply',
-          onPress: async () => {
-            try {
-              setIsLoading(true)
-              for (const event of updatedEvents) {
-                await updateEventForAllUsers(event.id, event, events)
-                onUpdateEvent(event.id, event)
-              }
-              Alert.alert('Success', `${selectedEvents.length} events arranged in a grid!`)
-            } catch (error) {
-              console.error('Error assigning grid coordinates:', error)
-              Alert.alert('Error', 'Failed to assign grid coordinates. Please try again.')
-            } finally {
-              setIsLoading(false)
-            }
-          }
-        }
-      ]
-    )
-  }
-
-  // Export events to JSON
-  const exportEvents = () => {
-    try {
-      const eventsToExport = selectedBulkGroup 
-        ? (selectedBulkGroup.events || []).filter(e => selectedEventsForBulkEdit.has(e.id))
-        : editingEvent 
-        ? [editingEvent] 
-        : events
-
-      const jsonString = JSON.stringify(eventsToExport, null, 2)
-      // In a real app, you'd use a file system API or share API
-      console.log('Events to export:', jsonString)
-      Alert.alert('Export', 'Events exported to console (implement file export)')
-    } catch (error) {
-      console.error('Export error:', error)
-      Alert.alert('Error', 'Failed to export events')
-    }
-  }
 
   // Marker icon function (same as in MapViewNative)
   const getMarkerIcon = (category: string): string => {
@@ -1196,7 +731,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            {isBulkEditMode ? 'Bulk Event Editor' : (editingEvent ? 'Edit Event' : 'Create New Event')}
+            {editingEvent ? 'Edit Event' : 'Create New Event'}
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>✕</Text>
@@ -1204,219 +739,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         </View>
 
         <View style={styles.content}>
-          {isBulkEditMode ? (
-            // Bulk Edit Mode
-            <>
-              {!selectedBulkGroup ? (
-                // Show groups list when no group is selected
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <View style={styles.modeToggle}>
-                    <Text style={styles.modeLabel}>Bulk Edit Mode</Text>
-                    <Switch
-                      value={isBulkEditMode}
-                      onValueChange={setIsBulkEditMode}
-                    />
-                  </View>
-                  
-                  <View style={styles.groupingToggle}>
-                    <Text style={styles.groupingLabel}>
-                      {groupByCoordinates ? 'Group by Coordinates' : 'Group by Venue'}
-                    </Text>
-                    <Switch
-                      value={groupByCoordinates}
-                      onValueChange={(value) => {
-                        setGroupByCoordinates(value)
-                        if (value) {
-                          groupEventsByCoordinates()
-                        } else {
-                          groupEventsByVenue()
-                        }
-                      }}
-                    />
-                  </View>
-
-                  {bulkEditGroups.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateText}>
-                        No events with duplicate venues found
-                      </Text>
-                    </View>
-                  ) : (
-                    <View>
-                      <Text style={styles.sectionTitle}>
-                        {groupByCoordinates ? 'Events by Coordinates' : 'Events by Venue'}
-                      </Text>
-                                            {bulkEditGroups.map((group: BulkEditGroup, index) => {
-                        const isSelected = selectedBulkGroup && selectedBulkGroup.venue === group.venue
-                        return (
-                          <TouchableOpacity
-                            key={index}
-                            style={[
-                              styles.venueGroup,
-                              isSelected ? styles.selectedVenueGroup : undefined
-                            ]}
-                            onPress={() => populateBulkForm(group)}
-                          >
-                            <Text style={styles.venueName}>{group.venue}</Text>
-                            <Text style={styles.eventCount}>
-                              {group.events.length} events
-                            </Text>
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
-                  )}
-                </ScrollView>
-              ) : (
-                // Show event list when a group is selected
-                <View style={styles.bulkEventListContainer}>
-                  <View style={styles.eventListHeader}>
-                    <TouchableOpacity 
-                      style={styles.backButton}
-                      onPress={() => setSelectedBulkGroup(null)}
-                    >
-                      <Text style={styles.backButtonText}>← Back to Groups</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.sectionTitle}>
-                      Events in "{selectedBulkGroup?.venue}" ({selectedBulkGroup?.events.length} events)
-                    </Text>
-                  </View>
-                    
-                    {/* Data Quality Warning */}
-                    {(() => {
-                      if (!selectedBulkGroup) return null
-                      const uniqueCoordinates = new Set((selectedBulkGroup.events || []).map(e => `${e.latitude},${e.longitude}`))
-                      const hasDefaultCoordinates = (selectedBulkGroup.events || []).every(e => e.latitude === 0 && e.longitude === 0)
-                      
-                      if (hasDefaultCoordinates) {
-                        return (
-                          <View style={styles.warningContainer}>
-                            <Text style={styles.warningText}>
-                              ⚠️ All events have NO coordinates (0,0)! Use location search or coordinate tools below to fix this.
-                            </Text>
-                          </View>
-                        )
-                      } else if (uniqueCoordinates.size === 1) {
-                        return (
-                          <View style={styles.warningContainer}>
-                            <Text style={styles.warningText}>
-                              ⚠️ All events have the same coordinates! Use coordinate tools below to fix this.
-                            </Text>
-                          </View>
-                        )
-                      }
-                      return null
-                    })()}
-                    
-                                         {/* Quick Action Buttons */}
-                     <View style={styles.quickActionsContainer}>
-                       <Text style={styles.quickActionsTitle}>Quick Coordinate Actions:</Text>
-                       
-                       <View style={styles.coordinateButtonsRow}>
-                         <TouchableOpacity
-                           style={styles.coordinateButton}
-                           onPress={spreadOutEvents}
-                         >
-                           <Text style={styles.coordinateButtonText}>🔄 Circle</Text>
-                         </TouchableOpacity>
-                         
-                         <TouchableOpacity
-                           style={styles.coordinateButton}
-                           onPress={assignRandomCoordinates}
-                         >
-                           <Text style={styles.coordinateButtonText}>🎲 Random</Text>
-                         </TouchableOpacity>
-                         
-                         <TouchableOpacity
-                           style={styles.coordinateButton}
-                           onPress={assignGridCoordinates}
-                         >
-                           <Text style={styles.coordinateButtonText}>📐 Grid</Text>
-                         </TouchableOpacity>
-                       </View>
-                       
-                       <TouchableOpacity
-                         style={styles.moveToCoordinateButton}
-                         onPress={setNewBaseCoordinate}
-                       >
-                         <Text style={styles.moveToCoordinateButtonText}>📍 Move All to New Coordinate</Text>
-                       </TouchableOpacity>
-
-                                               {/* Individual Coordinate Assignment Button */}
-                        {(() => {
-                          if (!selectedBulkGroup) return null
-                          const uniqueCoordinates = new Set((selectedBulkGroup.events || []).map(e => `${e.latitude},${e.longitude}`))
-                          const hasDefaultCoordinates = (selectedBulkGroup.events || []).every(e => e.latitude === 0 && e.longitude === 0)
-                          
-                          console.log('Checking individual coordinate button:', {
-                            uniqueCoordinates: uniqueCoordinates.size,
-                            hasDefaultCoordinates,
-                            events: (selectedBulkGroup.events || []).length
-                          })
-                          
-                          // Show button for any group of events (not just when they all have same coordinates)
-                          console.log('Rendering individual coordinate button for', (selectedBulkGroup.events || []).length, 'events')
-                          return (
-                            <TouchableOpacity
-                              style={styles.individualCoordinateButton}
-                              onPress={() => {
-                                console.log('Button pressed! Opening coordinate assignment editor for', (selectedBulkGroup.events || []).length, 'events')
-                                console.log('Current showCoordinateAssignmentEditor state:', showCoordinateAssignmentEditor)
-                                openCoordinateAssignmentEditor(selectedBulkGroup.events || [])
-                                console.log('After calling openCoordinateAssignmentEditor, showCoordinateAssignmentEditor should be true')
-                              }}
-                            >
-                              <Text style={styles.individualCoordinateButtonText}>
-                                🎯 Assign Individual Coordinates ({(selectedBulkGroup.events || []).length} events)
-                              </Text>
-                            </TouchableOpacity>
-                          )
-                        })()}
-                     </View>
-                    
-                    {/* Event List */}
-                    <FlatList
-                      data={selectedBulkGroup.events || []}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.bulkEventItem}
-                          onPress={() => openSingleEventEditor(item)}
-                        >
-                          <View style={styles.bulkEventInfo}>
-                            <Text style={styles.bulkEventTitle}>{item.name}</Text>
-                            <Text style={styles.bulkEventDate}>{item.startsAt}</Text>
-                            <Text style={styles.bulkEventCoordinates}>
-                              {item.latitude === 0 && item.longitude === 0 ? (
-                                '⚠️ NO coordinates (0,0)'
-                              ) : (
-                                `📍 ${item.latitude?.toFixed(6) || '0.000000'}, ${item.longitude?.toFixed(6) || '0.000000'}`
-                              )}
-                            </Text>
-                            {groupByCoordinates && (
-                              <Text style={styles.bulkEventVenue}>
-                                🏢 {item.venue}
-                              </Text>
-                            )}
-                          </View>
-                          <Text style={styles.editIcon}>✏️</Text>
-                        </TouchableOpacity>
-                      )}
-                      style={styles.bulkEventList}
-                    />
-                  </View>
-                )}
-             </>
-          ) : (
-            // Single Event Edit Mode
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modeToggle}>
-                <Text style={styles.modeLabel}>Single Event Mode</Text>
-                <Switch
-                  value={isBulkEditMode}
-                  onValueChange={setIsBulkEditMode}
-                />
-              </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
 
               <Text style={styles.fieldLabel}>Title *</Text>
               <TextInput
@@ -1661,7 +984,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
            </View>
          </Modal>
 
-                   {/* Single Event Editor Modal (from bulk view) */}
+                   {/* Single Event Editor Modal */}
           <Modal
             visible={showSingleEventEditor}
             animationType="slide"
@@ -2124,12 +1447,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
-  bulkEditForm: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 16,
-  },
+
   fieldLabel: {
     fontSize: 16,
     fontWeight: '600',
@@ -2417,9 +1735,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  bulkEditFormFields: {
-    padding: 16,
-  },
+
   selectionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2577,47 +1893,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  bulkEventListContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-    marginTop: 8,
-  },
-  bulkEventList: {
-    flex: 1,
-  },
-  bulkEventItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
-  },
-  bulkEventInfo: {
-    flex: 1,
-  },
-  bulkEventTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  bulkEventDate: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  bulkEventCoordinates: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-    fontFamily: 'monospace',
-  },
-  bulkEventVenue: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
+
   editIcon: {
     fontSize: 20,
     marginLeft: 12,

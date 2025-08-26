@@ -107,29 +107,56 @@ const SubscriptionTerms: React.FC<SubscriptionTermsProps> = ({ visible, onClose 
             </TouchableOpacity>
           </View>
 
-          {/* Premium Features */}
+          {/* User Group Comparison */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>⭐ Premium Features</Text>
+            <Text style={styles.sectionTitle}>👥 User Groups</Text>
+            
+            <Text style={styles.subsectionTitle}>Unregistered Users (Free)</Text>
             <Text style={styles.text}>
-              • Unlimited event creation and editing
+              • 5km radius limit
             </Text>
             <Text style={styles.text}>
-              • Advanced search and filtering options
+              • 1 day event filter
             </Text>
             <Text style={styles.text}>
-              • Extended event radius (up to 500km)
+              • View events only
+            </Text>
+            <Text style={styles.text}>
+              • Basic search
+            </Text>
+            
+            <Text style={styles.subsectionTitle}>Registered Users (Free)</Text>
+            <Text style={styles.text}>
+              • 15km radius limit
+            </Text>
+            <Text style={styles.text}>
+              • 1 week event filter
+            </Text>
+            <Text style={styles.text}>
+              • Create 1 event per day
+            </Text>
+            <Text style={styles.text}>
+              • Edit own events
+            </Text>
+            <Text style={styles.text}>
+              • Rate events
+            </Text>
+            
+            <Text style={styles.subsectionTitle}>Premium Users</Text>
+            <Text style={styles.text}>
+              • Unlimited radius (up to 500km)
+            </Text>
+            <Text style={styles.text}>
+              • Unlimited event filter (up to 1 year)
+            </Text>
+            <Text style={styles.text}>
+              • Unlimited event creation
+            </Text>
+            <Text style={styles.text}>
+              • Advanced search and filtering
             </Text>
             <Text style={styles.text}>
               • Priority customer support
-            </Text>
-            <Text style={styles.text}>
-              • Analytics and insights
-            </Text>
-            <Text style={styles.text}>
-              • Custom categories and tags
-            </Text>
-            <Text style={styles.text}>
-              • Export event data
             </Text>
             <Text style={styles.text}>
               • Ad-free experience
@@ -233,7 +260,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: '90%',
     maxWidth: 400,
-    maxHeight: '80%',
+    height: '80%',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -291,6 +318,13 @@ const styles = StyleSheet.create({
   bold: {
     fontWeight: 'bold',
     color: '#333',
+  },
+  subsectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 15,
+    marginBottom: 8,
   },
   note: {
     fontSize: 12,

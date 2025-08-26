@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import * as Location from 'expo-location'
 import { loadAllEvents } from '../utils/eventDataImporter'
 import { saveEventsToFile, loadEventsFromStorage } from '../utils/eventStorage'
@@ -303,6 +303,8 @@ interface EventContextType {
   refreshEvents: () => Promise<void>
   clearSyncErrors: () => void
   refreshUserGroupLimits: () => Promise<void>
+  persistUserGroupState: () => Promise<void>
+  restoreUserGroupState: () => { userGroup: string; maxRadius: number }
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined)
@@ -327,6 +329,10 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
   const [currentRadius, setCurrentRadius] = useState(300) // Increased default radius to 300km for better coverage
+  
+  // Add state persistence for user group and filters
+  const [userGroupState, setUserGroupState] = useState<string>('unregistered')
+  const [userMaxRadiusState, setUserMaxRadiusState] = useState<number>(5)
   
   // Default date filter based on user group limits
   const getDefaultDateFilter = async () => {
@@ -382,6 +388,30 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     
     setUserGroupDateFilter()
   }, []) // Run once on component mount
+
+  // Persist user group state and restore it when needed
+  const persistUserGroupState = useCallback(async () => {
+    try {
+      const userGroup = await userService.getUserGroup()
+      const userFeatures = await userService.getUserGroupFeatures()
+      
+      setUserGroupState(userGroup)
+      setUserMaxRadiusState(userFeatures.maxRadiusKm)
+      
+      console.log(`🔄 Persisting user group state: ${userGroup}, max radius: ${userFeatures.maxRadiusKm}km`)
+    } catch (error) {
+      console.log('⚠️ Could not persist user group state:', error)
+    }
+  }, [])
+
+  // Restore user group state
+  const restoreUserGroupState = useCallback(() => {
+    console.log(`🔄 Restoring user group state: ${userGroupState}, max radius: ${userMaxRadiusState}km`)
+    return {
+      userGroup: userGroupState,
+      maxRadius: userMaxRadiusState
+    }
+  }, [userGroupState, userMaxRadiusState])
 
   // Get user location for radius filtering
   useEffect(() => {
@@ -1130,7 +1160,9 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     forceUpdateCheck,
     refreshEvents,
     clearSyncErrors,
-    refreshUserGroupLimits
+    refreshUserGroupLimits,
+    persistUserGroupState,
+    restoreUserGroupState
   }
 
   return (

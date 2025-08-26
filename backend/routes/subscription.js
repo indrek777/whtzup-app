@@ -155,7 +155,7 @@ router.get('/billing', authenticateToken, async (req, res) => {
       {
         id: 'bill_001',
         date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        amount: 9.99,
+        amount: 4.99,
         currency: 'USD',
         status: 'paid',
         description: 'Monthly Premium Subscription',
@@ -164,7 +164,7 @@ router.get('/billing', authenticateToken, async (req, res) => {
       {
         id: 'bill_002',
         date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-        amount: 9.99,
+        amount: 4.99,
         currency: 'USD',
         status: 'paid',
         description: 'Monthly Premium Subscription',

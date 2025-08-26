@@ -967,7 +967,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
                     <View style={styles.subscriptionDetailItem}>
                       <Text style={styles.subscriptionDetailLabel}>Plan:</Text>
                       <Text style={styles.subscriptionDetailValue}>
-                        {detailedSubscription.plan === 'monthly' ? 'Monthly ($9.99/month)' : 'Yearly ($99.99/year)'}
+                        {detailedSubscription.plan === 'monthly' ? 'Monthly ($4.99/month)' : 'Yearly ($39.99/year)'}
                       </Text>
                     </View>
                     

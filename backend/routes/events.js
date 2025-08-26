@@ -707,4 +707,159 @@ router.get('/sync/changes', async (req, res) => {
   }
 });
 
+// POST /api/events/:id/register - Register user for an event
+router.post('/:id/register', authenticateToken, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check if event exists
+    const eventResult = await pool.query('SELECT * FROM events WHERE id = $1 AND deleted_at IS NULL', [eventId]);
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+    
+    // Check if user is already registered
+    const existingRegistration = await pool.query(
+      'SELECT * FROM event_registrations WHERE event_id = $1 AND user_id = $2',
+      [eventId, userId]
+    );
+    
+    if (existingRegistration.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User is already registered for this event'
+      });
+    }
+    
+    // Register user for the event
+    await pool.query(
+      'INSERT INTO event_registrations (event_id, user_id, registered_at) VALUES ($1, $2, CURRENT_TIMESTAMP)',
+      [eventId, userId]
+    );
+    
+    // Get updated registration count
+    const countResult = await pool.query(
+      'SELECT COUNT(*) as count FROM event_registrations WHERE event_id = $1',
+      [eventId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Successfully registered for event',
+      registrationCount: parseInt(countResult.rows[0].count)
+    });
+    
+  } catch (error) {
+    console.error('Event registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register for event'
+    });
+  }
+});
+
+// DELETE /api/events/:id/register - Unregister user from an event
+router.delete('/:id/register', authenticateToken, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+    
+    // Check if event exists
+    const eventResult = await pool.query('SELECT * FROM events WHERE id = $1 AND deleted_at IS NULL', [eventId]);
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+    
+    // Remove registration
+    const result = await pool.query(
+      'DELETE FROM event_registrations WHERE event_id = $1 AND user_id = $2',
+      [eventId, userId]
+    );
+    
+    if (result.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User is not registered for this event'
+      });
+    }
+    
+    // Get updated registration count
+    const countResult = await pool.query(
+      'SELECT COUNT(*) as count FROM event_registrations WHERE event_id = $1',
+      [eventId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Successfully unregistered from event',
+      registrationCount: parseInt(countResult.rows[0].count)
+    });
+    
+  } catch (error) {
+    console.error('Event unregistration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to unregister from event'
+    });
+  }
+});
+
+// GET /api/events/:id/registrations - Get event registration info
+router.get('/:id/registrations', optionalAuth, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const userId = req.user?.id || null;
+    
+    // Check if event exists
+    const eventResult = await pool.query('SELECT * FROM events WHERE id = $1 AND deleted_at IS NULL', [eventId]);
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Event not found'
+      });
+    }
+    
+    // Get registration count
+    const countResult = await pool.query(
+      'SELECT COUNT(*) as count FROM event_registrations WHERE event_id = $1',
+      [eventId]
+    );
+    
+    const registrationCount = parseInt(countResult.rows[0].count);
+    let isUserRegistered = false;
+    
+    // Check if current user is registered (if authenticated)
+    if (userId) {
+      const userRegistration = await pool.query(
+        'SELECT * FROM event_registrations WHERE event_id = $1 AND user_id = $2',
+        [eventId, userId]
+      );
+      isUserRegistered = userRegistration.rows.length > 0;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        eventId,
+        registrationCount,
+        isUserRegistered
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get event registrations error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get event registrations'
+    });
+  }
+});
+
 module.exports = router;
