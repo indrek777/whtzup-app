@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Platform,
   SafeAreaView,
-  Dimensions
+  Dimensions,
+  Linking
 } from 'react-native'
 import MapView, { Marker, Region, Callout } from 'react-native-maps'
 import * as Location from 'expo-location'
@@ -95,7 +96,7 @@ const getMarkerIcon = (category: string): string => {
     'cultural': '🏛️',
     'nightlife': '🌙',
     'family & kids': '👨‍👩‍👧‍👦',
-    'nature & environment': '🌿',
+    'nature & environment': '��',
     'theater': '🎭',
     'comedy': '😄',
     'charity & community': '🤝',
@@ -1245,90 +1246,162 @@ const MapViewNative: React.FC = () => {
            </View>
            
            {selectedEvent && (
-             <ScrollView style={styles.modalContent}>
-               <Text style={styles.eventTitle}>{selectedEvent.name}</Text>
-               <Text style={styles.eventCategory}>Category: {selectedEvent.category || 'other'}</Text>
-               
-               {/* Rating Display */}
-               <View style={styles.ratingContainer}>
-                 <RatingDisplay
-                   averageRating={eventRatingStats?.averageRating || 0}
-                   totalRatings={eventRatingStats?.totalRatings || 0}
-                   size="medium"
-                   onPress={async () => {
-                     const isAuth = await userService.isAuthenticated();
-                     
-                     if (isAuth) {
-                       // Use Alert-based rating system instead of modal
-                       Alert.alert(
-                         `Rate "${selectedEvent?.name}"`,
-                         'How would you rate this event?',
-                         [
-                           { text: '⭐ 1 Star', onPress: () => submitRating(1) },
-                           { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
-                           { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
-                           { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
-                           { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
-                           { text: 'Cancel', style: 'cancel' }
-                         ]
-                       );
-                     } else {
-                       Alert.alert(
-                         'Authentication Required',
-                         'You need to sign in to rate events. Would you like to sign in now?',
-                         [
-                           { text: 'Cancel', style: 'cancel' },
-                           { text: 'Sign In', onPress: () => {
-                             // TODO: Navigate to sign in screen or show auth modal
-                             Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
-                           }}
-                         ]
-                       );
-                     }
-                   }}
-                 />
-                 <TouchableOpacity
-                   style={styles.rateButton}
-                   onPress={async () => {
-                     const isAuth = await userService.isAuthenticated();
-                     
-                     if (isAuth) {
-                       // Use Alert-based rating system instead of modal
-                       Alert.alert(
-                         `Rate "${selectedEvent?.name}"`,
-                         'How would you rate this event?',
-                         [
-                           { text: '⭐ 1 Star', onPress: () => submitRating(1) },
-                           { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
-                           { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
-                           { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
-                           { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
-                           { text: 'Cancel', style: 'cancel' }
-                         ]
-                       );
-                     } else {
-                       Alert.alert(
-                         'Authentication Required',
-                         'You need to sign in to rate events. Would you like to sign in now?',
-                         [
-                           { text: 'Cancel', style: 'cancel' },
-                           { text: 'Sign In', onPress: () => {
-                             // TODO: Navigate to sign in screen or show auth modal
-                             Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
-                           }}
-                         ]
-                       );
-                     }
-                   }}
-                 >
-                   <Text style={styles.rateButtonText}>Rate Event</Text>
-                   <Text style={styles.authIndicator}>🔒</Text>
-                 </TouchableOpacity>
+             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+               {/* Event Header */}
+               <View style={styles.eventHeader}>
+                 <View style={styles.eventTitleContainer}>
+                   <Text style={styles.eventTitle}>{selectedEvent.name}</Text>
+                   <View style={styles.categoryBadge}>
+                     <Text style={styles.categoryIcon}>
+                       {getMarkerIcon(selectedEvent.category || 'other')}
+                     </Text>
+                     <Text style={styles.categoryText}>
+                       {selectedEvent.category || 'other'}
+                     </Text>
+                   </View>
+                 </View>
                </View>
-               
-               <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
-               <Text style={styles.eventVenue}>Venue: {selectedEvent.venue}</Text>
-               <Text style={styles.eventAddress}>Address: {selectedEvent.address}</Text>
+
+               {/* Rating Section */}
+               <View style={styles.ratingSection}>
+                 <View style={styles.ratingContainer}>
+                   <RatingDisplay
+                     averageRating={eventRatingStats?.averageRating || 0}
+                     totalRatings={eventRatingStats?.totalRatings || 0}
+                     size="medium"
+                     onPress={async () => {
+                       const isAuth = await userService.isAuthenticated();
+                       
+                       if (isAuth) {
+                         Alert.alert(
+                           `Rate "${selectedEvent?.name}"`,
+                           'How would you rate this event?',
+                           [
+                             { text: '⭐ 1 Star', onPress: () => submitRating(1) },
+                             { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
+                             { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
+                             { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
+                             { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
+                             { text: 'Cancel', style: 'cancel' }
+                           ]
+                         );
+                       } else {
+                         Alert.alert(
+                           'Authentication Required',
+                           'You need to sign in to rate events. Would you like to sign in now?',
+                           [
+                             { text: 'Cancel', style: 'cancel' },
+                             { text: 'Sign In', onPress: () => {
+                               Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
+                             }}
+                           ]
+                         );
+                       }
+                     }}
+                   />
+                   <TouchableOpacity
+                     style={styles.rateButton}
+                     onPress={async () => {
+                       const isAuth = await userService.isAuthenticated();
+                       
+                       if (isAuth) {
+                         Alert.alert(
+                           `Rate "${selectedEvent?.name}"`,
+                           'How would you rate this event?',
+                           [
+                             { text: '⭐ 1 Star', onPress: () => submitRating(1) },
+                             { text: '⭐⭐ 2 Stars', onPress: () => submitRating(2) },
+                             { text: '⭐⭐⭐ 3 Stars', onPress: () => submitRating(3) },
+                             { text: '⭐⭐⭐⭐ 4 Stars', onPress: () => submitRating(4) },
+                             { text: '⭐⭐⭐⭐⭐ 5 Stars', onPress: () => submitRating(5) },
+                             { text: 'Cancel', style: 'cancel' }
+                           ]
+                         );
+                       } else {
+                         Alert.alert(
+                           'Authentication Required',
+                           'You need to sign in to rate events. Would you like to sign in now?',
+                           [
+                             { text: 'Cancel', style: 'cancel' },
+                             { text: 'Sign In', onPress: () => {
+                               Alert.alert('Sign In', 'Please sign in through the app settings to rate events.');
+                             }}
+                           ]
+                         );
+                       }
+                     }}
+                   >
+                     <Text style={styles.rateButtonText}>Rate Event</Text>
+                     <Text style={styles.authIndicator}>🔒</Text>
+                   </TouchableOpacity>
+                 </View>
+               </View>
+
+               {/* Event Details */}
+               <View style={styles.eventDetailsSection}>
+                 {selectedEvent.description && (
+                   <View style={styles.detailItem}>
+                     <Text style={styles.detailLabel}>📝 Description</Text>
+                     <Text style={styles.eventDescription}>{selectedEvent.description}</Text>
+                   </View>
+                 )}
+
+                 <View style={styles.detailItem}>
+                   <Text style={styles.detailLabel}>🏢 Venue</Text>
+                   <Text style={styles.eventVenue}>{selectedEvent.venue}</Text>
+                 </View>
+
+                 {selectedEvent.address && (
+                   <View style={styles.detailItem}>
+                     <Text style={styles.detailLabel}>📍 Address</Text>
+                     <Text style={styles.eventAddress}>{selectedEvent.address}</Text>
+                   </View>
+                 )}
+
+                 <View style={styles.detailItem}>
+                   <Text style={styles.detailLabel}>📅 Date & Time</Text>
+                   <Text style={styles.eventDateTime}>
+                     {new Date(selectedEvent.startsAt).toLocaleDateString('en-US', {
+                       weekday: 'long',
+                       year: 'numeric',
+                       month: 'long',
+                       day: 'numeric'
+                     })}
+                   </Text>
+                   <Text style={styles.eventTime}>
+                     {new Date(selectedEvent.startsAt).toLocaleTimeString('en-US', {
+                       hour: '2-digit',
+                       minute: '2-digit'
+                     })}
+                   </Text>
+                 </View>
+
+                 {selectedEvent.url && selectedEvent.url.trim() !== '' && (
+                   <View style={styles.detailItem}>
+                     <Text style={styles.detailLabel}>🌐 Website</Text>
+                     <TouchableOpacity
+                       style={styles.urlButton}
+                       onPress={() => {
+                         if (selectedEvent.url) {
+                           Linking.openURL(selectedEvent.url).catch(() => {
+                             Alert.alert('Error', 'Could not open the website. Please check the URL.');
+                           });
+                         }
+                       }}
+                     >
+                       <Text style={styles.urlText}>Visit Website</Text>
+                       <Text style={styles.urlIcon}>🔗</Text>
+                     </TouchableOpacity>
+                   </View>
+                 )}
+
+                 {selectedEvent.createdBy && (
+                   <View style={styles.detailItem}>
+                     <Text style={styles.detailLabel}>👤 Organizer</Text>
+                     <Text style={styles.eventOrganizer}>{selectedEvent.createdBy}</Text>
+                   </View>
+                 )}
+               </View>
                
                {/* Permission loading indicator */}
                {permissionLoading && (
@@ -1349,7 +1422,7 @@ const MapViewNative: React.FC = () => {
                       onPress={() => {
                         setShowEventDetailsModal(false)
                         setShowEventEditor(true)
-                        setSelectedEvent(null)
+                        // Don't set selectedEvent to null - keep it for editing
                       }}
                     >
                       <Text style={styles.actionButtonText}>Edit Event</Text>
@@ -1523,7 +1596,7 @@ const MapViewNative: React.FC = () => {
                   </View>
                   
                   {/* Event list */}
-                  <ScrollView style={styles.eventList}>
+                  <ScrollView style={styles.eventList} showsVerticalScrollIndicator={false}>
                     {currentPageEvents.map((event, index) => (
                       <TouchableOpacity
                         key={`${event.id}-${index}`}
@@ -1535,35 +1608,54 @@ const MapViewNative: React.FC = () => {
                         }}
                       >
                         <View style={styles.clusterEventHeader}>
-                          <Text style={styles.clusterEventTitle}>{event.name || 'Untitled Event'}</Text>
-                          <View style={styles.clusterEventHeaderRight}>
-                            <Text style={styles.clusterEventCategory}>
-                              {event.category || determineCategory(event.name, event.description)}
-                            </Text>
-                                                         {(() => {
-                                                           console.log('🔐 Cluster event permission check:', event.name, 'permission:', eventPermissions[event.id]);
-                                                           return eventPermissions[event.id];
-                                                         })() && (
-                               <TouchableOpacity
-                                 style={styles.clusterEventEditButton}
-                                 onPress={(e) => {
-                                   e.stopPropagation()
-                                   setSelectedEvent(event)
-                                   setShowClusterModal(false)
-                                   setShowEventEditor(true)
-                                 }}
-                               >
-                                 <Text style={styles.clusterEventEditButtonText}>✏️</Text>
-                               </TouchableOpacity>
-                             )}
+                          <View style={styles.clusterEventTitleContainer}>
+                            <Text style={styles.clusterEventTitle}>{event.name || 'Untitled Event'}</Text>
+                            <View style={styles.clusterEventCategoryBadge}>
+                              <Text style={styles.clusterEventCategoryIcon}>
+                                {getMarkerIcon(event.category || determineCategory(event.name, event.description))}
+                              </Text>
+                              <Text style={styles.clusterEventCategoryText}>
+                                {event.category || determineCategory(event.name, event.description)}
+                              </Text>
+                            </View>
                           </View>
+                          {(() => {
+                            console.log('🔐 Cluster event permission check:', event.name, 'permission:', eventPermissions[event.id]);
+                            return eventPermissions[event.id];
+                          })() && (
+                            <TouchableOpacity
+                              style={styles.clusterEventEditButton}
+                              onPress={(e) => {
+                                e.stopPropagation()
+                                setSelectedEvent(event)
+                                setShowClusterModal(false)
+                                setShowEventEditor(true)
+                              }}
+                            >
+                              <Text style={styles.clusterEventEditButtonText}>✏️</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
-                        <Text style={styles.clusterEventDescription} numberOfLines={2}>
-                          {event.description || 'No description available'}
-                        </Text>
-                        <Text style={styles.clusterEventTime}>
-                          {new Date(event.startsAt).toLocaleString()}
-                        </Text>
+                        {event.description && (
+                          <Text style={styles.clusterEventDescription} numberOfLines={2}>
+                            {event.description}
+                          </Text>
+                        )}
+                        <View style={styles.clusterEventFooter}>
+                          <Text style={styles.clusterEventTime}>
+                            {new Date(event.startsAt).toLocaleDateString('en-US', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </Text>
+                          <Text style={styles.clusterEventTimeDetail}>
+                            {new Date(event.startsAt).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -1730,31 +1822,125 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  eventHeader: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  eventTitleContainer: {
+    marginBottom: 12,
   },
   eventTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#1a1a1a',
+    marginBottom: 8,
+    lineHeight: 34,
   },
-  eventCategory: {
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  categoryIcon: {
     fontSize: 16,
+    marginRight: 6,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#666',
-    marginBottom: 10,
+    textTransform: 'capitalize',
+  },
+  ratingSection: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  eventDetailsSection: {
+    marginBottom: 20,
+  },
+  detailItem: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 6,
   },
   eventDescription: {
     fontSize: 16,
-    marginBottom: 15,
     lineHeight: 24,
+    color: '#333',
   },
   eventVenue: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 5,
+    color: '#1a1a1a',
   },
   eventAddress: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 15,
+    marginTop: 2,
+  },
+  eventDateTime: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  eventTime: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  eventOrganizer: {
+    fontSize: 16,
+    color: '#1a1a1a',
+  },
+  urlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  urlText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+    marginRight: 8,
+  },
+  urlIcon: {
+    fontSize: 16,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1837,12 +2023,37 @@ const styles = StyleSheet.create({
   clusterEventHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  clusterEventHeaderRight: {
+  clusterEventTitleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  clusterEventTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  clusterEventCategoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  clusterEventCategoryIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  clusterEventCategoryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#666',
+    textTransform: 'capitalize',
   },
   clusterEventEditButton: {
     marginLeft: 10,
@@ -1852,30 +2063,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
   },
-  clusterEventTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    flex: 1,
-    marginRight: 10,
-  },
-  clusterEventCategory: {
-    fontSize: 12,
-    color: '#666',
-    backgroundColor: '#e9ecef',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
   clusterEventDescription: {
     fontSize: 14,
     color: '#666',
     marginBottom: 8,
     lineHeight: 20,
   },
+  clusterEventFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   clusterEventTime: {
     fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  clusterEventTimeDetail: {
+    fontSize: 12,
     color: '#999',
-    fontStyle: 'italic',
   },
   searchContainer: {
     padding: 15,

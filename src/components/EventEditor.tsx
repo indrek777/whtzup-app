@@ -73,6 +73,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
   const [organizer, setOrganizer] = useState('')
   const [attendees, setAttendees] = useState('')
   const [maxAttendees, setMaxAttendees] = useState('')
+  const [url, setUrl] = useState('')
   
   // Date/Time picker state
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -213,10 +214,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
       return
     }
     
+    // Reset form initialization flag when selectedEvent changes
+    if (selectedEvent && formInitializedRef.current) {
+      console.log('🎯 selectedEvent changed, resetting form initialization flag')
+      formInitializedRef.current = false
+    }
+    
     if (visible && !formInitializedRef.current) {
       console.log('🎯 Initializing EventEditor form for the first time...')
       if (selectedEvent) {
         // Single event edit mode
+        console.log('🎯 Setting up EVENT EDITING mode for:', selectedEvent.name)
         setEditingEvent(selectedEvent)
         setIsBulkEditMode(false)
         populateForm(selectedEvent)
@@ -237,6 +245,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
         setOrganizer('Event Organizer')
         setAttendees('0')
         setMaxAttendees('')
+        setUrl('')
         setCoordinates([0, 0])
         console.log('🎯 NEW EVENT setup complete - isBulkEditMode should be false')
       }
@@ -416,6 +425,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
     setCategory(event.category || 'other')
     setVenue(event.venue)
     setAddress(event.address)
+    setUrl(event.url || '')
     // Safely handle startsAt which might be undefined
     if (event.startsAt) {
       try {
@@ -715,6 +725,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
           longitude: safeCoordinates(coordinates)[1],
           startsAt: date && time ? new Date(`${date}T${time}:00`).toISOString() : new Date().toISOString(),
           createdBy: organizer.trim(),
+          url: url.trim(),
           updatedAt: new Date().toISOString()
         }
 
@@ -753,7 +764,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
           createdBy: organizer.trim(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          url: '',
+          url: url.trim(),
           source: 'user'
         }
 
@@ -1553,6 +1564,17 @@ const EventEditor: React.FC<EventEditorProps> = ({
                 onChangeText={setMaxAttendees}
                 placeholder="Maximum attendees (optional)"
                 keyboardType="numeric"
+              />
+
+              <Text style={styles.fieldLabel}>Website URL (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={url}
+                onChangeText={setUrl}
+                placeholder="https://example.com/event"
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <View style={styles.buttonRow}>
