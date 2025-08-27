@@ -17,6 +17,7 @@
     "submit:ios": "eas submit --platform ios",
     "fastlane:build": "cd ios && fastlane build",
     "fastlane:build-dev": "cd ios && fastlane build_dev",
+    "fastlane:build-test": "cd ios && fastlane build_test",
     "fastlane:setup": "cd ios && fastlane setup",
     "fastlane:testflight": "cd ios && fastlane upload_testflight",
     "fastlane:appstore": "cd ios && fastlane upload_appstore",

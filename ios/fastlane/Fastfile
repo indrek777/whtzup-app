@@ -28,9 +28,10 @@ platform :ios do
     build_app(
       workspace: "EventDiscovery.xcworkspace",
       scheme: "EventDiscovery",
-      export_method: "development",
-      configuration: "Debug",
-      clean: true
+      export_method: "app-store",
+      configuration: "Release",
+      clean: true,
+      skip_codesigning: false
     )
   end
 
@@ -45,6 +46,11 @@ platform :ios do
       clean: true,
       skip_codesigning: true
     )
+  end
+
+  desc "Build the app without archiving (for testing)"
+  lane :build_test do
+    sh("cd .. && npx expo run:ios --configuration Debug --no-build-cache")
   end
 
   desc "Build and upload to TestFlight"

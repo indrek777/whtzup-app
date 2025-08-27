@@ -39,6 +39,14 @@ Build the app for testing
 
 Build the app without code signing (for development)
 
+### ios build_test
+
+```sh
+[bundle exec] fastlane ios build_test
+```
+
+Build the app without archiving (for testing)
+
 ### ios upload_testflight
 
 ```sh
