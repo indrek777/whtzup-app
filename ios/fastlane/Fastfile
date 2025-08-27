@@ -25,14 +25,10 @@ platform :ios do
 
   desc "Build the app for testing"
   lane :build do
-    build_app(
-      workspace: "EventDiscovery.xcworkspace",
-      scheme: "EventDiscovery",
-      export_method: "app-store",
-      configuration: "Release",
-      clean: true,
-      skip_codesigning: false
-    )
+    sh("pod install")
+    UI.message "✅ Pod install completed"
+    UI.message "⚠️  Note: Full build requires Xcode due to React Native dependencies"
+    UI.message "💡 Use 'npm run ios' for development builds"
   end
 
   desc "Build the app without code signing (for development)"
@@ -50,19 +46,18 @@ platform :ios do
 
   desc "Build the app without archiving (for testing)"
   lane :build_test do
-    sh("cd .. && npx expo run:ios --configuration Debug --no-build-cache")
+    sh("pod install")
+    sh("xcodebuild -workspace EventDiscovery.xcworkspace -scheme EventDiscovery -configuration Debug -destination 'generic/platform=iOS' build")
   end
 
   desc "Build and upload to TestFlight"
   lane :upload_testflight do
     increment_build_number(xcodeproj: "EventDiscovery.xcodeproj")
-    build_app(
-      workspace: "EventDiscovery.xcworkspace",
-      scheme: "EventDiscovery",
-      export_method: "app-store",
-      configuration: "Release"
-    )
+    sh("pod install")
+    sh("xcodebuild -workspace EventDiscovery.xcworkspace -scheme EventDiscovery -configuration Release -destination 'generic/platform=iOS' archive -archivePath EventDiscovery.xcarchive")
+    sh("xcodebuild -exportArchive -archivePath EventDiscovery.xcarchive -exportPath ./build -exportOptionsPlist exportOptions.plist")
     upload_to_testflight(
+      ipa: "./build/EventDiscovery.ipa",
       skip_waiting_for_build_processing: true
     )
   end

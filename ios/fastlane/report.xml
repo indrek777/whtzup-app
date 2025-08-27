@@ -5,17 +5,12 @@
     
     
       
-      <testcase classname="fastlane.lanes" name="0: default_platform" time="0.000162">
+      <testcase classname="fastlane.lanes" name="0: default_platform" time="0.000177">
         
       </testcase>
     
       
-      <testcase classname="fastlane.lanes" name="1: clean_build_artifacts" time="8.8e-05">
-        
-      </testcase>
-    
-      
-      <testcase classname="fastlane.lanes" name="2: clear_derived_data" time="0.000595">
+      <testcase classname="fastlane.lanes" name="1: pod install" time="11.226448">
         
       </testcase>
     
