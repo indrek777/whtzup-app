@@ -2,7 +2,7 @@
   "expo": {
     "name": "Event Discovery",
     "slug": "event-discovery",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Discover and explore events near you with our interactive map. Find concerts, festivals, workshops, and more happening in your area.",
     "orientation": "portrait",
     "icon": "assets/icon_assets/Expo/icon.png",
@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eventdiscovery.app",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
