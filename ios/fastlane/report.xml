@@ -5,17 +5,12 @@
     
     
       
-      <testcase classname="fastlane.lanes" name="0: default_platform" time="0.000168">
+      <testcase classname="fastlane.lanes" name="0: default_platform" time="0.000147">
         
       </testcase>
     
       
-      <testcase classname="fastlane.lanes" name="1: increment_build_number" time="0.223753">
-        
-      </testcase>
-    
-      
-      <testcase classname="fastlane.lanes" name="2: pod install" time="9.307352">
+      <testcase classname="fastlane.lanes" name="1: increment_version_number" time="0.150732">
         
       </testcase>
     
