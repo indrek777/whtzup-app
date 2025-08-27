@@ -15,6 +15,15 @@
     "web": "expo start --web --lan",
     "build:ios": "eas build --platform ios",
     "submit:ios": "eas submit --platform ios",
+    "fastlane:build": "cd ios && fastlane build",
+    "fastlane:build-dev": "cd ios && fastlane build_dev",
+    "fastlane:setup": "cd ios && fastlane setup",
+    "fastlane:testflight": "cd ios && fastlane upload_testflight",
+    "fastlane:appstore": "cd ios && fastlane upload_appstore",
+    "fastlane:beta": "cd ios && fastlane beta",
+    "fastlane:clean": "cd ios && fastlane clean",
+    "fastlane:test": "cd ios && fastlane test",
+    "fastlane:version": "cd ios && fastlane version",
     "lint": "eslint . --ext js,jsx,ts,tsx"
   },
   "dependencies": {

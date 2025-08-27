@@ -1,6 +1,154 @@
-# Event - iOS Event Discovery App
+# Event Discovery App
 
-A powerful iOS-native event discovery application built with React Native and Expo, featuring smart performance optimizations for handling large datasets.
+Discover and explore events near you with our interactive map. Find concerts, festivals, workshops, and more happening in your area.
+
+## 🚀 Fastlane Setup - COMPLETED ✅
+
+This project now uses Fastlane for iOS builds and deployments. Fastlane provides automated workflows for building, testing, and deploying iOS apps.
+
+### ✅ What was accomplished:
+
+1. **Fastlane installed** - `brew install fastlane`
+2. **Fastlane configured** - iOS project setup complete
+3. **Fastfile created** - 8 automation lanes configured
+4. **Package.json updated** - New npm scripts added
+5. **CocoaPods working** - Dependencies installed successfully
+6. **Build tested** - Archive succeeded (export needs code signing)
+
+### Prerequisites
+
+- ✅ Fastlane installed: `brew install fastlane`
+- ✅ Xcode with iOS development tools
+- ✅ Apple Developer account
+- ✅ App Store Connect access
+
+### Available Fastlane Commands
+
+#### Using npm scripts (recommended):
+```bash
+# Build the app locally (development)
+npm run fastlane:build-dev
+
+# Build the app (requires code signing)
+npm run fastlane:build
+
+# Upload to TestFlight
+npm run fastlane:testflight
+
+# Upload to App Store
+npm run fastlane:appstore
+
+# Beta build (legacy)
+npm run fastlane:beta
+
+# Clean build artifacts
+npm run fastlane:clean
+
+# Run tests
+npm run fastlane:test
+
+# Update version number
+npm run fastlane:version
+
+# Setup project dependencies
+npm run fastlane:setup
+```
+
+#### Direct Fastlane commands:
+```bash
+cd ios
+
+# List all available lanes
+fastlane lanes
+
+# Build app (development, no code signing)
+fastlane build_dev
+
+# Build app (requires code signing)
+fastlane build
+
+# Upload to TestFlight
+fastlane upload_testflight
+
+# Upload to App Store
+fastlane upload_appstore
+
+# Beta build
+fastlane beta
+
+# Clean
+fastlane clean
+
+# Run tests
+fastlane test
+
+# Update version
+fastlane version version:1.4.0
+
+# Setup dependencies
+fastlane setup
+```
+
+### Fastlane Configuration
+
+- **Fastfile**: `ios/fastlane/Fastfile` - Contains all automation lanes
+- **Appfile**: `ios/fastlane/Appfile` - Contains app configuration
+- **Gemfile**: `ios/Gemfile` - Ruby dependencies
+
+### Current Status
+
+✅ **Build working** - Archive succeeds  
+⚠️ **Export needs code signing** - Manual setup required  
+✅ **CocoaPods working** - Dependencies installed  
+✅ **Fastlane configured** - All lanes ready  
+
+### Next Steps for Full Deployment
+
+1. **Configure Code Signing in Xcode:**
+   ```bash
+   # Open project in Xcode
+   open ios/EventDiscovery.xcworkspace
+   ```
+   - Select EventDiscovery target
+   - Go to "Signing & Capabilities"
+   - Select your team and provisioning profile
+
+2. **Test with code signing:**
+   ```bash
+   npm run fastlane:build
+   ```
+
+3. **Deploy to TestFlight:**
+   ```bash
+   npm run fastlane:testflight
+   ```
+
+4. **Deploy to App Store:**
+   ```bash
+   npm run fastlane:appstore
+   ```
+
+### Workflow
+
+1. **Development**: Use `npm run fastlane:build-dev` to build locally (no code signing)
+2. **Testing**: Use `npm run fastlane:testflight` to upload to TestFlight
+3. **Release**: Use `npm run fastlane:appstore` to upload to App Store
+
+### Benefits over EAS
+
+- **Local builds**: Build directly on your machine
+- **Faster**: No cloud build queue
+- **More control**: Full control over build process
+- **Cost effective**: No cloud build costs
+- **Offline capable**: Works without internet connection
+
+### Troubleshooting
+
+If you encounter code signing issues:
+1. Open Xcode and configure signing manually
+2. Ensure your Apple Developer account is active
+3. Check that provisioning profiles are valid
+4. Use `fastlane setup_codesigning` for guidance
 
 ## 🚀 Features
 
