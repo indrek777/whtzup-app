@@ -2,7 +2,7 @@
   "expo": {
     "name": "Event Discovery",
     "slug": "event-discovery",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Discover and explore events near you with our interactive map. Find concerts, festivals, workshops, and more happening in your area.",
     "orientation": "portrait",
     "icon": "assets/icon_assets/Expo/icon.png",
@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eventdiscovery.app",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to show events near you",
@@ -30,24 +30,18 @@
         "NSPrivacyPolicyURL": "https://olympio.ee/privacy-policy",
         "NSTermsOfServiceURL": "https://olympio.ee/terms-of-service",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true,
+          "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {
+            "165.22.90.180": {
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSExceptionMinimumTLSVersion": "1.2",
+              "NSExceptionRequiresForwardSecrecy": true,
+              "NSIncludesSubdomains": true
+            },
             "olympio.ee": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSExceptionMinimumTLSVersion": "1.0",
-              "NSExceptionRequiresForwardSecrecy": false,
-              "NSIncludesSubdomains": true
-            },
-            "192.168.66.54": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSExceptionMinimumTLSVersion": "1.0",
-              "NSExceptionRequiresForwardSecrecy": false,
-              "NSIncludesSubdomains": true
-            },
-            "88.196.240.63": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSExceptionMinimumTLSVersion": "1.0",
-              "NSExceptionRequiresForwardSecrecy": false,
+              "NSExceptionAllowsInsecureHTTPLoads": false,
+              "NSExceptionMinimumTLSVersion": "1.2",
+              "NSExceptionRequiresForwardSecrecy": true,
               "NSIncludesSubdomains": true
             }
           }
