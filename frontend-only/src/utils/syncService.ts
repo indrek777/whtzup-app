@@ -51,7 +51,8 @@ class SyncService {
   constructor() {
     this.initializeDeviceId();
     this.setupNetworkListener();
-    this.setupSocketConnection();
+    // Temporarily disable socket connection due to SSL issues
+    // this.setupSocketConnection();
     this.loadPendingOperations();
     this.loadLastUpdateCheck();
   }
