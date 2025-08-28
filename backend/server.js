@@ -21,6 +21,7 @@ const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const subscriptionRouter = require('./routes/subscription');
 const ratingsRouter = require('./routes/ratings');
+const adminRouter = require('./routes/admin');
 const { errorHandler } = require('./middleware/errorHandler');
 const { validateDeviceId } = require('./middleware/deviceValidation');
 
@@ -28,11 +29,25 @@ const { validateDeviceId } = require('./middleware/deviceValidation');
 const app = express();
 
 // SSL Certificate configuration
-const sslOptions = {
-  key: process.env.SSL_KEY_PATH ? fs.readFileSync(process.env.SSL_KEY_PATH) : null,
-  cert: process.env.SSL_CERT_PATH ? fs.readFileSync(process.env.SSL_CERT_PATH) : null,
-  ca: process.env.SSL_CA_PATH ? fs.readFileSync(process.env.SSL_CA_PATH) : null
-};
+let sslOptions = null;
+try {
+  if (process.env.SSL_KEY_PATH && process.env.SSL_CERT_PATH) {
+    sslOptions = {
+      key: fs.readFileSync(process.env.SSL_KEY_PATH),
+      cert: fs.readFileSync(process.env.SSL_CERT_PATH)
+    };
+    
+    // Add CA certificate if provided
+    if (process.env.SSL_CA_PATH) {
+      sslOptions.ca = fs.readFileSync(process.env.SSL_CA_PATH);
+    }
+    
+    logger.info('SSL certificates loaded successfully');
+  }
+} catch (error) {
+  logger.error('Error loading SSL certificates:', error.message);
+  sslOptions = null;
+}
 
 // Create HTTP and HTTPS servers
 const server = http.createServer(app);
@@ -58,7 +73,7 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://olympio.ee', 'https://olympio.ee:4001'] 
-    : ['http://localhost:3000', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'https://olympio.ee:4001', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'exp://10.0.0.57:8081']
+    : ['http://localhost:3000', 'https://localhost:4001', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'https://olympio.ee:4001', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'https://10.0.0.57:4001', 'exp://10.0.0.57:8081']
 }));
 
 // Rate limiting (can be disabled with DISABLE_RATE_LIMIT=true)
@@ -97,6 +112,7 @@ app.use('/api/events', validateDeviceId, (req, res, next) => {
 app.use('/api/ratings', ratingsRouter);
 app.use('/api/sync', validateDeviceId, syncRouter);
 app.use('/api/health', healthRouter);
+app.use('/api/admin', adminRouter);
 
 // Socket.IO connection handling function
 function setupSocketIO(socketIo) {

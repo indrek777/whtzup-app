@@ -6,14 +6,18 @@ services:
     container_name: whtzup-api
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "4000:4000"  # HTTP
+      - "4001:4001"  # HTTPS
     environment:
       - NODE_ENV=production
       - PORT=4000
+      - HTTPS_PORT=4001
       - JWT_SECRET=${JWT_SECRET}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=${FRONTEND_URL}
+      - SSL_KEY_PATH=${SSL_KEY_PATH:-/app/ssl/server.key}
+      - SSL_CERT_PATH=${SSL_CERT_PATH:-/app/ssl/server.crt}
     depends_on:
       - postgres
       - redis
@@ -21,6 +25,8 @@ services:
       - whtzup-network
     volumes:
       - ./logs:/app/logs
+      - ${SSL_KEY_PATH:-./ssl/server.key}:/app/ssl/server.key:ro
+      - ${SSL_CERT_PATH:-./ssl/server.crt}:/app/ssl/server.crt:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
       interval: 30s

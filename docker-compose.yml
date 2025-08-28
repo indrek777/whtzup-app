@@ -37,14 +37,19 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
+      HTTPS_PORT: 4001
       DATABASE_URL: postgresql://whtzup_user:whtzup_password@postgres:5432/whtzup_events
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       DISABLE_RATE_LIMIT: "true"
+      SSL_KEY_PATH: /app/ssl/server.key
+      SSL_CERT_PATH: /app/ssl/server.crt
     ports:
-      - "4000:4000"
+      - "4000:4000"  # HTTP
+      - "4001:4001"  # HTTPS
     volumes:
       - ./backend:/app
+      - ./ssl:/app/ssl:ro
       - /app/node_modules
     depends_on:
       - postgres
