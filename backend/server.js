@@ -32,20 +32,29 @@ const app = express();
 let sslOptions = null;
 try {
   if (process.env.SSL_KEY_PATH && process.env.SSL_CERT_PATH) {
-    sslOptions = {
-      key: fs.readFileSync(process.env.SSL_KEY_PATH),
-      cert: fs.readFileSync(process.env.SSL_CERT_PATH)
-    };
-    
-    // Add CA certificate if provided
-    if (process.env.SSL_CA_PATH) {
-      sslOptions.ca = fs.readFileSync(process.env.SSL_CA_PATH);
+    // Check if SSL files exist before trying to read them
+    if (fs.existsSync(process.env.SSL_KEY_PATH) && fs.existsSync(process.env.SSL_CERT_PATH)) {
+      sslOptions = {
+        key: fs.readFileSync(process.env.SSL_KEY_PATH),
+        cert: fs.readFileSync(process.env.SSL_CERT_PATH)
+      };
+      
+      // Add CA certificate if provided
+      if (process.env.SSL_CA_PATH && fs.existsSync(process.env.SSL_CA_PATH)) {
+        sslOptions.ca = fs.readFileSync(process.env.SSL_CA_PATH);
+      }
+      
+      logger.info('SSL certificates loaded successfully');
+    } else {
+      logger.warn('SSL certificate files not found, running without HTTPS');
+      sslOptions = null;
     }
-    
-    logger.info('SSL certificates loaded successfully');
+  } else {
+    logger.info('SSL certificate paths not configured, running without HTTPS');
   }
 } catch (error) {
   logger.error('Error loading SSL certificates:', error.message);
+  logger.warn('Continuing without HTTPS support');
   sslOptions = null;
 }
 

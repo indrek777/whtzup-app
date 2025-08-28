@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   View,
@@ -928,7 +927,6 @@ const EventEditor: React.FC<EventEditorProps> = ({
             </ScrollView>
           </View>
         </View>
-      </Modal>
 
         {/* Location Search Modal */}
         <Modal
@@ -1176,6 +1174,7 @@ const EventEditor: React.FC<EventEditorProps> = ({
               </ScrollView>
             </View>
           </Modal>
+        </View>
 
      {/* Coordinate Assignment Editor Modal - Outside main modal to avoid nesting issues */}
      <Modal

@@ -30,7 +30,7 @@ class IAPService {
         console.log('🛒 Purchase listener triggered:', { responseCode, results, errorCode });
         
         if (responseCode === InAppPurchases.IAPResponseCode.OK) {
-          results.forEach(purchase => {
+          (results || []).forEach(purchase => {
             if (!purchase.acknowledged) {
               this.handlePurchase(purchase);
             }
@@ -43,9 +43,7 @@ class IAPService {
       });
 
       // Set up purchase history listener
-      InAppPurchases.setPurchaseHistoryListener(({ responseCode, results }) => {
-        console.log('📜 Purchase history listener:', { responseCode, results });
-      });
+      // Some SDK versions may not have a separate history listener; fallback is no-op here
 
       return true;
     } catch (error) {
@@ -68,9 +66,9 @@ class IAPService {
       ]);
 
       if (responseCode === InAppPurchases.IAPResponseCode.OK) {
-        this.products = results;
-        console.log('✅ Products fetched:', results.map(p => ({ id: p.productId, price: p.price })));
-        return results;
+        this.products = results || [];
+        console.log('✅ Products fetched:', (results || []).map(p => ({ id: p.productId, price: p.price })));
+        return results || [];
       } else {
         console.error('❌ Failed to fetch products:', responseCode);
         return [];
@@ -94,14 +92,17 @@ class IAPService {
 
       console.log('🛒 Purchasing subscription:', productId);
       
-      const { responseCode, results } = await InAppPurchases.purchaseItemAsync(productId);
+      // Types may declare void on web; cast to any to support native shape
+      const purchaseResp: any = await InAppPurchases.purchaseItemAsync(productId);
+      const responseCode = purchaseResp?.responseCode;
+      const results = purchaseResp?.results as InAppPurchases.InAppPurchase[] | undefined;
 
       if (responseCode === InAppPurchases.IAPResponseCode.OK) {
-        const purchase = results[0];
+        const purchase = (results || [])[0] as any;
         console.log('✅ Purchase successful:', purchase);
         
         // Acknowledge the purchase
-        await InAppPurchases.finishTransactionAsync(purchase, true);
+        await InAppPurchases.finishTransactionAsync(purchase as InAppPurchases.InAppPurchase, true);
         
         return { success: true, purchase };
       } else {
@@ -134,14 +135,14 @@ class IAPService {
   }
 
   // Store purchase receipt locally
-  private async storePurchaseReceipt(purchase: InAppPurchases.InAppPurchase) {
+  private async storePurchaseReceipt(purchase: InAppPurchases.InAppPurchase | any) {
     try {
       const receipts = await this.getStoredReceipts();
       receipts.push({
         productId: purchase.productId,
-        transactionId: purchase.transactionId,
-        purchaseDate: purchase.purchaseDate,
-        receipt: purchase.transactionReceipt
+        transactionId: (purchase as any).transactionId || '',
+        purchaseDate: (purchase as any).purchaseDate || new Date().toISOString(),
+        receipt: (purchase as any).transactionReceipt || ''
       });
       
       await AsyncStorage.setItem('iap_receipts', JSON.stringify(receipts));
@@ -168,7 +169,7 @@ class IAPService {
   }
 
   // Update subscription status based on purchase
-  private async updateSubscriptionStatus(purchase: InAppPurchases.InAppPurchase) {
+  private async updateSubscriptionStatus(purchase: InAppPurchases.InAppPurchase | any) {
     try {
       // Determine subscription plan
       const plan = purchase.productId === SUBSCRIPTION_PRODUCTS.MONTHLY ? 'monthly' : 'yearly';
@@ -236,11 +237,11 @@ class IAPService {
         console.log('✅ Purchases restored:', results);
         
         // Process restored purchases
-        for (const purchase of results) {
+        for (const purchase of (results || [])) {
           await this.handlePurchase(purchase);
         }
         
-        return { success: true, restoredPurchases: results };
+        return { success: true, restoredPurchases: results || [] };
       } else {
         console.error('❌ Failed to restore purchases:', responseCode);
         return { success: false, error: `Restore failed: ${responseCode}` };

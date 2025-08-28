@@ -1377,6 +1377,34 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 }
 
 const styles = StyleSheet.create({
+  section: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  disabledButton: {
+    backgroundColor: '#a0aec0',
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: 'white',

@@ -86,7 +86,8 @@ class ReceiptValidator {
       // Try production first, then sandbox if needed
       const productionResult = await this.validateWithApple(receiptData, APPLE_PRODUCTION_URL);
       
-      if (productionResult.status === 21007) {
+      // Allow status inspection when returned shape varies
+      if ((productionResult as any)?.status === 21007) {
         // Sandbox receipt sent to production, try sandbox
         console.log('🔄 Retrying with sandbox environment...');
         return await this.validateWithApple(receiptData, APPLE_SANDBOX_URL);

@@ -3,14 +3,14 @@ const AsyncStorage = require('@react-native-async-storage/async-storage');
 // Demo user credentials
 const DEMO_USER = {
   email: 'demo@eventdiscovery.app',
-  password: 'demo123' // Assuming this is the password
+  password: 'demo123' // Updated password
 };
 
 async function loginDemoUser() {
   try {
     console.log('🔐 Logging in demo user...');
     
-    const response = await fetch('https://165.22.90.180:4001/api/auth/signin', {
+    const response = await fetch('http://165.22.90.180:4000/api/auth/signin', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

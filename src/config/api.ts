@@ -2,10 +2,10 @@
 export const API_CONFIG = {
   // Development environment
   development: {
-    http: 'http://localhost:4000',
-    https: 'https://localhost:4001',
-    api: 'http://localhost:4000/api',
-    apiHttps: 'https://localhost:4001/api'
+    http: 'http://165.22.90.180:4000',
+    https: 'https://165.22.90.180:4001',
+    api: 'http://165.22.90.180:4000/api',
+    apiHttps: 'https://165.22.90.180:4001/api'
   },
   
   // Production environment

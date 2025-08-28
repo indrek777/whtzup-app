@@ -1,4 +1,6 @@
 import { Alert } from 'react-native'
+// Type import guard for AlertButton (may not exist on older RN types)
+type RNAlertButton = { text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }
 
 // Error types for better categorization
 export enum ErrorType {
@@ -211,34 +213,34 @@ export class ErrorHandler {
       
       // Network errors
       if (type === ErrorType.NETWORK) {
-        if (lowerMessage.includes('timeout')) return messages.timeout
-        if (lowerMessage.includes('offline')) return messages.offline
-        if (lowerMessage.includes('unreachable')) return messages.serverUnreachable
+        if (lowerMessage.includes('timeout')) return (messages as any).timeout || messages.default
+        if (lowerMessage.includes('offline')) return (messages as any).offline || messages.default
+        if (lowerMessage.includes('unreachable')) return (messages as any).serverUnreachable || messages.default
       }
       
       // Authentication errors
       if (type === ErrorType.AUTHENTICATION) {
-        if (lowerMessage.includes('expired')) return messages.expired
-        if (lowerMessage.includes('invalid')) return messages.invalid
-        if (lowerMessage.includes('required')) return messages.required
+        if (lowerMessage.includes('expired')) return (messages as any).expired || messages.default
+        if (lowerMessage.includes('invalid')) return (messages as any).invalid || messages.default
+        if (lowerMessage.includes('required')) return (messages as any).required || messages.default
       }
       
       // Permission errors
       if (type === ErrorType.PERMISSION) {
-        if (lowerMessage.includes('edit')) return messages.eventEdit
-        if (lowerMessage.includes('delete')) return messages.eventDelete
-        if (lowerMessage.includes('premium')) return messages.premium
+        if (lowerMessage.includes('edit')) return (messages as any).eventEdit || messages.default
+        if (lowerMessage.includes('delete')) return (messages as any).eventDelete || messages.default
+        if (lowerMessage.includes('premium')) return (messages as any).premium || messages.default
       }
       
       // Validation errors
       if (type === ErrorType.VALIDATION) {
-        if (lowerMessage.includes('email')) return messages.email
-        if (lowerMessage.includes('password')) return messages.password
-        if (lowerMessage.includes('name')) return messages.eventName
-        if (lowerMessage.includes('venue')) return messages.venue
-        if (lowerMessage.includes('coordinates')) return messages.coordinates
-        if (lowerMessage.includes('date')) return messages.date
-        if (lowerMessage.includes('required')) return messages.required
+        if (lowerMessage.includes('email')) return (messages as any).email || messages.default
+        if (lowerMessage.includes('password')) return (messages as any).password || messages.default
+        if (lowerMessage.includes('name')) return (messages as any).eventName || messages.default
+        if (lowerMessage.includes('venue')) return (messages as any).venue || messages.default
+        if (lowerMessage.includes('coordinates')) return (messages as any).coordinates || messages.default
+        if (lowerMessage.includes('date')) return (messages as any).date || messages.default
+        if (lowerMessage.includes('required')) return (messages as any).required || messages.default
       }
     }
     
@@ -289,7 +291,7 @@ export class ErrorHandler {
 
     // Show alert to user
     if (showAlert) {
-      const buttons = [{ text: 'OK', style: 'default' }]
+      const buttons: RNAlertButton[] = [{ text: 'OK', style: 'default' }]
       
       // Add retry button for retryable errors
       if (error.retryable && retryCallback) {
@@ -303,7 +305,7 @@ export class ErrorHandler {
       Alert.alert(
         this.getAlertTitle(error),
         error.userMessage,
-        buttons
+        buttons as any
       )
     }
   }

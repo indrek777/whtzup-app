@@ -185,7 +185,7 @@ const determineCategory = (name: string, description: string): string => {
     return 'cultural'
   } else if (text.includes('ball') || text.includes('ceremony') || text.includes('celebration')) {
     return 'cultural'
-  } else if (text.includes('festival') || text.includes('holiday') || text.includes('custom')) {
+  } else if (text.includes('holiday') || text.includes('custom')) {
     return 'cultural'
   }
   

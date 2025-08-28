@@ -153,7 +153,7 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
 }
 
 // Backend API URL - update this to match your backend server
-const API_BASE_URL = 'https://165.22.90.180:4001/api' // Digital Ocean backend URL
+const API_BASE_URL = 'http://165.22.90.180:4000/api' // Digital Ocean backend URL
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',
@@ -291,18 +291,50 @@ class UserService {
   // Check if user has premium subscription
   async hasPremiumSubscription(): Promise<boolean> {
     await this.ensureInitialized()
-    if (!this.currentUser) return false
+    if (!this.currentUser) {
+      console.log('🔍 No current user for premium check')
+      return false
+    }
     
+    // First check local subscription data
+    const subscription = this.currentUser.subscription
+    console.log('🔍 Local subscription data:', subscription)
+    
+    if (subscription && subscription.status === 'premium') {
+      // Check if subscription is expired
+      if (subscription.endDate) {
+        const endDate = new Date(subscription.endDate)
+        const now = new Date()
+        const isActive = endDate > now
+        console.log('🔍 Local premium subscription end date check:', { 
+          endDate: endDate.toISOString(), 
+          now: now.toISOString(), 
+          isActive 
+        })
+        return isActive
+      } else {
+        // No end date means unlimited subscription
+        console.log('🔍 Local premium subscription with no end date - assuming active')
+        return true
+      }
+    }
+    
+    // If local data shows no premium, try backend
     try {
-      // Check backend for most up-to-date subscription status
+      console.log('🔍 Checking subscription status from backend...')
       const headers = await this.getAuthHeaders()
+      
       const response = await fetch(`${API_BASE_URL}/subscription/status`, {
         method: 'GET',
         headers
       })
 
+      console.log('🔍 Backend response status:', response.status)
+
       if (response.ok) {
         const result = await response.json()
+        console.log('🔍 Backend subscription result:', result)
+        
         if (result.success) {
           // Update local subscription data
           this.currentUser.subscription = result.data
@@ -316,28 +348,31 @@ class UserService {
               const endDate = new Date(result.data.endDate)
               const now = new Date()
               const isActive = endDate > now
-              console.log('🔍 Premium subscription end date check:', { endDate, now, isActive })
+              console.log('🔍 Premium subscription end date check:', { 
+                endDate: endDate.toISOString(), 
+                now: now.toISOString(), 
+                isActive 
+              })
               return isActive
             }
+            console.log('🔍 Premium subscription with no end date - assuming active')
             return true
+          } else {
+            console.log('🔍 Subscription status is not premium:', result.data.status)
+            return false
           }
-          return false
+        } else {
+          console.log('🔍 Backend returned error:', result.error)
         }
+      } else {
+        console.log('🔍 Backend request failed with status:', response.status)
       }
     } catch (error) {
-      console.log('Failed to check subscription status from backend, using local data')
+      console.log('🔍 Failed to check subscription status from backend, using local data:', error instanceof Error ? error.message : 'Unknown error')
     }
     
-    // Fallback to local data if backend check fails
-    const subscription = this.currentUser.subscription
-    if (!subscription || subscription.status !== 'premium') return false
-    
-    if (subscription.endDate) {
-      const endDate = new Date(subscription.endDate)
-      const now = new Date()
-      return endDate > now
-    }
-    
+    // If backend check fails, return false (no premium subscription)
+    console.log('🔍 No premium subscription found')
     return false
   }
 
@@ -784,9 +819,11 @@ class UserService {
         this.authToken = result.data.accessToken
         if (result.data.refreshToken) {
           this.refreshToken = result.data.refreshToken
-          await AsyncStorage.setItem('refresh_token', this.refreshToken)
+          await AsyncStorage.setItem('refresh_token', this.refreshToken || '')
         }
-        await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken!)
+        if (this.authToken) {
+          await AsyncStorage.setItem(STORAGE_KEYS.authToken, this.authToken)
+        }
         console.log('✅ Token refreshed successfully')
         console.log('💾 New tokens saved to storage')
         return true
@@ -929,8 +966,10 @@ class UserService {
 
       if (result.success) {
         // Update local user data
-        this.currentUser.subscription.status = 'expired'
-        this.currentUser.subscription.autoRenew = false
+        if (this.currentUser.subscription) {
+          this.currentUser.subscription.status = 'expired'
+          this.currentUser.subscription.autoRenew = false
+        }
         this.currentUser.userGroup = 'registered'
 
         // Save to storage
@@ -1046,7 +1085,7 @@ class UserService {
 
   private async getDefaultUsageData() {
     // Fallback to local data
-    const stats = this.currentUser?.stats || { eventsCreated: 0, eventsCreatedToday: 0 }
+    const stats: Partial<UserStats> = this.currentUser?.stats || { eventsCreated: 0, eventsCreatedToday: 0 }
     const features = await this.getUserGroupFeatures()
     
     return {
@@ -1243,7 +1282,7 @@ class UserService {
           'priority_support'
         ]
       },
-      upgradeBenefits: userGroup === 'free' ? [
+      upgradeBenefits: (userGroup === 'unregistered' ? [
         'unlimited_events',
         'advanced_search',
         'priority_support',
@@ -1257,7 +1296,7 @@ class UserService {
         'premium_categories',
         'create_groups',
         'priority_support'
-      ] : []
+      ] : [])
     }
   }
 
