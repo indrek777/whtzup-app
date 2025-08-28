@@ -19,6 +19,7 @@ import { errorHandler, ErrorType } from '../utils/errorHandler'
 import { iapService, SUBSCRIPTION_PRODUCTS } from '../utils/iapServiceMock'
 import SubscriptionManager from './SubscriptionManager'
 import SubscriptionTerms from './SubscriptionTerms'
+import PasswordResetModal from './PasswordResetModal'
 
 interface UserProfileProps {
   visible: boolean
@@ -42,6 +43,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
   const [showSubscriptionTerms, setShowSubscriptionTerms] = useState(false)
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false)
   
   // Auth states
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
@@ -564,6 +566,18 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
               {authMode === 'signin' ? 'Sign Up' : 'Sign In'}
             </Text>
           </TouchableOpacity>
+
+          {authMode === 'signin' && (
+            <TouchableOpacity 
+              style={styles.forgotPasswordButton}
+              onPress={() => {
+                setShowAuthModal(false)
+                setShowPasswordResetModal(true)
+              }}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
     </Modal>
@@ -1347,6 +1361,16 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
             </ScrollView>
           </SafeAreaView>
         </Modal>
+
+        {/* Password Reset Modal */}
+        <PasswordResetModal
+          visible={showPasswordResetModal}
+          onClose={() => setShowPasswordResetModal(false)}
+          onSuccess={() => {
+            setShowPasswordResetModal(false)
+            Alert.alert('Success', 'Password reset successfully! You can now sign in with your new password.')
+          }}
+        />
       </SafeAreaView>
     </Modal>
   )
@@ -1878,6 +1902,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 15,
+  },
+  forgotPasswordButton: {
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  forgotPasswordText: {
+    color: '#007AFF',
+    fontSize: 16,
+    textDecorationLine: 'underline',
   },
 })
 
