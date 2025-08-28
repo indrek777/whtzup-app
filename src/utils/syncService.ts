@@ -29,6 +29,7 @@ interface Conflict {
 
 // Configuration
 const API_BASE_URL = 'https://165.22.90.180:4001';
+const SOCKET_BASE_URL = 'https://165.22.90.180:4001';
 const SYNC_INTERVAL = 30000; // 30 seconds
 const UPDATE_CHECK_INTERVAL = 60000; // 60 seconds for checking updates (reduced frequency)
 const MAX_RETRY_COUNT = 3;
@@ -127,15 +128,17 @@ class SyncService {
     }
 
     console.log('🔌 Setting up Socket.IO connection...');
-    console.log(`📡 Connecting to: ${API_BASE_URL}`);
+    console.log(`📡 Connecting to: ${SOCKET_BASE_URL}`);
     console.log(`🆔 Device ID: ${this.deviceId}`);
 
-    this.socket = io(API_BASE_URL, {
+    this.socket = io(SOCKET_BASE_URL, {
       transports: ['websocket', 'polling'],
       timeout: 10000,
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5
+      reconnectionAttempts: 5,
+      rejectUnauthorized: false,
+      secure: true
     });
 
     this.socket.on('connect', () => {
