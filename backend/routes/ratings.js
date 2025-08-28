@@ -340,4 +340,90 @@ router.get('/top-rated', async (req, res) => {
   }
 });
 
+// GET /api/ratings - Get all ratings (with pagination)
+router.get('/', async (req, res) => {
+  try {
+    const { page = 1, limit = 20, eventId, userId } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT 
+        er.id, er.event_id, er.user_id, er.rating, er.review, er.created_at,
+        e.name as event_name,
+        u.name as user_name
+      FROM event_ratings er
+      JOIN events e ON er.event_id = e.id
+      JOIN users u ON er.user_id = u.id
+      WHERE e.deleted_at IS NULL
+    `;
+    
+    const queryParams = [];
+    let paramCount = 0;
+
+    if (eventId) {
+      paramCount++;
+      query += ` AND er.event_id = $${paramCount}`;
+      queryParams.push(eventId);
+    }
+
+    if (userId) {
+      paramCount++;
+      query += ` AND er.user_id = $${paramCount}`;
+      queryParams.push(userId);
+    }
+
+    query += ` ORDER BY er.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    queryParams.push(limit, offset);
+
+    const result = await pool.query(query, queryParams);
+    const ratings = result.rows;
+
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM event_ratings er
+      JOIN events e ON er.event_id = e.id
+      WHERE e.deleted_at IS NULL
+    `;
+    
+    const countParams = [];
+    paramCount = 0;
+
+    if (eventId) {
+      paramCount++;
+      countQuery += ` AND er.event_id = $${paramCount}`;
+      countParams.push(eventId);
+    }
+
+    if (userId) {
+      paramCount++;
+      countQuery += ` AND er.user_id = $${paramCount}`;
+      countParams.push(userId);
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    res.json({
+      success: true,
+      data: {
+        ratings,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching ratings:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch ratings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 module.exports = router;

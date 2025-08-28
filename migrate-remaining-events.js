@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Backend API URL
-const BACKEND_URL = 'http://165.22.90.180:4000';
+const BACKEND_URL = 'https://165.22.90.180:4001';
 
 // Admin credentials
 const ADMIN_EMAIL = 'admin@whtzup.com';

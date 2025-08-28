@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 
 // Server URLs
 const OLYMPIO_URL = 'http://olympio.ee:4000';
-const DIGITAL_OCEAN_URL = 'http://165.22.90.180:4000';
+const DIGITAL_OCEAN_URL = 'https://165.22.90.180:4001';
 
 // Admin credentials for Digital Ocean
 const ADMIN_EMAIL = 'admin@whtzup.com';

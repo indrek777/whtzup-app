@@ -12,7 +12,7 @@ export const API_CONFIG = {
   production: {
     http: 'http://165.22.90.180:4000',
     https: 'https://165.22.90.180:4001',
-    api: 'http://165.22.90.180:4000/api',
+    api: 'https://165.22.90.180:4001/api',
     apiHttps: 'https://165.22.90.180:4001/api'
   }
 };

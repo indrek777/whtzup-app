@@ -732,4 +732,48 @@ router.post('/reset-password', [
   }
 });
 
+// GET /api/auth/status - Check authentication status
+router.get('/status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get user data
+    const userResult = await pool.query(`
+      SELECT id, email, name, created_at, last_login, is_active
+      FROM users WHERE id = $1
+    `, [userId]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const user = userResult.rows[0];
+    
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          createdAt: user.created_at,
+          lastLogin: user.last_login,
+          isActive: user.is_active
+        },
+        authenticated: true
+      }
+    });
+    
+  } catch (error) {
+    logger.error('Auth status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get authentication status'
+    });
+  }
+});
+
 module.exports = router;

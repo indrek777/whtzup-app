@@ -1,6 +1,6 @@
 import { userService } from './userService';
 
-const API_BASE_URL = 'http://165.22.90.180:4000/api';
+const API_BASE_URL = 'https://165.22.90.180:4001/api';
 
 export interface EventRating {
   id: number;

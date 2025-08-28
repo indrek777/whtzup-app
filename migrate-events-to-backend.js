@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Backend API URL
-const BACKEND_URL = 'http://165.22.90.180:4000';
+const BACKEND_URL = 'https://165.22.90.180:4001';
 
 // Load events from JSON file
 const eventsDataPath = path.join(__dirname, 'src/data/events-data.json');

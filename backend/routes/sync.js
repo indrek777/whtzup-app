@@ -339,4 +339,68 @@ function mergeEvents(localEvent, serverEvent) {
   };
 }
 
+// GET /api/sync - Get sync status and statistics
+router.get('/', async (req, res) => {
+  try {
+    const { deviceId } = req.query;
+    
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Device ID is required'
+      });
+    }
+
+    // Get sync statistics for the device
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_operations,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_operations,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_operations,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_operations,
+        MAX(created_at) as last_sync_attempt
+      FROM sync_queue 
+      WHERE device_id = $1
+    `;
+    
+    const statsResult = await pool.query(statsQuery, [deviceId]);
+    const stats = statsResult.rows[0];
+
+    // Get recent sync operations
+    const recentQuery = `
+      SELECT 
+        id, operation_type, event_id, status, created_at, error_message
+      FROM sync_queue 
+      WHERE device_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    
+    const recentResult = await pool.query(recentQuery, [deviceId]);
+    const recentOperations = recentResult.rows;
+
+    res.json({
+      success: true,
+      data: {
+        deviceId,
+        statistics: {
+          total: parseInt(stats.total_operations),
+          pending: parseInt(stats.pending_operations),
+          completed: parseInt(stats.completed_operations),
+          failed: parseInt(stats.failed_operations),
+          lastSyncAttempt: stats.last_sync_attempt
+        },
+        recentOperations
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching sync status:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch sync status',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 module.exports = router;

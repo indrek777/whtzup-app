@@ -62,7 +62,7 @@ Muuda API URL-d failides:
 const API_BASE_URL = 'http://localhost:4000/api'
 
 // Production
-const API_BASE_URL = 'http://165.22.90.180:4000/api'
+const API_BASE_URL = 'https://165.22.90.180:4001/api'
 ```
 
 ## 📱 Funktsionaalsus
