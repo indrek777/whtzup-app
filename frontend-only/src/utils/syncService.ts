@@ -118,13 +118,14 @@ class SyncService {
     console.log(`🆔 Device ID: ${this.deviceId}`);
 
     this.socket = io(SOCKET_BASE_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       timeout: 10000,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
       rejectUnauthorized: false,
-      secure: true
+      secure: true,
+      forceNew: true
     });
 
     this.socket.on('connect', () => {
