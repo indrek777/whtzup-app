@@ -1,6 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { iapService, SUBSCRIPTION_PRODUCTS } from './iapServiceMock'
 
+// Password reset interfaces
+export interface PasswordResetRequest {
+  email: string
+}
+
+export interface PasswordResetCodeVerification {
+  email: string
+  code: string
+}
+
+export interface PasswordResetWithCode {
+  resetToken: string
+  newPassword: string
+}
+
+export interface PasswordResetResponse {
+  success: boolean
+  message: string
+  data?: {
+    resetToken?: string
+    email?: string
+  }
+  debug?: {
+    code?: string
+  }
+}
+
 // User Group Types
 export type UserGroup = 'unregistered' | 'registered' | 'premium'
 
@@ -1480,6 +1507,93 @@ class UserService {
       console.log('✅ Password reset email sent successfully')
     } catch (error) {
       console.error('❌ Failed to send password reset email:', error)
+      throw error
+    }
+  }
+
+  // Request password reset code
+  async requestPasswordResetCode(email: string): Promise<PasswordResetResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/request-reset-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send reset code')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send reset code')
+      }
+
+      console.log('✅ Password reset code sent successfully')
+      return result
+    } catch (error) {
+      console.error('❌ Failed to send reset code:', error)
+      throw error
+    }
+  }
+
+  // Verify password reset code
+  async verifyPasswordResetCode(email: string, code: string): Promise<PasswordResetResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-reset-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, code })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to verify reset code')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to verify reset code')
+      }
+
+      console.log('✅ Password reset code verified successfully')
+      return result
+    } catch (error) {
+      console.error('❌ Failed to verify reset code:', error)
+      throw error
+    }
+  }
+
+  // Reset password with code
+  async resetPasswordWithCode(resetToken: string, newPassword: string): Promise<PasswordResetResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password-with-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ resetToken, newPassword })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to reset password')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reset password')
+      }
+
+      console.log('✅ Password reset successfully')
+      return result
+    } catch (error) {
+      console.error('❌ Failed to reset password:', error)
       throw error
     }
   }

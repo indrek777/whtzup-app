@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
 // Get database connection from config
-const { pool, redis } = require('../config/database');
+const { pool, redis, logger } = require('../config/database');
 
 // POST /api/sync/queue - Add operation to offline queue
 router.post('/queue', [
