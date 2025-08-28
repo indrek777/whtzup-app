@@ -30,7 +30,8 @@ platform :ios do
       scheme: "EventDiscovery",
       configuration: "Debug",
       destination: "generic/platform=iOS Simulator",
-      clean: true
+      clean: true,
+      skip_archive: true
     )
     
     UI.success "✅ Build completed for iOS Simulator!"

@@ -8,10 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		20E772BDCA61028E4E81E122 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5AC1B909D347A86F313CA6C /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		9D7ABE3346788EFBE7695C7E /* libPods-EventDiscovery.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B83A4C5A1A7ADDD771B5E065 /* libPods-EventDiscovery.a */; };
-		A11DE1CA7D79F5108AB105C7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2CFBB6A12318E446DC1AF2D /* PrivacyInfo.xcprivacy */; };
+		7F4CC73643C35676C1B03ED8 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334101CC5653A7184BB713EC /* ExpoModulesProvider.swift */; };
+		854EA374C8C908F8610C525F /* libPods-EventDiscovery.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C223BF8E8BD59D0218C3009 /* libPods-EventDiscovery.a */; };
+		AFC3E8A2692C0DD60BBE8C25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3AC7110C2B4EE2D1E7948CAE /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
@@ -20,13 +20,13 @@
 		13B07F961A680F5B00A75B9A /* EventDiscovery.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EventDiscovery.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = EventDiscovery/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = EventDiscovery/Info.plist; sourceTree = "<group>"; };
-		1617C9D02397A68BADF813F9 /* Pods-EventDiscovery.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EventDiscovery.release.xcconfig"; path = "Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery.release.xcconfig"; sourceTree = "<group>"; };
-		A2CFBB6A12318E446DC1AF2D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = EventDiscovery/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		334101CC5653A7184BB713EC /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-EventDiscovery/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		3AC7110C2B4EE2D1E7948CAE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = EventDiscovery/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4C223BF8E8BD59D0218C3009 /* libPods-EventDiscovery.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-EventDiscovery.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = EventDiscovery/SplashScreen.storyboard; sourceTree = "<group>"; };
-		B50F1A2C3B48065993FD6A6C /* Pods-EventDiscovery.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EventDiscovery.debug.xcconfig"; path = "Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery.debug.xcconfig"; sourceTree = "<group>"; };
-		B83A4C5A1A7ADDD771B5E065 /* libPods-EventDiscovery.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-EventDiscovery.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC2D59CB77AA582659A7090E /* Pods-EventDiscovery.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EventDiscovery.release.xcconfig"; path = "Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery.release.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C5AC1B909D347A86F313CA6C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-EventDiscovery/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		D48931FA28200542BC765394 /* Pods-EventDiscovery.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EventDiscovery.debug.xcconfig"; path = "Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery.debug.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = EventDiscovery/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* EventDiscovery-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "EventDiscovery-Bridging-Header.h"; path = "EventDiscovery/EventDiscovery-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9D7ABE3346788EFBE7695C7E /* libPods-EventDiscovery.a in Frameworks */,
+				854EA374C8C908F8610C525F /* libPods-EventDiscovery.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				A2CFBB6A12318E446DC1AF2D /* PrivacyInfo.xcprivacy */,
+				3AC7110C2B4EE2D1E7948CAE /* PrivacyInfo.xcprivacy */,
 			);
 			name = EventDiscovery;
 			sourceTree = "<group>";
@@ -62,17 +62,35 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				B83A4C5A1A7ADDD771B5E065 /* libPods-EventDiscovery.a */,
+				4C223BF8E8BD59D0218C3009 /* libPods-EventDiscovery.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		4E5B80DB97DBA58523075D54 /* EventDiscovery */ = {
+		2DDFF568605DB8435F109743 /* EventDiscovery */ = {
 			isa = PBXGroup;
 			children = (
-				C5AC1B909D347A86F313CA6C /* ExpoModulesProvider.swift */,
+				334101CC5653A7184BB713EC /* ExpoModulesProvider.swift */,
 			);
 			name = EventDiscovery;
+			sourceTree = "<group>";
+		};
+		5341080FDAE370410333C054 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				2DDFF568605DB8435F109743 /* EventDiscovery */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		65D9A63D2EC714765B9B6A90 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				D48931FA28200542BC765394 /* Pods-EventDiscovery.debug.xcconfig */,
+				AC2D59CB77AA582659A7090E /* Pods-EventDiscovery.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -89,8 +107,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				F6DBC09F2571AF6BD6F5E585 /* Pods */,
-				8A3CAB50187F80D97D995A82 /* ExpoModulesProviders */,
+				65D9A63D2EC714765B9B6A90 /* Pods */,
+				5341080FDAE370410333C054 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,14 +123,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		8A3CAB50187F80D97D995A82 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				4E5B80DB97DBA58523075D54 /* EventDiscovery */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -120,15 +130,6 @@
 			);
 			name = Supporting;
 			path = EventDiscovery/Supporting;
-			sourceTree = "<group>";
-		};
-		F6DBC09F2571AF6BD6F5E585 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				B50F1A2C3B48065993FD6A6C /* Pods-EventDiscovery.debug.xcconfig */,
-				1617C9D02397A68BADF813F9 /* Pods-EventDiscovery.release.xcconfig */,
-			);
-			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -139,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "EventDiscovery" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				629EA5A0B9FC5BE18B493AA7 /* [Expo] Configure project */,
+				7E5D509AB56635209639573D /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				C9B090334E7B43A4AC6CAF72 /* [CP] Embed Pods Frameworks */,
+				579B81A75D48692C7953BDAF /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -195,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				A11DE1CA7D79F5108AB105C7 /* PrivacyInfo.xcprivacy in Resources */,
+				AFC3E8A2692C0DD60BBE8C25 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,7 +240,25 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		629EA5A0B9FC5BE18B493AA7 /* [Expo] Configure project */ = {
+		579B81A75D48692C7953BDAF /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		7E5D509AB56635209639573D /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -300,24 +319,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C9B090334E7B43A4AC6CAF72 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EventDiscovery/Pods-EventDiscovery-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -326,7 +327,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				20E772BDCA61028E4E81E122 /* ExpoModulesProvider.swift in Sources */,
+				7F4CC73643C35676C1B03ED8 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -335,13 +336,12 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B50F1A2C3B48065993FD6A6C /* Pods-EventDiscovery.debug.xcconfig */;
+			baseConfigurationReference = D48931FA28200542BC765394 /* Pods-EventDiscovery.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = EventDiscovery/EventDiscovery.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = AX96Q6AL52;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -372,13 +372,12 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1617C9D02397A68BADF813F9 /* Pods-EventDiscovery.release.xcconfig */;
+			baseConfigurationReference = AC2D59CB77AA582659A7090E /* Pods-EventDiscovery.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = EventDiscovery/EventDiscovery.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = AX96Q6AL52;
 				INFOPLIST_FILE = EventDiscovery/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -456,7 +455,10 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -511,7 +513,10 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
