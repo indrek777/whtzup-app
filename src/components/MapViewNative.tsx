@@ -1039,19 +1039,18 @@ const MapViewNative: React.FC = () => {
         console.log(`⚠️ Requested radius ${currentRadius}km exceeds user group limit ${userMaxRadius}km, using ${effectiveRadius}km`)
       }
       
-      const radiusInDegrees = effectiveRadius / 111; // Approximate conversion from km to degrees
       filtered = events.filter(event => {
         if (!event.latitude || !event.longitude) return false;
         
-        const latDiff = Math.abs(event.latitude - userLocation[0]);
-        const lngDiff = Math.abs(event.longitude - userLocation[1]);
-        
-        // Simple distance check (approximate)
-        const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
-        const isWithinRadius = distance <= radiusInDegrees;
+        // Use proper geographic distance calculation
+        const distance = calculateDistance(
+          userLocation[0], userLocation[1], 
+          event.latitude, event.longitude
+        );
+        const isWithinRadius = distance <= effectiveRadius;
         
         if (!isWithinRadius) {
-          console.log(`🎯 Event filtered out by radius: ${event.name} (distance: ${(distance * 111).toFixed(1)}km)`);
+          console.log(`🎯 Event filtered out by radius: ${event.name} (distance: ${distance.toFixed(1)}km)`);
         }
         
         return isWithinRadius;

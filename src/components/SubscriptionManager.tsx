@@ -16,9 +16,10 @@ import { useEvents } from '../context/EventContext';
 interface SubscriptionManagerProps {
   visible: boolean;
   onClose: () => void;
+  onUpgrade?: () => void;
 }
 
-const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onClose }) => {
+const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onClose, onUpgrade }) => {
   const { refreshUserGroupLimits } = useEvents();
   const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -319,7 +320,9 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ visible, onCl
                     style={[styles.actionButton, styles.upgradeButton]} 
                     onPress={() => {
                       onClose();
-                      // This would typically open the subscription modal
+                      if (onUpgrade) {
+                        onUpgrade();
+                      }
                     }}
                   >
                     <Text style={styles.upgradeButtonText}>⭐ Upgrade Now</Text>

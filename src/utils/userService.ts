@@ -185,6 +185,14 @@ class UserService {
   private async loadUserFromStorage() {
     try {
       console.log('🔄 Loading user data from storage...')
+      
+      // FORCE CLEAR OLD TOKENS - Remove this after testing
+      console.log('🧹 FORCING CLEAR OF OLD TOKENS FOR JWT COMPATIBILITY...')
+      await AsyncStorage.removeItem(STORAGE_KEYS.user)
+      await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
+      await AsyncStorage.removeItem('refresh_token')
+      console.log('✅ Old tokens cleared - app will require fresh login')
+      
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
       const refreshTokenData = await AsyncStorage.getItem('refresh_token')

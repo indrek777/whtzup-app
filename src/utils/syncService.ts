@@ -549,6 +549,7 @@ class SyncService {
         // Ensure all events have properly typed coordinates and field mapping
         const typedEvents = response.data.map((event: any) => ({
           ...event,
+          name: event.name || event.title || 'Untitled Event', // Map title to name for frontend compatibility
           latitude: Number(event.latitude) || 0,
           longitude: Number(event.longitude) || 0,
           startsAt: event.startsAt || event.starts_at || '', // Map database field to interface field

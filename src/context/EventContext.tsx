@@ -328,7 +328,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false)
   const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | undefined>(undefined)
-  const [currentRadius, setCurrentRadius] = useState(5) // Default radius 5km for unregistered users
+  const [currentRadius, setCurrentRadius] = useState(100) // Default radius 100km for better event discovery
   
   // Add state persistence for user group and filters
   const [userGroupState, setUserGroupState] = useState<string>('unregistered')

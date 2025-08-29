@@ -1138,6 +1138,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
 
                 <TouchableOpacity 
                   style={styles.actionItem}
+                  onPress={() => setShowSubscriptionModal(true)}
+                >
+                  <Text style={styles.actionIcon}>⭐</Text>
+                  <Text style={styles.actionText}>Upgrade to Premium</Text>
+                  <Text style={styles.actionArrow}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.actionItem}
                   onPress={() => setShowSubscriptionTerms(true)}
                 >
                   <Text style={styles.actionIcon}>📄</Text>
@@ -1218,6 +1227,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ visible, onClose }) => {
         <SubscriptionManager 
           visible={showSubscriptionManager} 
           onClose={() => setShowSubscriptionManager(false)} 
+          onUpgrade={() => setShowSubscriptionModal(true)}
         />
         
         <SubscriptionTerms 

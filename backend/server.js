@@ -60,7 +60,7 @@ try {
 
 // Create HTTP and HTTPS servers
 const server = http.createServer(app);
-const httpsServer = sslOptions.key && sslOptions.cert ? https.createServer(sslOptions, app) : null;
+const httpsServer = sslOptions && sslOptions.key && sslOptions.cert ? https.createServer(sslOptions, app) : null;
 
 const io = socketIo(server, {
   cors: {
