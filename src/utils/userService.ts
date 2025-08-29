@@ -638,7 +638,31 @@ class UserService {
     }
     
     try {
-      // Decode JWT token to check expiration
+      // Check if token is in custom format (e.g., "email_access_token_timestamp")
+      if (this.authToken.includes('_access_token_')) {
+        // Extract timestamp from custom token format
+        const parts = this.authToken.split('_access_token_')
+        if (parts.length === 2) {
+          const timestamp = parseInt(parts[1])
+          if (!isNaN(timestamp)) {
+            const currentTime = Date.now()
+            const tokenAge = currentTime - timestamp
+            const maxAge = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+            
+            console.log('🔍 Custom token age:', { tokenAge, maxAge, timestamp: new Date(timestamp) })
+            
+            if (tokenAge > maxAge) {
+              console.log('🕐 Custom token expired (older than 24 hours)')
+              return true
+            }
+            
+            console.log('✅ Custom token is still valid')
+            return false
+          }
+        }
+      }
+      
+      // Try JWT format as fallback
       const base64Url = this.authToken.split('.')[1]
       if (!base64Url) {
         console.log('❌ Invalid token format - missing payload')
@@ -652,15 +676,15 @@ class UserService {
       
       const payload = JSON.parse(jsonPayload)
       const currentTime = Math.floor(Date.now() / 1000)
-      console.log('🔍 Token payload:', { exp: payload.exp, currentTime })
+      console.log('🔍 JWT Token payload:', { exp: payload.exp, currentTime })
       
       // Check if token is expired (with 30 second buffer)
       if (payload.exp && payload.exp < (currentTime + 30)) {
-        console.log('🕐 Token expired at:', new Date(payload.exp * 1000), 'Current time:', new Date())
+        console.log('🕐 JWT Token expired at:', new Date(payload.exp * 1000), 'Current time:', new Date())
         return true
       }
       
-      console.log('✅ Token is still valid')
+      console.log('✅ JWT Token is still valid')
       return false
     } catch (error) {
       console.log('❌ Error checking token expiration:', error)

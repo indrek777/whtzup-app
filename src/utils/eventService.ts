@@ -12,7 +12,7 @@ export interface EventResponse {
 }
 
 // Backend API URL
-const API_BASE_URL = 'https://165.22.90.180:4001/api' // Digital Ocean backend URL
+const API_BASE_URL = 'http://165.22.90.180:4000/api' // Digital Ocean backend URL
 const API_ENDPOINTS = {
   events: '/events',
   stats: '/events/stats',

@@ -26,15 +26,15 @@ export const getApiConfig = () => {
 };
 
 // Export individual URLs
-export const getApiBaseUrl = (useHttps = true) => {
+export const getApiBaseUrl = (useHttps = false) => {
   const config = getApiConfig();
   return useHttps ? config.apiHttps : config.api;
 };
 
-export const getBaseUrl = (useHttps = true) => {
+export const getBaseUrl = (useHttps = false) => {
   const config = getApiConfig();
   return useHttps ? config.https : config.http;
 };
 
 // Default export for backward compatibility
-export default getApiBaseUrl(true); // Default to HTTPS
+export default getApiBaseUrl(false); // Default to HTTP for development
