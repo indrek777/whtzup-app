@@ -68,20 +68,15 @@ platform :ios do
     # Clean build
     clean_build_artifacts
     
-    # Build and archive
+    # Build and archive (without export for now)
     build_app(
       workspace: "EventDiscovery.xcworkspace",
       scheme: "EventDiscovery",
       configuration: "Release",
       destination: "generic/platform=iOS",
       clean: true,
-      export_method: "app-store",
-      export_options: {
-        method: "app-store",
-        provisioningProfiles: {
-          "com.eventdiscovery.app" => "EventDiscovery_AppStore"
-        }
-      }
+      skip_archive: false,
+      archive_path: "/Users/indrek/Library/Developer/Xcode/Archives/EventDiscovery.xcarchive"
     )
     
     UI.success "✅ Build and archive completed!"
