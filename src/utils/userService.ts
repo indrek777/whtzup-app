@@ -153,7 +153,9 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
 }
 
 // Backend API URL - update this to match your backend server
-const API_BASE_URL = 'http://165.22.90.180:4000/api' // Digital Ocean backend URL
+import { getApiBaseUrl } from '../config/api';
+const API_BASE_URL = getApiBaseUrl(true) // Digital Ocean backend URL - Use HTTPS
+console.log('🔗 API_BASE_URL configured as:', API_BASE_URL)
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',
@@ -186,12 +188,7 @@ class UserService {
     try {
       console.log('🔄 Loading user data from storage...')
       
-      // FORCE CLEAR OLD TOKENS - Remove this after testing
-      console.log('🧹 FORCING CLEAR OF OLD TOKENS FOR JWT COMPATIBILITY...')
-      await AsyncStorage.removeItem(STORAGE_KEYS.user)
-      await AsyncStorage.removeItem(STORAGE_KEYS.authToken)
-      await AsyncStorage.removeItem('refresh_token')
-      console.log('✅ Old tokens cleared - app will require fresh login')
+      // Load existing tokens (removed forced clearing)
       
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.user)
       const tokenData = await AsyncStorage.getItem(STORAGE_KEYS.authToken)
@@ -720,6 +717,7 @@ class UserService {
   async signIn(email: string, password: string): Promise<{ success: boolean; user?: User; error?: string; details?: any[] }> {
     try {
       console.log('🔐 Attempting sign in for:', email)
+      console.log('🌐 Using URL:', `${API_BASE_URL}/auth/signin`)
       
       const response = await fetch(`${API_BASE_URL}/auth/signin`, {
         method: 'POST',
@@ -763,6 +761,7 @@ class UserService {
   async signUp(email: string, password: string, name: string): Promise<{ success: boolean; user?: User; error?: string; details?: any[] }> {
     try {
       console.log('🔐 Attempting sign up for:', email)
+      console.log('🌐 Using URL:', `${API_BASE_URL}/auth/signup`)
       
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',

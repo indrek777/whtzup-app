@@ -126,7 +126,8 @@ export const USER_GROUP_CONFIG: Record<UserGroup, UserGroupFeatures> = {
 }
 
 // Backend API URL - update this to match your backend server
-const API_BASE_URL = 'https://165.22.90.180:4001/api' // Digital Ocean backend URL
+import { getApiBaseUrl } from '../config/api';
+const API_BASE_URL = getApiBaseUrl(true) // Digital Ocean backend URL - Use HTTPS
 const API_ENDPOINTS = {
   auth: '/auth',
   profile: '/profile',

@@ -2,18 +2,18 @@
 export const API_CONFIG = {
   // Development environment
   development: {
-    http: 'http://165.22.90.180:4000',
-    https: 'https://165.22.90.180:4001',
-    api: 'http://165.22.90.180:4000/api',
-    apiHttps: 'https://165.22.90.180:4001/api'
+    http: 'https://api.olympio.ee',
+    https: 'https://api.olympio.ee',
+    api: 'https://api.olympio.ee/api',
+    apiHttps: 'https://api.olympio.ee/api'
   },
-  
+
   // Production environment
   production: {
-    http: 'http://165.22.90.180:4000',
-    https: 'https://165.22.90.180:4001',
-    api: 'https://165.22.90.180:4001/api',
-    apiHttps: 'https://165.22.90.180:4001/api'
+    http: 'https://api.olympio.ee',
+    https: 'https://api.olympio.ee',
+    api: 'https://api.olympio.ee/api',
+    apiHttps: 'https://api.olympio.ee/api'
   }
 };
 
@@ -37,4 +37,4 @@ export const getBaseUrl = (useHttps = false) => {
 };
 
 // Default export for backward compatibility
-export default getApiBaseUrl(false); // Default to HTTP for development
+export default getApiBaseUrl(true); // Default to HTTPS for production

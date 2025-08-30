@@ -28,8 +28,9 @@ interface Conflict {
 }
 
 // Configuration
-const API_BASE_URL = 'http://165.22.90.180:4000';
-const SOCKET_BASE_URL = 'http://165.22.90.180:4000';
+import { getBaseUrl } from '../config/api';
+const API_BASE_URL = getBaseUrl(true); // Use HTTPS
+const SOCKET_BASE_URL = getBaseUrl(true); // Use HTTPS
 const SYNC_INTERVAL = 30000; // 30 seconds
 const UPDATE_CHECK_INTERVAL = 60000; // 60 seconds for checking updates (reduced frequency)
 const MAX_RETRY_COUNT = 3;

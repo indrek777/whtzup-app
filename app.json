@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eventdiscovery.app",
-      "buildNumber": "17",
+      "buildNumber": "35",
       "usesNonExemptEncryption": false,
       "icon": "assets/icon_assets/iOS_AppIcon.appiconset/Icon-App-1024x1024@1x.png",
       "infoPlist": {
@@ -33,7 +33,7 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {
-            "165.22.90.180": {
+            "api.olympio.ee": {
               "NSExceptionAllowsInsecureHTTPLoads": false,
               "NSExceptionMinimumTLSVersion": "1.2",
               "NSExceptionRequiresForwardSecrecy": true,

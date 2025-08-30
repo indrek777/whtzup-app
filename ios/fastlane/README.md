@@ -15,29 +15,13 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## iOS
 
-### ios build_simulator
-
-```sh
-[bundle exec] fastlane ios build_simulator
-```
-
-Build for iOS Simulator
-
-### ios build_device
-
-```sh
-[bundle exec] fastlane ios build_device
-```
-
-Build for iOS Device
-
 ### ios build_archive
 
 ```sh
 [bundle exec] fastlane ios build_archive
 ```
 
-Build and archive for distribution
+Build and archive the app
 
 ### ios beta
 
@@ -45,23 +29,15 @@ Build and archive for distribution
 [bundle exec] fastlane ios beta
 ```
 
-Push a new beta build to TestFlight
+Upload to TestFlight
 
-### ios release
-
-```sh
-[bundle exec] fastlane ios release
-```
-
-Deploy to App Store
-
-### ios clean
+### ios build_simulator
 
 ```sh
-[bundle exec] fastlane ios clean
+[bundle exec] fastlane ios build_simulator
 ```
 
-Clean build artifacts
+Build for simulator
 
 ----
 

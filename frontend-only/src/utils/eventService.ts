@@ -12,7 +12,8 @@ export interface EventResponse {
 }
 
 // Backend API URL
-const API_BASE_URL = 'https://165.22.90.180:4001/api' // Digital Ocean backend URL
+import { getApiBaseUrl } from '../config/api';
+const API_BASE_URL = getApiBaseUrl(true) // Digital Ocean backend URL - Use HTTPS
 const API_ENDPOINTS = {
   events: '/events',
   stats: '/events/stats',

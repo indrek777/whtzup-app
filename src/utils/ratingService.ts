@@ -1,6 +1,7 @@
 import { userService } from './userService';
 
-const API_BASE_URL = 'http://165.22.90.180:4000/api';
+import { getApiBaseUrl } from '../config/api';
+const API_BASE_URL = getApiBaseUrl(true); // Use HTTPS
 
 export interface EventRating {
   id: number;

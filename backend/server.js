@@ -80,9 +80,10 @@ const httpsIo = httpsServer ? socketIo(httpsServer, {
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://olympio.ee', 'https://olympio.ee:4001'] 
-    : ['http://localhost:3000', 'https://localhost:4001', 'http://localhost:8081', 'exp://localhost:8081', 'http://olympio.ee:4000', 'https://olympio.ee:4001', 'exp://olympio.ee:8081', 'http://10.0.0.57:4000', 'https://10.0.0.57:4001', 'exp://10.0.0.57:8081']
+  origin: "*", // Temporarily allow all origins for testing
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID']
 }));
 
 // Rate limiting (can be disabled with DISABLE_RATE_LIMIT=true)
