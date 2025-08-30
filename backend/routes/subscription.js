@@ -508,4 +508,190 @@ router.get('/features', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/subscription/validate-receipt - Validate Apple receipt
+router.post('/validate-receipt', authenticateToken, [
+  body('receiptData').isString().notEmpty().withMessage('Receipt data is required'),
+  body('productId').isString().notEmpty().withMessage('Product ID is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const { receiptData, productId } = req.body;
+    const userId = req.user.id;
+
+    console.log('🔍 Validating receipt for user:', userId);
+
+    // Import receipt validator
+    const { ReceiptValidator } = require('../../src/utils/receiptValidator');
+    
+    const validator = new ReceiptValidator(
+      'com.eventdiscovery.app',
+      '1.5.0',
+      process.env.APPLE_SHARED_SECRET
+    );
+
+    // Validate receipt
+    const validationResult = await validator.validateReceipt(receiptData);
+
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: 'Receipt validation failed',
+        details: validationResult.error
+      });
+    }
+
+    if (!validationResult.isValid) {
+      return res.status(400).json({
+        error: 'Invalid receipt',
+        details: validationResult.error
+      });
+    }
+
+    // Check if product ID matches
+    if (validationResult.productId !== productId) {
+      return res.status(400).json({
+        error: 'Product ID mismatch',
+        expected: productId,
+        received: validationResult.productId
+      });
+    }
+
+    // Determine subscription plan
+    const plan = productId === 'premium_monthly' ? 'monthly' : 'yearly';
+
+    // Calculate subscription dates
+    const startDate = validationResult.purchaseDate;
+    const endDate = validationResult.expirationDate || new Date();
+
+    // If no expiration date, calculate based on plan
+    if (!validationResult.expirationDate) {
+      if (plan === 'monthly') {
+        endDate.setMonth(endDate.getMonth() + 1);
+      } else {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      }
+    }
+
+    // Check if user already has a subscription
+    const existingResult = await pool.query(
+      'SELECT id FROM user_subscriptions WHERE user_id = $1',
+      [userId]
+    );
+
+    const subscriptionData = {
+      status: validationResult.isExpired ? 'expired' : 'premium',
+      plan,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      autoRenew: validationResult.autoRenewStatus,
+      features: [
+        'unlimited_events',
+        'advanced_search',
+        'priority_support',
+        'analytics',
+        'custom_categories',
+        'export_data',
+        'no_ads',
+        'early_access',
+        'extended_event_radius',
+        'advanced_filtering',
+        'premium_categories',
+        'create_groups'
+      ],
+      transactionId: validationResult.transactionId,
+      originalTransactionId: validationResult.originalTransactionId,
+      receiptData: receiptData,
+      environment: validationResult.environment,
+      isTrialPeriod: validationResult.isTrialPeriod,
+      isIntroOfferPeriod: validationResult.isIntroOfferPeriod
+    };
+
+    if (existingResult.rows.length > 0) {
+      // Update existing subscription
+      await pool.query(`
+        UPDATE user_subscriptions 
+        SET status = $1, plan = $2, start_date = $3, end_date = $4, 
+            auto_renew = $5, features = $6, transaction_id = $7, 
+            original_transaction_id = $8, receipt_data = $9, 
+            environment = $10, is_trial_period = $11, is_intro_offer_period = $12,
+            updated_at = NOW()
+        WHERE user_id = $13
+      `, [
+        subscriptionData.status,
+        subscriptionData.plan,
+        subscriptionData.startDate,
+        subscriptionData.endDate,
+        subscriptionData.autoRenew,
+        JSON.stringify(subscriptionData.features),
+        subscriptionData.transactionId,
+        subscriptionData.originalTransactionId,
+        subscriptionData.receiptData,
+        subscriptionData.environment,
+        subscriptionData.isTrialPeriod,
+        subscriptionData.isIntroOfferPeriod,
+        userId
+      ]);
+    } else {
+      // Create new subscription
+      await pool.query(`
+        INSERT INTO user_subscriptions (
+          user_id, status, plan, start_date, end_date, auto_renew, 
+          features, transaction_id, original_transaction_id, 
+          receipt_data, environment, is_trial_period, is_intro_offer_period
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `, [
+        userId,
+        subscriptionData.status,
+        subscriptionData.plan,
+        subscriptionData.startDate,
+        subscriptionData.endDate,
+        subscriptionData.autoRenew,
+        JSON.stringify(subscriptionData.features),
+        subscriptionData.transactionId,
+        subscriptionData.originalTransactionId,
+        subscriptionData.receiptData,
+        subscriptionData.environment,
+        subscriptionData.isTrialPeriod,
+        subscriptionData.isIntroOfferPeriod
+      ]);
+    }
+
+    console.log('✅ Receipt validated and subscription updated for user:', userId);
+
+    res.json({
+      success: true,
+      message: 'Receipt validated successfully',
+      subscription: {
+        status: subscriptionData.status,
+        plan: subscriptionData.plan,
+        startDate: subscriptionData.startDate,
+        endDate: subscriptionData.endDate,
+        autoRenew: subscriptionData.autoRenew,
+        features: subscriptionData.features,
+        isTrialPeriod: subscriptionData.isTrialPeriod,
+        isIntroOfferPeriod: subscriptionData.isIntroOfferPeriod,
+        environment: subscriptionData.environment
+      },
+      validation: {
+        isValid: validationResult.isValid,
+        isExpired: validationResult.isExpired,
+        autoRenewStatus: validationResult.autoRenewStatus,
+        environment: validationResult.environment
+      }
+    });
+
+  } catch (error) {
+    logger.error('Validate receipt error:', error);
+    res.status(500).json({
+      error: 'Failed to validate receipt'
+    });
+  }
+});
+
 module.exports = router;

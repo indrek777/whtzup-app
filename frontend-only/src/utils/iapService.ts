@@ -125,11 +125,69 @@ class IAPService {
       // Store purchase receipt
       await this.storePurchaseReceipt(purchase);
       
+      // Validate receipt with backend
+      await this.validateReceiptWithBackend(purchase);
+      
       // Update subscription status
       await this.updateSubscriptionStatus(purchase);
       
     } catch (error) {
       console.error('❌ Error handling purchase:', error);
+    }
+  }
+
+  // Validate receipt with backend
+  private async validateReceiptWithBackend(purchase: InAppPurchases.InAppPurchase | any) {
+    try {
+      console.log('🔍 Validating receipt with backend...');
+      
+      const receiptData = (purchase as any).transactionReceipt || '';
+      const productId = purchase.productId;
+      
+      if (!receiptData) {
+        console.warn('⚠️ No receipt data available for validation');
+        return;
+      }
+
+      // Import API configuration
+      const { getApiBaseUrl } = require('../config/api');
+      const API_BASE_URL = getApiBaseUrl(true);
+
+      // Get user token
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        console.error('❌ No user token available for receipt validation');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/subscription/validate-receipt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          receiptData,
+          productId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Receipt validation failed:', errorData);
+        return;
+      }
+
+      const result = await response.json();
+      console.log('✅ Receipt validated with backend:', result);
+      
+      // Update local subscription data with backend response
+      if (result.subscription) {
+        await AsyncStorage.setItem('user_subscription', JSON.stringify(result.subscription));
+      }
+      
+    } catch (error) {
+      console.error('❌ Error validating receipt with backend:', error);
     }
   }
 

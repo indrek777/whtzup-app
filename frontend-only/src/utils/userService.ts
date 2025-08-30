@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { iapService, SUBSCRIPTION_PRODUCTS } from './iapServiceMock'
+import { iapService, SUBSCRIPTION_PRODUCTS } from './iapService'
 
 // User Group Types
 export type UserGroup = 'unregistered' | 'registered' | 'premium'
